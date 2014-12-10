@@ -14,28 +14,34 @@ a
 ```
 will be equivalent to `a(b c(d) e)`. This allows you to lay out your termpose with a minimum of friction and aesthetic noise.
 
-
+syntax by example:
 ```
-//rambling around:
-{
-  abacus: "opens",
-  to: [
-    1,
-    2,
-    3,
-    4,
-    5
-  ],
-  whaia: {gloria: [54, 90, 142]}
-  goings:{
-    comings:"7  9"
-    aways:90
-  }
-}
+A B
+> B pertains to A
+A B C
+> B and C pertain to A
+A
+  B
+  C
+> equivalent
+A(B C)
+> equivalent
+A B:C D:E
+> B and D pertain to A, but C and E pertain to their colon buddy, B and D respectively
+A "a string"
+> "a string" pertains to "A" ("A" == A, all symbols are just strings)
+A "a string
+> equivalent. Closing quote isn't needed if the line ends. What else could such a statement be intended to mean?
+A """
+  a string
+  that is multiline
+> "a string↩that is multiline" pertains to A
+```
 
+potential translation scheme:
+```
 term = parse("""
 abacus(opens)
-horse
 to
   1
   2
@@ -43,11 +49,11 @@ to
   4
   5
 whaia(gloria(54 90 142))
+goings
+  comings("7  9")
+  aways(90)
 """)
 
->[{term:"abacus", c:[{term:"opens"}]}, {term:"horse"}, {term:"to", c:[1,2,3,4,5]}, {term:"whaia", c:[{term:"gloria", c:[{term:"54"}, {term:"90"}, {term:"142"}]}]}]
-//¿or maybe
+javascript:
 >{{abacus:"opens"}, horse:1, to:{1:1,2:1,3:1,4:1,5:1}, whaia:{gloria:{54:1,90:1,142:1}}}
-
->Seq(Term("abacus", Seq(Term("opens"))), Term("to", Seq(1,2,3,4,5)), Term("whaia", Seq(Term("gloria", Seq(Term("54"), Term("90"), Term("142"))))))
 ```
