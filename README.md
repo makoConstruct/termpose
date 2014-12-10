@@ -41,7 +41,8 @@ A """
 potential translation scheme:
 ```
 term = parse("""
-abacus(opens)
+abacus opens
+horse
 to
   1
   2
