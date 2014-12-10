@@ -26,12 +26,22 @@ A
 > equivalent
 A(B C)
 > equivalent
+A(B C)
+  D E
+>B, C and D pertain to A. E pertains to D.
+A(B C) D
+  E
+>equivalent
 A B:C D:E
 > B and D pertain to A, but C and E pertain to their colon buddy, B and D respectively
+A:B:C:D:E
+> Each pertains to the previous
 A "a string"
 > "a string" pertains to "A" ("A" == A, all symbols are just strings)
 A "a string
 > equivalent. Closing quote isn't needed if the line ends. What else could such a statement be intended to mean?
+A"a string
+> equivalent
 A """
   a string
   that is multiline
@@ -57,4 +67,46 @@ goings
 
 javascript:
 >{{abacus:"opens"}, horse:1, to:{1:1,2:1,3:1,4:1,5:1}, whaia:{gloria:{54:1,90:1,142:1}}}
+```
+
+What if I defined a programming language for the termpose syntax?
+```
+let i 0
+while <(i 5)
+  print s:stop.
+  println s" hammer time
+  = i +(i 1)
+
+>stop. hammer time
+>stop. hammer time
+>stop. hammer time
+>stop. hammer time
+>stop. hammer time
+```
+
+here's me making a start on defining a universal type system:
+```
+type
+  name Stream
+  type_parameters par
+    name E
+    variance 0
+type
+  name U32
+  description "32 bit, signed, little-endian Integer
+type
+  name Log
+  type_parameters par
+    name Line
+    variance 0
+  serves_as
+    type_ref name:Stream type_parametization:Line
+    type_ref name:Sequence type_parametization:Line
+  operations
+    name get
+    params par
+      name index
+      type Unsigned
+  
+  ... grossly unfinished but you get the point
 ```
