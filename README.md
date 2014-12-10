@@ -66,7 +66,7 @@ goings
 """)
 
 javascript:
->{{abacus:"opens"}, horse:1, to:{1:1,2:1,3:1,4:1,5:1}, whaia:{gloria:{54:1,90:1,142:1}}}
+>{abacus:"opens", horse:1, to:{1:1,2:1,3:1,4:1,5:1}, whaia:{gloria:{54:1,90:1,142:1}}}
 ```
 
 What if I defined a programming language for the termpose syntax?
@@ -93,7 +93,7 @@ type
     variance 0
 type
   name U32
-  description "32 bit, signed, little-endian Integer
+  description "32 bit, unsigned, little-endian Integer
 type
   name Log
   type_parameters par
