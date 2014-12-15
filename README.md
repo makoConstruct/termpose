@@ -81,9 +81,9 @@ What if I defined a programming language for the termpose syntax?
 ```
 let i 0
 while <(i 5)
-  print s:Hello
-  println s" worldly people
-  = i +(i 1)
+  print 'Hello
+  println "' worldly people
+  = i, + i 1
 
 >Hello worldly people
 >Hello worldly people
@@ -91,6 +91,22 @@ while <(i 5)
 >Hello worldly people
 >Hello worldly people
 
+class(Dog types(< WillBite Professional) extends:BitingAnimal)
+  def(meets prof:Professional)
+    if(eq type(prof) WillBite)
+      then
+        bite prof
+      else
+        bark prof
+  def(bark prof:Professional)
+    utter prof "he comes, beware, he comes
+
+class Dog types(< WillBite Professional) extends:BitingAnimal
+  def meets prof:Professional
+    
+//"urgh. this gets pretty ugly. What can I do..
+
+//"hmm... there's a case we might not handle so well;
 a or b or c or d or e
 //"doesn't work
 or(a or(b or(c or(d e))))
@@ -98,10 +114,11 @@ or(a or(b or(c or(d e))))
 or: a or: b or: c or: d e
 //"doesn't work in the present termpose standard, but it would be kind of nice if it meant what it's supposed to mean..
 or a, or b, or c, or d, e
-//"is how coffeescript would put it
-or a b c:
-  open
-// "
+//"kinda coffeescript
+or a, or b, or c, or d e
+//"would work if we cast the comma as being equivalent to an indent, but it's not very readable.
+foldleft or a b c d e
+//"lol. Maybe that's best.
 ```
 
 here's me making a start on defining a universal type system:
@@ -112,11 +129,7 @@ meta
     // is a comment
     - is a list element
 
-type
-  name Vessel
-  type_parameters E
-  mutates
-  subscribable
+type Vessel type_parameters:E mutates subscribable
   //"makes for reactive streams, has a current state, state changes, you can subscribe to be notified of changes (this is the point of the thing)
   operation
     name place
@@ -128,16 +141,7 @@ type
     
 type
   name Number
-  constant
-  operation
-    name add
-    in name:other type:Number
-    out type:Number
-  operation
-    name subtract
-    params name:other type:Number
-    out:Number
-  operation name:add other:Number out:Number
+  fixed
       
 type
   name Integer
@@ -177,29 +181,30 @@ What would termpose imitating json look like?
 ```
 ```termpose
 //"minified
-'highlight_line true
-'ignored_packages ar('Floobits 'SublimeLinter 'Vintage)
-'indent_guide_options('draw_active:true)
-"'overlay scroll bars" 'enabled
-"'show tab close buttons" false
-'tab_size 2
-'theme 'Spacegray.sublime-theme
-'word_wrap true
+highlight_line 'true
+ignored_packages ar(Floobits SublimeLinter Vintage)
+indent_guide_options(draw_active:'true)
+"overlay scroll bars" enabled
+"show tab close buttons" 'false
+tab_size '2
+theme Spacegray.sublime-theme
+word_wrap 'true
 
 //"pretty printed
-'highlight_line true
-'ignored_packages
-  - 'Floobits
-  - 'SublimeLinter
-  - 'Vintage
-'indent_guide_options
-  'draw_active true
-"'overlay scroll bars" 'enabled
-"'show tab close buttons" false
-'tab_size 2
-'theme 'Spacegray.sublime-theme
-'word_wrap true
+highlight_line 'true
+ignored_packages 'ar
+  Floobits
+  SublimeLinter
+  Vintage
+  'ar '1 '2 '3
+indent_guide_options
+  draw_active 'true
+"overlay scroll bars" enabled
+"show tab close buttons" 'false
+tab_size '2
+theme Spacegray.sublime-theme
+word_wrap 'true
 ```
-I think that works out very well. Note that `'`s are required for all string keys, more so than in json, in order to differentiate them from primitives like `true`, `2`, and `ar` terms. `"`s alone would not do this, as, once parsed through the termpose filter, there is no perceptible difference between a `"true"` and a `true`.
+I think that works out very well. Note that `'`s are required for all non-string keys in order to, for instance, differentiate `true` from the string `"true"`, and `"`s alone would not do this, as, once parsed through the termpose filter, there is no perceptible difference between the terms `"true"` and a `true`.
 
-Caveat: Does not preserve the difference between `"a"` and `'a'`. It also cannot be formatted as a single line due to the unnamed but implicit root element
+Caveat: Does not preserve the difference between js inputs `"a"` and `'a'`. It also cannot be formatted as a single line due to the unnamed but implicit root element.
