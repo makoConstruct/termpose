@@ -83,7 +83,7 @@ let i 0
 while <(i 5)
   print 'Hello
   println "' worldly people
-  = i, + i 1
+  =(i +(i 1))
 
 >Hello worldly people
 >Hello worldly people
@@ -91,18 +91,15 @@ while <(i 5)
 >Hello worldly people
 >Hello worldly people
 
-class(Dog types(< WillBite Professional) extends:BitingAnimal)
-  def(meets prof:Professional)
-    if(eq type(prof) WillBite)
+class Dog types(< WillBite Professional) extends:BitingAnimal
+  def meets prof:Professional
+    if eq type(prof) WillBite
       then
         bite prof
       else
         bark prof
-  def(bark prof:Professional)
+  def bark prof:Professional
     utter prof "he comes, beware, he comes
-
-class Dog types(< WillBite Professional) extends:BitingAnimal
-  def meets prof:Professional
     
 //"urgh. this gets pretty ugly. What can I do..
 
@@ -111,13 +108,13 @@ a or b or c or d or e
 //"doesn't work
 or(a or(b or(c or(d e))))
 //"would work but is unsightly
-or: a or: b or: c or: d e
-//"doesn't work in the present termpose standard, but it would be kind of nice if it meant what it's supposed to mean..
+or(a or(b or(c or(d e
+//"I might just allow this. I'm getting the sense that closing parens even though parens are required to close at line end is bullshit. I have a vague feeling that it's good for error checking? Seriously, bullshit. No errors can stem from that.
 or a, or b, or c, or d, e
-//"kinda coffeescript
+//"like coffeescript
 or a, or b, or c, or d e
 //"would work if we cast the comma as being equivalent to an indent, but it's not very readable.
-foldleft or a b c d e
+reduce or a b c d e
 //"lol. Maybe that's best.
 ```
 
@@ -182,7 +179,7 @@ What would termpose imitating json look like?
 ```termpose
 //"minified
 highlight_line 'true
-ignored_packages ar(Floobits SublimeLinter Vintage)
+ignored_packages 'ar(Floobits SublimeLinter Vintage)
 indent_guide_options(draw_active:'true)
 "overlay scroll bars" enabled
 "show tab close buttons" 'false
@@ -192,7 +189,7 @@ word_wrap 'true
 
 //"pretty printed
 highlight_line 'true
-ignored_packages 'ar
+ignored_packages 'ar:
   Floobits
   SublimeLinter
   Vintage

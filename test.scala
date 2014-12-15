@@ -32,7 +32,7 @@ object App{
 		"""
 		a b
 		  c
-		""", "a(b(c))",
+		""", "a(b c)",
 		
 		"""
 		Aaron b""", "Aaron(b)",
@@ -58,14 +58,22 @@ object App{
 			make "my day"
 			horrid clown
 				jp awesome:ross
-		""", "\"horrid clown\"(make(\"my day\") horrid(clown(jp(awesome(ross)))))",
+		""", "\"horrid clown\"(make(\"my day\") horrid(clown jp(awesome(ross))))",
 		
 		"""
 		how about a "
 			~M~U~L~T~I~L~I~N~E~
 			~S~T~R~I~N~G~
 		//"YOU LIKE?"
-		""", "how(about a \"~M~U~L~T~I~L~I~N~E~\\n~S~T~R~I~N~G~\") //(\"YOU LIKE?\")"
+		""", "how(about a \"~M~U~L~T~I~L~I~N~E~\\n~S~T~R~I~N~G~\") //(\"YOU LIKE?\")",
+		"""
+		hobobo
+			green witches:
+				glon
+				mora
+				bonell
+			emero
+		""", "hobobo(green(witches(glon mora bonell)) emero)"
 		)
 
 		var i = 0

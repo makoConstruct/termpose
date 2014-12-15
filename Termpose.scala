@@ -1,6 +1,5 @@
-import termpose._
 import util.{Try, Success, Failure}
-import collection.mutable.{ArrayStack}
+import collection.mutable.{ArrayBuffer}
 object Termpose{
 	trait Stringificable{ //has a method for stringifying through a stringBuilder, provides a toString through this
 		def stringify(sb:StringBuilder):Unit
@@ -10,17 +9,37 @@ object Termpose{
 			buf.result
 		}
 	}
+	private def escapeSymbol(str:String):String ={
+		val sb = new StringBuilder
+		for(c <- str){
+			c match{
+				case '\\' =>
+					sb += '\\'
+					sb += '\\'
+				case '"' =>
+					sb += '\\'
+					sb += '"'
+				case '\n' =>
+					sb += '\\'
+					sb += 'n'
+				case c:Char =>
+					sb += c
+			}
+		}
+		sb.result
+	}
 	sealed trait Pose extends Stringificable{
 		val v:String
 		def stringifySymbol(sb:StringBuilder) =
 			if(
 				v.indexOf(' ') >= 0 ||
-				v.indexOf('\t') >= 0 ||
+				v.indexOf('(') >= 0 ||
 				v.indexOf(':') >= 0 ||
-				v.indexOf(')') >= 0 ||
-				v.indexOf('(') >= 0
+				v.indexOf('\t') >= 0 ||
+				v.indexOf('\n') >= 0 ||
+				v.indexOf(')') >= 0
 			)
-				sb += '"' ++= v.replaceAll("\"", "\\\"").replaceAll("\n", "\\n").replaceAll("\\", "\\\\") += '"'
+				sb += '"' ++= escapeSymbol(v) += '"'
 			else
 				sb ++= v
 	}
@@ -34,10 +53,10 @@ object Termpose{
 			}else{
 				stringifySymbol(sb)
 				sb += '('
-				s(0).stringify(sb)
+				s.head.stringify(sb)
 				for(i <- 1 until s.length){
-					s(i).stringify(sb)
 					sb += ' '
+					s(i).stringify(sb)
 				}
 				sb += ')'
 			}
@@ -48,7 +67,7 @@ object Termpose{
 	class Parser{
 		private class ParsingException(msg:String) extends RuntimeException(msg)
 		private class InterTerm(val symbol:String, val line:Int, val column:Int){
-			val s = ArrayStack[InterTerm]()
+			val s = ArrayBuffer[InterTerm]()
 			def toPose:Pose = {
 				if(s.isEmpty)
 					Leaf(symbol)
@@ -60,19 +79,19 @@ object Termpose{
 		private val stringBuffer = new StringBuilder(512)
 		private var foremostSymbol:String = ""
 		private var salientIndentation:String = ""
-		private var resultSeq = new ArrayStack[InterTerm]
+		private var resultSeq = new ArrayBuffer[InterTerm]
 		private var headTerm:InterTerm = null
 		private var foremostTerm:InterTerm = null
-		private val parenTermStack = new ArrayStack[InterTerm]
-		private var tailestTermSequence:ArrayStack[InterTerm] = resultSeq
-		private val parenParentStack = new ArrayStack[InterTerm]
+		private val parenTermStack = new ArrayBuffer[InterTerm]
+		private var tailestTermSequence:ArrayBuffer[InterTerm] = resultSeq
+		private val parenParentStack = new ArrayBuffer[InterTerm]
 		private var line = 0
 		private var column = 0
 		private var index = 0
-		private type PF = PartialFunction[Char, Unit]
+		private type PF = Char => Unit
 		private var currentMode:PF = null
-		private val modes = new ArrayStack[PF]
-		private val indentStack = ArrayStack[(Int, ArrayStack[InterTerm])]((0, resultSeq))  //indentation length, tailestTermSequence. It is enough to keep track of length. We can derive ∀(a,b∈Line.Indentation) a.length = b.length → a = b from the prefix checking that is done before adding to the stack
+		private val modes = new ArrayBuffer[PF]
+		private val indentStack = ArrayBuffer[(Int, ArrayBuffer[InterTerm])]((0, resultSeq))  //indentation length, tailestTermSequence. It is enough to keep track of length. We can derive ∀(a,b∈Line.Indentation) a.length = b.length → a = b from the prefix checking that is done before adding to the stack
 		private var previousIndentation = ""
 		private var previousTailestTermSequence = resultSeq
 		private val multiLineIndent = new StringBuilder
@@ -84,7 +103,7 @@ object Termpose{
 			stringBuffer.clear
 			foremostSymbol = ""
 			salientIndentation = ""
-			resultSeq = new ArrayStack[InterTerm]
+			resultSeq = new ArrayBuffer[InterTerm]
 			headTerm = null
 			foremostTerm = null
 			parenTermStack.clear
@@ -110,16 +129,8 @@ object Termpose{
 			transition(nm)
 		}
 		private def popMode{
-			currentMode = modes.pop
-		}
-		private def nline = {
-			line += 1
-			column = 0
-			index += 1
-		}
-		private def ncol = {
-			column += 1
-			index += 1
+			currentMode = modes.last
+			modes.trimEnd(1)
 		}
 		private def break(message:String):Unit = breakAt(line, column, message)
 		private def breakAt(l:Int, c:Int, message:String):Unit = throw new ParsingException("line:"+l+" column:"+c+", no, bad: "+message)
@@ -138,9 +149,8 @@ object Termpose{
 				tailestTermSequence = foremostTerm.s
 			}else if(parenTermStack.isEmpty){
 				headTerm.s += foremostTerm
-				tailestTermSequence = foremostTerm.s
 			}else{
-				parenTermStack.head.s += foremostTerm
+				parenTermStack.last.s += foremostTerm
 			}
 		}
 		private def finishTakingIndentation ={
@@ -155,50 +165,54 @@ object Termpose{
 					breakAt(headTerm.line, headTerm.column, "inconsistent indentation at")
 				}
 				indentStack += ((salientIndentation.length, previousTailestTermSequence))
-				previousTailestTermSequence += headTerm
 			}else if(salientIndentation.length < previousIndentation.length){
 				if(! previousIndentation.startsWith(salientIndentation)){
 					breakAt(headTerm.line, headTerm.column, "inconsistent indentation")
 				}
 				//pop to enclosing scope
-				while(indentStack.head._1 > salientIndentation.length){
-					if(indentStack.head._1 < salientIndentation.length){
+				while(indentStack.last._1 > salientIndentation.length){
+					if(indentStack.last._1 < salientIndentation.length){
 						breakAt(headTerm.line, headTerm.column, "inconsistent indentation, sibling elements have different indentation")
 					}
-					indentStack.pop
+					indentStack.trimEnd(1)
 				}
-				indentStack.head._2 += headTerm
 			}
 			
-			previousTailestTermSequence = tailestTermSequence
+			indentStack.last._2 += headTerm
+			
+			colonHead = null
 			previousIndentation = salientIndentation
+			previousTailestTermSequence = tailestTermSequence
 			tailestTermSequence = resultSeq
 			parenTermStack.clear
 			headTerm = null
 			foremostTerm = null
-			nline
+		}
+		def finishLineNormally{ //where as finishing abnormally is what multiline reading does because by the time it finishes it has already eaten the indentation and it doesn't ask whether the parenTermStack's empty
+			if(parenTermStack.isEmpty){
+				finishLine
+				transition(eatingIndentation)
+			}else{
+				break("line end before closing paren")
+			}
 		}
 		private def getColonBuddy{
-			ncol
 			colonHead = foremostTerm
 			transition(seekingColonBuddy)
 		}
 		private def closeParen ={
 			if(parenTermStack.isEmpty)
 				break("unbalanced paren")
-			parenTermStack.pop
-			ncol
+			parenTermStack.trimEnd(1)
 			transition(seekingInLine)
 		}
 		private def openParen ={
 			parenTermStack += foremostTerm
-			ncol
 			transition(enteringParen)
 		}
-		private def eatingIndentation:PF ={
+		private val eatingIndentation:PF = (c:Char)=> c match{
 			case '\n' =>
 				stringBuffer.clear
-				nline
 			case ':' =>
 				break("colon not allowed here")
 			case '(' =>
@@ -207,136 +221,111 @@ object Termpose{
 				break("what are you closingggg")
 			case '"' =>
 				finishTakingIndentation
-				ncol
 				transition(startingToTakeQuoteTerm)
+			case ' ' | '\t' =>
+				stringBuffer += c
 			case c:Char =>
-				if(c == ' ' || c == '\t'){
-					stringBuffer += c
-					ncol
-				}else{
-					finishTakingIndentation
-					transition(takeTerm)
-				}
+				finishTakingIndentation
+				transition(takeTerm)
+				takeTerm(c)
 		}
-		private def seekingInLine:PF ={
+		private val seekingInLine:PF = (c:Char)=> c match{
 			case '(' =>
 				openParen
 			case ')' =>
-				if(parenTermStack.isEmpty){
-					break("unbalanced paren")
-				}else{
-					ncol
-					closeParen
-				}
+				closeParen
 			case ':' =>
 				getColonBuddy
-			case ' ' | '\t' =>
-				ncol
+			case ' ' | '\t' => {}
 			case '\n' =>
-				if(parenTermStack.isEmpty){
-					finishLine
-					transition(eatingIndentation)
-				}else{
-					break("line end before closing paren")
-				}
+				finishLineNormally
 			case '"' =>
-				ncol
 				transition(startingToTakeQuoteTerm)
 			case c:Char =>
 				transition(takeTerm)
+				takeTerm(c)
 		}
-		private def takeTerm:PF ={
+		private val takeTerm:PF = (c:Char)=> c match{
 			case ' ' | '\t' | ':' | '\n' | '(' | ')' | '"' =>
 				finishTakingTermAndAttach
 				transition(seekingInLine)
+				seekingInLine(c)
 			case c:Char =>
 				stringBuffer += c
-				ncol
 		}
-		private def enteringParen:PF ={
-			case ' ' | '\t' =>
-				ncol
+		private val enteringParen:PF = (c:Char)=> c match{
+			case ' ' | '\t' => {}
 			case ':' =>
 				break("colon wat")
 			case '(' =>
 				break("paren opens nothing")
 			case ')' =>
-				ncol
 				closeParen
 			case '"' =>
-				ncol
 				transition(takingQuoteTermThatMustTerminateWithQuote)
 			case '\n' =>
 				break("newline before paren completion (parens are only for single lines)")
 			case c:Char =>
 				transition(takeTerm)
+				takeTerm(c)
 		}
-		private def seekingColonBuddy:PF ={
-			case ' ' | '\t' =>
-				ncol
+		private val seekingColonBuddy:PF = (c:Char)=> c match{
+			case ' ' | '\t' => {}
 			case ':' =>
 				break("double colon wat")
 			case '\n' =>
-				break("special end of line colon syntax update has not yet come")
+				tailestTermSequence = colonHead.s
+				finishLineNormally
 			case '(' =>
 				//fine whatever I'll just forget the colon ever happened
 				openParen
 			case ')' =>
 				break("closebracket after colon wat")
 			case '"' =>
-				ncol
 				transition(startingToTakeQuoteTerm)
 			case c:Char =>
 				transition(takeTerm)
+				takeTerm(c)
 		}
-		private def takingQuoteTermThatMustTerminateWithQuote:PF ={
+		private val takingQuoteTermThatMustTerminateWithQuote:PF = (c:Char)=> c match{
 			case '"' =>
 				finishTakingTermAndAttach
-				ncol
 				transition(seekingInLine)
 			case '\n' =>
 				break("quote must terminate before newline")
 			case '\\' =>
-				ncol
 				pushMode(takingEscape)
 			case c:Char =>
 				stringBuffer += c
-				ncol
 		}
-		private def startingToTakeQuoteTerm:PF ={
+		private val startingToTakeQuoteTerm:PF = (c:Char)=> c match{
 			case '"' =>
 				finishTakingTermAndAttach
-				ncol
 				transition(seekingInLine)
 			case '\n' =>
 				if(!parenTermStack.isEmpty) break("newline with unbalanced parens(if you want multiline string syntax, that's an indented block under a single quote)")
 				stringBuffer.clear
-				nline
 				transition(multiLineFirstLine)
+			case ' ' | '\t' =>
+				stringBuffer += c
 			case c:Char =>
-				if(c == ' ' || c == '\t'){
-					stringBuffer += c
-					ncol
-				}else{
-					transition(takingSingleLineQuoteTerm)
-				}
+				transition(takingSingleLineQuoteTerm)
+				takingSingleLineQuoteTerm(c)
 		}
-		private def takingSingleLineQuoteTerm:PF ={
+		private val takingSingleLineQuoteTerm:PF = (c:Char)=> c match{
 			case '"' =>
 				finishTakingTermAndAttach
-				ncol
 				transition(seekingInLine)
 			case '\\' =>
-				ncol
 				pushMode(takingEscape)
 			case '\n' =>
 				finishTakingTermAndAttach
 				transition(seekingInLine)
+				seekingInLine('\n')
 			case c:Char =>
 				stringBuffer += c
-				ncol
 		}
-		private def takingEscape:PF ={
+		private val takingEscape:PF = (c:Char)=> c match{
 			case c:Char =>
 				c match{
 					case 'n' => stringBuffer += '\n'
@@ -344,41 +333,39 @@ object Termpose{
 					case 'h' => stringBuffer += '☃'
 					case g:Char => stringBuffer += g
 				}
-				ncol
 				popMode
 		}
-		private def multiLineFirstLine:PF ={
+		private val multiLineFirstLine:PF = (c:Char)=> c match{
+			case ' ' | '\t' =>
+				multiLineIndent += c
 			case c:Char =>
-				if(c == ' ' || c == '\t'){
-					ncol
-					multiLineIndent += c
-				}else{
-					mlIndent = multiLineIndent.result
-					if(mlIndent.length > salientIndentation.length){
-						if(salientIndentation.startsWith(mlIndent)){
-							multiLineIndent.clear
-							transition(multiLineTakingText)
-						}else{
-							break("inconsistent indentation")
-						}
+				mlIndent = multiLineIndent.result
+				if(mlIndent.length > salientIndentation.length){
+					if(mlIndent.startsWith(salientIndentation)){
+						multiLineIndent.clear
+						transition(multiLineTakingText)
+						multiLineTakingText(c)
 					}else{
-						break("multiline string must be indented")
+						break("inconsistent indentation")
 					}
+				}else{
+					break("multiline string must be indented")
 				}
 		}
-		private def multiLineTakingIndent:PF ={
+		private val multiLineTakingIndent:PF = (c:Char)=> c match{
 			case c:Char =>
 				if(c == ' ' || c == '\t'){
-					ncol
 					multiLineIndent += c
 				}else{
 					val nin = multiLineIndent.result
 					multiLineIndent.clear
 					if(nin.length >= mlIndent.length){
 						if(nin.startsWith(mlIndent)){
+							stringBuffer += '\n' //add the newline from the previous line, safe in the knowledge that the multiline string continues up to and beyond that point
 							if(nin.length > mlIndent.length)
 								stringBuffer ++= mlIndent.substring(nin.length, mlIndent.length)
 							transition(multiLineTakingText)
+							multiLineTakingText(c)
 						}else{
 							break("inconsistent indentation")
 						}
@@ -386,18 +373,19 @@ object Termpose{
 						if(mlIndent.startsWith(nin)){
 							//breaking out, returning to usual scanning
 							finishTakingTermAndAttach
-							salientIndentation = mlIndent
+							finishLine
+							salientIndentation = nin
 							transition(takeTerm)
+							takeTerm(c)
 						}else{
 							break("inconsistent indentation")
 						}
 					}
 				}
 		}
-		private def multiLineTakingText:PF ={
+		private val multiLineTakingText:PF = (c:Char)=> c match{
 			case '\n' =>
-				stringBuffer += '\n'
-				nline
+				// stringBuffer += '\n'   will not add the newline until we're sure the multiline string is continuing
 				transition(multiLineTakingIndent)
 			case c:Char =>
 				stringBuffer += c
@@ -411,12 +399,17 @@ object Termpose{
 			val res = try{
 				while(index < s.length){
 					val c = s.charAt(index)
-					if(currentMode.isDefinedAt(c))
-						currentMode(c)
-					else
-						break("can't handle a '"+c+"' at this point")
+					currentMode(c)
+					index += 1
+					if(c == '\n'){
+						line += 1
+						column = 0
+					}else{
+						column += 1
+					}
 				}
-				currentMode('\n') //simulated final newline
+				if(s.last != '\n')
+					currentMode('\n') //simulated final newline
 				Success(resultSeq.map { _.toPose })
 			}catch{
 				case pe:ParsingException =>
