@@ -2,7 +2,7 @@
 A dead simple, pretty, machine-readable format for trees of strings.
 
 ###it's like s-expressions, but not
-Termpose is extremely regular, but instead of basing all of its data on lists, termpose speaks of terms and their associated sequences, (EG `array(1 2 3 4)`, 'array' is the term, the numbers are the sequence), under the expectation that the host language will interpret sequences as being contained or in some way pertaining to their enclosing term. This is a reasonable expectation, considering that even Lisp gives special meaning to the first term of its lists in the majority of cases. Termpose resolves to an AST, rather than a list of lists. This evenue also eliminates the edge cases of termless empty lists; every entity in the tree has a string at its head.
+Termpose is extremely regular, but instead of basing all of its data on lists, termpose speaks of terms and their associated sequences, (EG `array(1 2 3 4)`, 'array' is the term, the numbers are the sequence), under the expectation that the host language will interpret sequences as being contained or in some way pertaining to their enclosing term. This is a reasonable expectation, considering that even Lisp gives special meaning to the first term of its lists in the majority of cases. This eliminates the edge cases of termless empty lists; every entity in the tree has a string at its head.
 
 Termpose pays attention to indentation. Expressions like
 ```
@@ -33,10 +33,14 @@ A(B C)
 #A contains B, C and D. D contains E.
 A(B C) D
   E
-#equivalent
+#A contains everything.
 A B C D
   E
 #equivalent
+A B C D:
+  E
+  F
+#A contains B, C and D. D contains E and F
 A B:C D:E
 #A contains B and D, but C and E are contained by their colon buddy, B and D respectively
 A:B:C:D:E
@@ -162,7 +166,13 @@ What would termpose imitating json look like?
   [
     "Floobits",
     "SublimeLinter",
-    "Vintage"
+    "Vintage",
+    {
+      "ref":"http://enema.makopool.com/",
+      "name":"enema",
+      "update":"yes"
+    },
+    [1, 2, 3]
   ],
   "indent_guide_options":
   {
@@ -179,7 +189,7 @@ What would termpose imitating json look like?
 ```termpose
 //"minified
 highlight_line 'true
-ignored_packages 'ar(Floobits SublimeLinter Vintage)
+ignored_packages 'ar(Floobits SublimeLinter Vintage {(ref:"http://enema.makopool.com/" name:enema update:yes))
 indent_guide_options(draw_active:'true)
 "overlay scroll bars" enabled
 "show tab close buttons" 'false
@@ -193,6 +203,7 @@ ignored_packages 'ar:
   Floobits
   SublimeLinter
   Vintage
+  { ref:"http://enema.makopool.com/" name:enema update:yes
   'ar '1 '2 '3
 indent_guide_options
   draw_active 'true
