@@ -1,8 +1,8 @@
 ##termpose
 A dead simple, pretty, machine-readable format for trees of strings.
 
-###it's like s-expressions, but not
-Termpose is extremely regular, but instead of basing all of its data on lists, termpose speaks of terms and their associated sequences, (EG `array(1 2 3 4)`, 'array' is the term, the numbers are the sequence), under the expectation that the host language will interpret sequences as being contained or in some way pertaining to their enclosing term. This is a reasonable expectation, considering that even Lisp gives special meaning to the first term of its lists in the majority of cases. This eliminates the edge cases of termless empty lists; every entity in the tree has a string at its head.
+###It's arguably more regular than s-expressions
+Termpose speaks of terms and their associated sequences, (EG `array(1 2 3 4)`, 'array' is the term, the numbers are the sequence), under the expectation that the host language will interpret sequences as being contained or in some way pertaining to their enclosing term. This is a reasonable expectation, considering that even Lisp gives special meaning to the first term of its lists in the majority of cases. This eliminates the edge cases of termless empty lists and heterogynous element types: every entity in the tree is a term with a string at its head.
 
 Termpose pays attention to indentation. Expressions like
 ```
@@ -12,9 +12,9 @@ a
 		d
 	e
 ```
-will be equivalent to `a(b c(d) e)`. This allows you to lay out your termpose with a minimum of friction and aesthetic noise.
+will be equivalent to `a(b c(d) e)`.
 
-Termpose tries to keep out of your namespace, attributing its own meanings to `":()`, but leaving `\/?-+=[]*&^%$#@!\`~;'.,<>` for your metalanguage to define as it pleases.
+Termpose tries to keep out of your namespace, attributing its own meanings to `":()`, but leaving `\/?-+=[]*&^%$#@!\`~;'.,<>` for your domain-specific language to define as it pleases.
 
 syntax by example
 ```python
@@ -31,6 +31,9 @@ A(B C)
 A(B C)
   D E
 #A contains B, C and D. D contains E.
+A(B C
+  D E
+#equivalent (crazy, right? Thing is: Support for multiline indentation syntax makes the use of paren blocks spanning multiple lines unnecessary, against convention, and thus disrecommended. As a result, it'd be really dumb to require people to close their parens. It'd just be tricky, inhumane pedantry.)
 A(B C) D
   E
   F
@@ -50,7 +53,7 @@ A:B:C:D:E
 A(B(C(D(E))))
 #equivalent
 A(B(C(D(E
-#equivalent (crazy, right? Thing is: Support for multiline indentation syntax makes the use of paren blocks spanning multiple lines unnecessary, against convention, and thus disrecommended. As a result, it'd be really dumb to require people to close their parens. It'd just be tricky, inhumane pedantry.)
+#equivalent
 A "a string"
 #"a string" is contained within "A" ("A" == A, all symbols are just strings)
 A "a string
@@ -132,7 +135,7 @@ here's me making a start on defining a universal type system:
 ```termpose
 meta
   description "
-    notes on metalanguage:
+    notes on DSL:
     // is a comment
     - is a list element
 
