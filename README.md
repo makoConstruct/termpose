@@ -87,7 +87,7 @@ goings
 #json:
 #[["abacus", ["opens"]], "horse", ["to", ["1", "2", "3", "4", "5"]], ["whaia", ["gloria", ["54", "90", "142"]]], "goings", ["comings", ["7  9"]], ["aways", ["90"]]]
 #lisp:
-#(('abacus 'opens) 'horse ('to '1 '2 '3 '4 '5) ('whaia ('gloria ('54 '90 '142))) 'goings ('comings ('7 '9)) ('aways '90))
+#'((abacus opens) horse (to 1 2 3 4 5) (whaia (gloria (54 90 142))) goings (comings (7 9)) (aways 90))
 ```
 
 What if I defined a programming language for the termpose syntax?
@@ -104,21 +104,21 @@ while <(i 5)
 >Hello worldly people
 >Hello worldly people
 
-class Dog types(< WillBite Professional) extends:BitingAnimal
-  def meets prof:Professional
+class Dog type_parameters(<(WillBite Professional) <(FavFood Food)) extends:BitingAnimal
+  def meets prof:Professional !:
     if eq type(prof) WillBite
       then
         bite prof
       else
         bark prof
-  def bark prof:Professional
+  def bark prof:Professional !:
     utter prof "he comes, beware, he comes
-    
-//"urgh. this gets pretty ugly. What can I do..
+  def beg !:
+    utter nearbyPeople "give me {}"(FavFood.name)
 
 //"hmm... there's a case we might not handle so well;
 a or b or c or d or e
-//"doesn't work
+//"No infix exprs. Doesn't work at all.
 or(a or(b or(c or(d e))))
 //"would work but is unsightly
 or(a or(b or(c or(d e
@@ -163,7 +163,7 @@ type
 type
   name U64
   
-  ... grossly unfinished but you get the point
+  ... you get the point
 ```
 
 What would termpose imitating json look like?
@@ -198,7 +198,7 @@ What would termpose imitating json look like?
 ```termpose
 //"minified
 highlight_line 'true
-ignored_packages 'ar(Floobits SublimeLinter Vintage {(ref:"http://enema.makopool.com/" name:enema update:yes))
+ignored_packages '[(Floobits SublimeLinter Vintage '{(ref:"http://enema.makopool.com/" name:enema update:yes) '[('1 '2 '3
 indent_guide_options(draw_active:'true)
 "overlay scroll bars" enabled
 "show tab close buttons" 'false
@@ -208,12 +208,12 @@ word_wrap 'true
 
 //"pretty printed
 highlight_line 'true
-ignored_packages 'ar:
+ignored_packages '[:
   Floobits
   SublimeLinter
   Vintage
-  { ref:"http://enema.makopool.com/" name:enema update:yes
-  'ar '1 '2 '3
+  '{ ref:"http://enema.makopool.com/" name:enema update:yes
+  '[ '1 '2 '3
 indent_guide_options
   draw_active 'true
 "overlay scroll bars" enabled
