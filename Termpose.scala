@@ -189,12 +189,12 @@ object Termpose{
 			foremostTerm = null
 		}
 		def finishLineNormally{ //where as finishing abnormally is what multiline reading does because by the time it finishes it has already eaten the indentation and it doesn't ask whether the parenTermStack's empty
-			if(parenTermStack.isEmpty){
+			// if(parenTermStack.isEmpty){
 				finishLine
 				transition(eatingIndentation)
-			}else{
-				break("line end before closing paren")
-			}
+			// }else{
+			// 	break("line end before closing paren")
+			// }
 		}
 		private def getColonBuddy{
 			colonHead = foremostTerm
@@ -262,7 +262,7 @@ object Termpose{
 			case ')' =>
 				closeParen
 			case '"' =>
-				transition(takingQuoteTermThatMustTerminateWithQuote)
+				transition(takingSingleLineQuoteTerm)
 			case '\n' =>
 				break("newline before paren completion (parens are only for single lines)")
 			case c:Char =>
@@ -286,17 +286,6 @@ object Termpose{
 			case c:Char =>
 				transition(takeTerm)
 				takeTerm(c)
-		}
-		private val takingQuoteTermThatMustTerminateWithQuote:PF = (c:Char)=> c match{
-			case '"' =>
-				finishTakingTermAndAttach
-				transition(seekingInLine)
-			case '\n' =>
-				break("quote must terminate before newline")
-			case '\\' =>
-				pushMode(takingEscape)
-			case c:Char =>
-				stringBuffer += c
 		}
 		private val startingToTakeQuoteTerm:PF = (c:Char)=> c match{
 			case '"' =>
@@ -325,6 +314,7 @@ object Termpose{
 			case c:Char =>
 				stringBuffer += c
 		}
+		//history story: takingQuoteTermThatMustTerminateWithQuote was an artifact from when line breaks wern't allowed during parens, it was really just the above with a breaker response to '\n's instead of a handler. We now handle such events reasonably.
 		private val takingEscape:PF = (c:Char)=> c match{
 			case c:Char =>
 				c match{

@@ -17,7 +17,7 @@ will be equivalent to `a(b c(d) e)`. This allows you to lay out your termpose wi
 Termpose tries to keep out of your namespace, attributing its own meanings to `":()`, but leaving `\/?-+=[]*&^%$#@!\`~;'.,<>` for your metalanguage to define as it pleases.
 
 syntax by example
-```
+```python
 A B
 #A contains B
 A B C
@@ -33,9 +33,11 @@ A(B C)
 #A contains B, C and D. D contains E.
 A(B C) D
   E
+  F
 #A contains everything.
 A B C D
   E
+  F
 #equivalent
 A B C D:
   E
@@ -45,6 +47,10 @@ A B:C D:E
 #A contains B and D, but C and E are contained by their colon buddy, B and D respectively
 A:B:C:D:E
 #each contains the next
+A(B(C(D(E))))
+#equivalent
+A(B(C(D(E
+#equivalent (crazy, right? Thing is: Support for multiline indentation syntax makes the use of paren blocks spanning multiple lines unnecessary, against convention, and thus disrecommended. As a result, it'd be really dumb to require people to close their parens. It'd just be tricky, inhumane pedantry.)
 A "a string"
 #"a string" is contained within "A" ("A" == A, all symbols are just strings)
 A "a string
@@ -76,7 +82,7 @@ goings
   aways(90)
 """)
 #json:
-#[["abacus", ["opens"]], "horse", ["to", ["1", "2", "3", "4", "5"]], ["whaia", ["gloria", ["54", "90", "142"]]], "goings", ["comings", ["7", "9"]], ["aways", ["90"]]]
+#[["abacus", ["opens"]], "horse", ["to", ["1", "2", "3", "4", "5"]], ["whaia", ["gloria", ["54", "90", "142"]]], "goings", ["comings", ["7  9"]], ["aways", ["90"]]]
 #lisp:
 #(('abacus 'opens) 'horse ('to '1 '2 '3 '4 '5) ('whaia ('gloria ('54 '90 '142))) 'goings ('comings ('7 '9)) ('aways '90))
 ```
@@ -113,7 +119,7 @@ a or b or c or d or e
 or(a or(b or(c or(d e))))
 //"would work but is unsightly
 or(a or(b or(c or(d e
-//"I might just allow this. I'm getting the sense that closing parens even though parens are required to close at line end is bullshit. I have a vague feeling that it's good for error checking? Seriously, bullshit. No errors can stem from that.
+//"Closing parens at the end of a line is not required, so this is reasonably nice
 or a, or b, or c, or d, e
 //"like coffeescript
 or a, or b, or c, or d e

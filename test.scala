@@ -73,7 +73,16 @@ object App{
 				mora
 				bonell
 			emero
-		""", "hobobo(green(witches(glon mora bonell)) emero)"
+		""", "hobobo(green(witches(glon mora bonell)) emero)",
+		"""a(bb(aod(igjd(ss
+			ojfjf
+			jjj(s:
+				2""", "a(bb(aod(igjd(ss))) ojfjf jjj(s(2)))",
+		"""
+		f
+			a:
+			b
+		""", "f(a b)"
 		)
 
 		var i = 0
