@@ -16,7 +16,7 @@ will be equivalent to `a(b c(d) e)`.
 
 Termpose tries to keep out of your namespace, attributing its own meanings to `":()`, but leaving `\/?-+=[]*&^%$#@!\`~;'.,<>` for your domain-specific language to define as it pleases.
 
-syntax by example
+###Spec by example
 ```python
 A B
 #A contains B
@@ -68,29 +68,10 @@ A "
 <!-- A B, C D, E F
 #A(B C(D E(F))). Commas start a new term within the line. -->
 
-potential translation scheme:
-```coffeescript
-parse("""
-abacus opens
-horse
-to
-  1
-  2
-  3
-  4
-  5
-whaia(gloria(54 90 142))
-goings
-  comings("7  9")
-  aways(90)
-""")
-#json:
-#[["abacus", ["opens"]], "horse", ["to", ["1", "2", "3", "4", "5"]], ["whaia", ["gloria", ["54", "90", "142"]]], "goings", ["comings", ["7  9"]], ["aways", ["90"]]]
-#lisp:
-#'((abacus opens) horse (to 1 2 3 4 5) (whaia (gloria (54 90 142))) goings (comings (7 9)) (aways 90))
-```
+###Due mentions
+If you want an actual Lisp, you should know that there does exist a Lisp with something of the syntactical niceties that termpose has srfi.schemers.org/srfi-110/srfi-110.html
 
-What if I defined a programming language for the termpose syntax?
+###What if I defined a programming language for the termpose syntax?
 ```
 let i 0
 while <(i 5)
