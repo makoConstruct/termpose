@@ -9,6 +9,8 @@ object Termpose{
 			buf.result
 		}
 	}
+	private def mightBeReservedChar(c:Char) = c < 59 //heuristic, never false negatives
+	//history story: private def mightBeReservedChar(c:Char) = (c&(-60)) == 0 //filters out 94.8% of non-matches. I used to use a magic xor shift and a magic number I'd trauled up from brutespace, til I realized this was all they were doing. How it works: It filters everything greater than 64 and every x for which x%8 < 4 //can't use this beauty no more.
 	private def escapeSymbol(str:String):String ={
 		val sb = new StringBuilder
 		for(c <- str){
@@ -22,6 +24,9 @@ object Termpose{
 				case '\n' =>
 					sb += '\\'
 					sb += 'n'
+				case '\r' =>
+					sb += '\\'
+					sb += 'r'
 				case c:Char =>
 					sb += c
 			}
@@ -32,12 +37,20 @@ object Termpose{
 		val v:String
 		def stringifySymbol(sb:StringBuilder) =
 			if(
-				v.indexOf(' ') >= 0 ||
-				v.indexOf('(') >= 0 ||
-				v.indexOf(':') >= 0 ||
-				v.indexOf('\t') >= 0 ||
-				v.indexOf('\n') >= 0 ||
-				v.indexOf(')') >= 0
+				v.exists { c =>
+					mightBeReservedChar(c) && (
+						c match{
+							case ' ' => true
+							case '(' => true
+							case ':' => true
+							case '\t' => true
+							case '\n' => true
+							case '\r' => true
+							case ')' => true
+							case _:Char => false
+						}
+					)
+				}
 			)
 				sb += '"' ++= escapeSymbol(v) += '"'
 			else
@@ -109,7 +122,7 @@ object Termpose{
 			parenTermStack.clear
 			tailestTermSequence = resultSeq
 			parenParentStack.clear
-			line = 0
+			line = 0 
 			column = 0
 			index = 0
 			currentMode = null
@@ -121,6 +134,11 @@ object Termpose{
 			multiLineIndent.clear
 			mlIndent = null
 		}
+		
+		
+		//general notes:
+		//the parser consists of a loop that pumps chars from the input string into whatever the current Mode is. Modes jump from one to the next according to cues, sometimes forwarding the cue onto the new mode before it gets any input from the input loop. There is a mode stack, but it is rarely used. Modes are essentially just a Char => Unit (named 'PF', short for Processing Funnel(JJ it's legacy from when they were Partial Functions)). An LF ('\n') is inserted artificially at the end of input to ensure that line end processes are called. CR LFs ("\r\n"s) are filtered to a single LF (This does mean that a windows formatted file will have unix line endings when parsing multiline strings, that is not a significant issue, ignoring the '\r's will probably save more pain than it causes and the escape sequence \r is available if they're explicitly desired).
+		
 		
 		private def interTerm(symbol:String) = new InterTerm(symbol, line, column)
 		private def transition(nm:PF){ currentMode = nm }
@@ -315,15 +333,15 @@ object Termpose{
 				stringBuffer += c
 		}
 		//history story: takingQuoteTermThatMustTerminateWithQuote was an artifact from when line breaks wern't allowed during parens, it was really just the above with a breaker response to '\n's instead of a handler. We now handle such events reasonably.
-		private val takingEscape:PF = (c:Char)=> c match{
-			case c:Char =>
-				c match{
-					case 'n' => stringBuffer += '\n'
-					case 't' => stringBuffer += '\t'
-					case 'h' => stringBuffer += '☃'
-					case g:Char => stringBuffer += g
-				}
-				popMode
+		private val takingEscape:PF = (c:Char)=> {
+			c match{
+				case 'n' => stringBuffer += '\n'
+				case 'r' => stringBuffer += '\r'
+				case 't' => stringBuffer += '\t'
+				case 'h' => stringBuffer += '☃'
+				case g:Char => stringBuffer += g
+			}
+			popMode
 		}
 		private val multiLineFirstLine:PF = (c:Char)=> c match{
 			case ' ' | '\t' =>
@@ -388,7 +406,13 @@ object Termpose{
 			transition(eatingIndentation)
 			val res = try{
 				while(index < s.length){
-					val c = s.charAt(index)
+					var c = s.charAt(index)
+					if(c == '\r'){
+						if(s.charAt(index) == '\n'){
+							index += 1
+						}
+						c = '\n'
+					}
 					currentMode(c)
 					index += 1
 					if(c == '\n'){

@@ -1,8 +1,11 @@
 ##termpose
-A dead simple, pretty, machine-readable format for trees of strings.
+The ultimate markup language, combining an absolutely minimal syntax with an extremely regular, flexible in-memory representation.
 
 ###It's arguably more regular than s-expressions
-Termpose speaks of terms and their associated sequences, (EG `array(1 2 3 4)`, 'array' is the term, the numbers are the sequence), under the expectation that the host language will interpret sequences as being contained or in some way pertaining to their enclosing term. This is a reasonable expectation, considering that even Lisp gives special meaning to the first term of its lists in the majority of cases. This eliminates the edge cases of termless empty lists and heterogynous element types: every entity in the tree is a term with a string at its head.
+Parsed termpose resolves to a tree of terms and their associated sequences (EG `array(a b c d e)`, 'array' is the term, the letters are the terms in its sequence). This convention eliminates the edge cases of termless empty lists and heterogynous element types: every entity in the tree is a term with a string at its head which tells the parser how to take it. Symbols are not a separate type, but a component of the fundamental unit. In practice, these differences do not set termpose sublanguages apart from other languages, as with the right conventions, anything had by json or lisp or yaml can be easily replicated. Termpose mimicing yaml looks (marginally)better than yaml. Termpose mimicing JSON looks (unambiguously)better than json. Termpose mimicking xml is not a contest. Termpose mimicking lisp.. well, if you want that I should refer you to http://srfi.schemers.org/srfi-110/srfi-110.html they do it better than termpose could.
+
+
+##Syntax
 
 Termpose pays attention to indentation. Expressions like
 ```
@@ -14,7 +17,7 @@ a
 ```
 will be equivalent to `a(b c(d) e)`.
 
-Termpose tries to keep out of your namespace, attributing its own meanings to `":()`, but leaving `\/?-+=[]*&^%$#@!\`~;'.,<>` for your domain-specific language to define as it pleases.
+Termpose tries to keep out of your namespace, attributing its own meanings to the characters `":()`, but leaving ```\/?-+=[]*&^%$#@!`~;'.,<>``` for your domain-specific languages to define as they please.
 
 ###Spec by example
 ```python
@@ -31,9 +34,6 @@ A(B C)
 A(B C)
   D E
 #A contains B, C and D. D contains E.
-A(B C
-  D E
-#equivalent (crazy, right? Thing is: Support for multiline indentation syntax makes the use of paren blocks spanning multiple lines unnecessary, against convention, and thus disrecommended. As a result, it'd be really dumb to require people to close their parens. It'd just be tricky, inhumane pedantry.)
 A(B C) D
   E
   F
@@ -46,6 +46,12 @@ A B C D:
   E
   F
 #A contains B, C and D. D contains E and F
+A B(C)
+  D
+#A contains B and D. B contains C.
+A B(C
+  D
+#equivalent (crazy, right? Thing is: Support for multiline indentation syntax makes the use of paren blocks spanning multiple lines completely unnecessary and against convention, thus unjustifiable. As a result, it'd be really dumb to require people to close their parens. It'd just be tricky, inhumane pedantry.)
 A B:C D:E
 #A contains B and D, but C and E are contained by their colon buddy, B and D respectively
 A:B:C:D:E
@@ -68,16 +74,13 @@ A "
 <!-- A B, C D, E F
 #A(B C(D E(F))). Commas start a new term within the line. -->
 
-###Due mentions
-If you want an actual Lisp, you should know that there does exist a Lisp with something of the syntactical niceties that termpose has srfi.schemers.org/srfi-110/srfi-110.html
-
 ###What if I defined a programming language for the termpose syntax?
 ```
 let i 0
-while <(i 5)
+while <(i 5
   print 'Hello
   println "' worldly people
-  =(i +(i 1))
+  =(i +(i 1
 
 >Hello worldly people
 >Hello worldly people
@@ -204,5 +207,3 @@ theme Spacegray.sublime-theme
 word_wrap 'true
 ```
 I think that works out very well. Note that `'`s are required for all non-string keys in order to, for instance, differentiate `true` from the string `"true"`, and `"`s alone would not do this, as, once parsed through the termpose filter, there is no perceptible difference between the terms `"true"` and a `true`.
-
-Caveat: Does not preserve the difference between js inputs `"a"` and `'a'`. It also cannot be formatted as a single line due to the unnamed but implicit root element.
