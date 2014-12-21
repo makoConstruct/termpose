@@ -1,8 +1,8 @@
 ##termpose
-The ultimate markup language, combining an absolutely minimal syntax with an extremely regular, flexible in-memory representation.
+A markup language. A noise-free syntax for pure, flexible data models.
 
 ###It's arguably more regular than s-expressions
-Parsed termpose resolves to a tree of terms and their associated sequences (EG `array(a b c d e)`, 'array' is the term, the letters are the terms in its sequence). This convention eliminates the edge cases of termless empty lists and heterogynous element types: every entity in the tree is a term with a string at its head which tells the parser how to take it. Symbols are not a separate type, but a component of the fundamental unit. In practice, these differences do not set termpose sublanguages apart from other languages, as with the right conventions, anything had by json or lisp or yaml can be easily replicated. Termpose mimicing yaml looks (marginally)better than yaml. Termpose mimicing JSON looks (unambiguously)better than json. Termpose mimicking xml is not a contest. Termpose mimicking lisp.. well, if you want that I should refer you to http://srfi.schemers.org/srfi-110/srfi-110.html they do it better than termpose could.
+Parsed termpose resolves to a tree of terms and their associated sequences (EG `array(a b c d e)`, 'array' is the term, the letters are the terms in its sequence, each of which having the empty sequence themselves). This convention eliminates the edge cases of termless empty lists and varying element types: every entity in the tree is a term with a string at its head which tells the parser how to take it, and a tail of similar entities pertaining to it. Symbols are not a separate type, but a component of the fundamental unit. In practice, these differences do not set termpose sublanguages apart from other languages, as, with the right domain-specific language, anything had by json or lisp or yaml can be easily replicated. Termpose mimicing yaml looks (marginally)better than yaml. Termpose mimicing JSON looks (unambiguously)better than json. Termpose mimicking xml is not even a contest. Termpose mimicking lisp.. well, if you want that I should refer you to http://srfi.schemers.org/srfi-110/srfi-110.html , but termpose would do a commendable job.
 
 
 ##Syntax
@@ -22,9 +22,9 @@ Termpose tries to keep out of your namespace, attributing its own meanings to th
 ###Spec by example
 ```python
 A B
-#A contains B
+#equivalent to A(B)
 A B C
-#A contains B and C
+#equivalent to A(B C)
 A
   B
   C
@@ -33,7 +33,7 @@ A(B C)
 #equivalent
 A(B C)
   D E
-#A contains B, C and D. D contains E.
+#A(B C D(E)).
 A(B C) D
   E
   F
@@ -45,25 +45,23 @@ A B C D
 A B C D:
   E
   F
-#A contains B, C and D. D contains E and F
+#A(B C D(E F)). If the line sequence is terminated by a colon, the last element takes the indent sequence, rather than the first.
 A B(C)
   D
-#A contains B and D. B contains C.
+#A(B(C) D)
 A B(C
   D
-#equivalent (crazy, right? Thing is: Support for multiline indentation syntax makes the use of paren blocks spanning multiple lines completely unnecessary and against convention, thus unjustifiable. As a result, it'd be really dumb to require people to close their parens. It'd just be tricky, inhumane pedantry.)
+#equivalent (crazy? Thing is: Since indentation is supported and suffient for expressing containments spread over multiple lines, there is no need to allow brackets to do this. So we don't. Stemming from that, since a bracket cannot possibly continue over multiple lines, we just close them automatically.)
 A B:C D:E
 #A contains B and D, but C and E are contained by their colon buddy, B and D respectively
 A:B:C:D:E
-#each contains the next
-A(B(C(D(E))))
-#equivalent
+#A(B(C(D(E))))
 A(B(C(D(E
-#equivalent
+#equivalent, in this case
 A "a string"
-#"a string" is contained within "A" ("A" == A, all symbols are just strings)
+#A("a string"). (all symbols are just strings, but this one contains a space, so it needs quotes.)
 A "a string
-#equivalent. Closing quote isn't needed if the line ends. What else could such a statement be intended to mean?
+#equivalent. Closing quote isn't needed if the line ends.
 A"a string
 #equivalent
 A "
@@ -74,7 +72,12 @@ A "
 <!-- A B, C D, E F
 #A(B C(D E(F))). Commas start a new term within the line. -->
 
-###What if I defined a programming language for the termpose syntax?
+##Surely as a burgeoning format the parser is woefully inefficient?
+The community has lead me unto the impression that Jackson, the Json parser for Java is, like, *super fast*. I compared my early, unoptimized, Scala-based termpose parser with Jackson, and there is basically no discernable difference between their performance. Maybe I just have efficient coding habits. Maybe it's the kinda uninformed graphic way I architected the thing. Either way, the termpose parser is perfectly competitive already. On that dimension.
+
+###What if you defined a programming language for the termpose syntax? What would that look like?
+
+Probably something like this
 ```
 let i 0
 while <(i 5
@@ -88,7 +91,7 @@ while <(i 5
 >Hello worldly people
 >Hello worldly people
 
-class Dog type_parameters(<(WillBite Professional) <(FavFood Food)) extends:BitingAnimal
+class Dog type_parameters(<(WillBite Professional) <(FavFood Food) //"Note, the one on the right of the < exprs is a type bound, IE, it's saying FavFood must be a subclass of Food") extends:BitingAnimal
   def meets prof:Professional !:
     if eq type(prof) WillBite
       then
@@ -150,8 +153,9 @@ type
   ... you get the point
 ```
 
-What would termpose imitating json look like?
+##Termpose is better for typing json than json
 
+for
 ```javascript
 {
   "highlight_line": true,
@@ -181,29 +185,61 @@ What would termpose imitating json look like?
 ```
 ```termpose
 //"minified
-highlight_line 'true
-ignored_packages '[(Floobits SublimeLinter Vintage '{(ref:"http://enema.makopool.com/" name:enema update:yes) '[('1 '2 '3
-indent_guide_options(draw_active:'true)
+highlight_line true
+ignored_packages [(Floobits SublimeLinter Vintage {(ref:"http://enema.makopool.com/" name:enema update:yes) [(1 2 3
+indent_guide_options draw_active:true
 "overlay scroll bars" enabled
-"show tab close buttons" 'false
-tab_size '2
+"show tab close buttons" false
+tab_size 2
 theme Spacegray.sublime-theme
-word_wrap 'true
+word_wrap true
 
 //"pretty printed
-highlight_line 'true
-ignored_packages '[:
+highlight_line true
+ignored_packages [:
   Floobits
   SublimeLinter
   Vintage
-  '{ ref:"http://enema.makopool.com/" name:enema update:yes
-  '[ '1 '2 '3
+  { ref:"http://enema.makopool.com/" name:enema update:yes
+  [ 1 2 3
 indent_guide_options
-  draw_active 'true
+  draw_active true
 "overlay scroll bars" enabled
-"show tab close buttons" 'false
-tab_size '2
+"show tab close buttons" false
+tab_size 2
 theme Spacegray.sublime-theme
-word_wrap 'true
+word_wrap true
 ```
-I think that works out very well. Note that `'`s are required for all non-string keys in order to, for instance, differentiate `true` from the string `"true"`, and `"`s alone would not do this, as, once parsed through the termpose filter, there is no perceptible difference between the terms `"true"` and a `true`.
+I think that works out very well. `'` may be used an escape for instances like, say, representing the string `"true"`(parsed termpose has no record of whether there were double quotes, so that alone wouldn't do).
+
+
+##How about XML?
+Representing my homepage:
+```python
+html
+  head
+    title ."about mako
+    meta -charset:utf-8
+    link -rel:"shortcut icon" -href:DGFavicon.png
+    style ."
+      CSS plaintext...
+    script -language:javascript ."
+      Javascript plaintext...
+  body
+    div -id:centerControlled
+      table tbody:
+        tr
+          td
+          td
+            div -id:downgust
+              canvas -height:43 -width:43
+        tr
+          td -class:leftCol ."who
+          td -class:rightCol ."mako yass, global handle @makoConstruct.
+        ...
+```
+This doesn't work yet, though, I need to fix `c a"b` to mean `c(a(b))` rather than `c(a b)` as it does now. Note
+
+
+##pedantic spec notes:
+When converting in-memory representations to maps, if the same key occurs more than once, the latest occurance should overwrite the earlier ones.

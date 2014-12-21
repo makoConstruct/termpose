@@ -1,5 +1,5 @@
 import util.{Try, Success, Failure}
-import collection.mutable.{ArrayBuffer}
+import collection.mutable.{ArrayBuffer, HashMap}
 object Termpose{
 	trait Stringificable{ //has a method for stringifying through a stringBuilder, provides a toString through this
 		def stringify(sb:StringBuilder):Unit
@@ -9,10 +9,31 @@ object Termpose{
 			buf.result
 		}
 	}
-	private def mightBeReservedChar(c:Char) = c < 59 //heuristic, never false negatives
-	//history story: private def mightBeReservedChar(c:Char) = (c&(-60)) == 0 //filters out 94.8% of non-matches. I used to use a magic xor shift and a magic number I'd trauled up from brutespace, til I realized this was all they were doing. How it works: It filters everything greater than 64 and every x for which x%8 < 4 //can't use this beauty no more.
-	private def escapeSymbol(str:String):String ={
+	def asJsonString(ps:Seq[Pose]):String ={
 		val sb = new StringBuilder
+		sb += '['
+		if(!ps.isEmpty){
+			ps(0).buildJsonString(sb)
+			for(i <- 1 until ps.length){
+				sb += ','
+				ps(i).buildJsonString(sb)
+			}
+		}
+		sb += ']'
+		sb.result
+	}
+	def minified(ps:Seq[Pose]):String ={
+		val sb = new StringBuilder
+		for(i <- 0 until ps.length){
+			ps(i).stringify(sb)
+			sb += '\n'
+		}
+		sb.result
+	}
+		
+	private def mightBeReservedChar(c:Char) = c < 59 //heuristic, never false negatives
+	//history story: private def mightBeReservedChar(c:Char) = (c&(-60)) == 0 //filters out 94.8% of non-matches. I used to use a magic xor shift and a magic number I'd trauled up from brutespace, til I realized this was all they were doing. How it works: It filters everything greater than 64 and every x for which x%8 < 4 //can't use this beauty no more cause of windows lineendings; '\r'%8 is not less than four.
+	private def escapeSymbol(sb:StringBuilder, str:String){
 		for(c <- str){
 			c match{
 				case '\\' =>
@@ -31,11 +52,39 @@ object Termpose{
 					sb += c
 			}
 		}
-		sb.result
 	}
+	case class TermposeAccessError(msg:String) extends RuntimeException(msg)
+	// import language.dynamic
 	sealed trait Pose extends Stringificable{
 		val v:String
-		def stringifySymbol(sb:StringBuilder) =
+		def map:Map[String, Seq[Pose]]
+		// def selectDynamic(k:String):String = map.get(k) match{
+		// 	case Some(p) =>
+		// 		if(p.tail.length == 1){
+		// 			p.tail(0)
+		// 		}else if(p.tail.length < 1){
+		// 			throw new TermposeAccessError("empty field "+k)
+		// 		}else{
+		// 			throw new TermposeAccessError("multiple possible matches for field "+k)
+		// 		}
+		// 	case None =>
+		// 		throw new TermposeAccessError("no such field")
+		// }
+		def getValue(k:String):Option[String] = map.get(k).flatMap { p =>
+			if(p.tail.length == 1)
+				Some(p.tail(0).term)
+			else None
+		}
+		def getSub(k:String):Option[Pose] = map.get(k).flatMap { p =>
+			if(p.length == 0)
+				Some(p(0))
+			else
+				None
+		}
+		def apply(k:Int):Pose = tail(k)
+		def term:String = v
+		def tail:Seq[Pose]
+		protected def stringifySymbol(sb:StringBuilder) =
 			if(
 				v.exists { c =>
 					mightBeReservedChar(c) && (
@@ -51,15 +100,41 @@ object Termpose{
 						}
 					)
 				}
-			)
-				sb += '"' ++= escapeSymbol(v) += '"'
-			else
+			){
+				sb += '"'
+				escapeSymbol(sb, v)
+				sb += '"'
+			}else{
 				sb ++= v
+			}
+		def jsonString:String ={
+			val sb = new StringBuilder
+			buildJsonString(sb)
+			sb.result
+		}
+		def buildJsonString(sb:StringBuilder){
+			sb += '"'
+			escapeSymbol(sb, v)
+			sb += '"'
+		}
 	}
+	
 	case class Leaf(val v:String) extends Pose{
+		def tail:Seq[Pose] = Seq.empty
+		lazy val _map:Map[String, Seq[Pose]] = Map.empty
 		def stringify(sb:StringBuilder) = stringifySymbol(sb)
+		def map = _map
 	}
 	case class Term(val v:String, val s:Seq[Pose]) extends Pose {
+		def tail:Seq[Pose] = s
+		lazy val _map:Map[String, Seq[Pose]] = {
+			val m = new HashMap[String, Seq[Pose]]
+			for(p <- s){
+				m(p.term) = p.tail
+			}
+			m.toMap
+		}
+		def map = _map
 		def stringify(sb:StringBuilder) ={
 			if(s.isEmpty){
 				stringifySymbol(sb)
@@ -76,7 +151,21 @@ object Termpose{
 		}
 		def apply(key:String):Option[Pose] = s.find { t => t.v equals key }
 		def each(key:String):Seq[Pose] = s.filter { t => t.v equals key }
+		override def buildJsonString(sb:StringBuilder){
+			sb += '['
+			sb += '"'
+			escapeSymbol(sb, v)
+			sb += '"'
+			for(sub <- s){
+				sb += ','
+				sub.buildJsonString(sb)
+			}
+			sb += ']'
+		}
 	}
+	
+	
+	
 	class Parser{
 		private class ParsingException(msg:String) extends RuntimeException(msg)
 		private class InterTerm(val symbol:String, val line:Int, val column:Int){
