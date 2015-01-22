@@ -1,8 +1,8 @@
 ##termpose
-A markup language. A noise-free syntax for pure, flexible data models.
+A markup language, and symbol tree representation format. Noise-free syntax and pure, flexible data models.
 
 ###It's arguably more regular than s-expressions
-Parsed termpose resolves to a tree of terms and their associated sequences (EG `array(a b c d e)`, 'array' is the term, the letters are the terms in its sequence, each of which having the empty sequence themselves). This convention eliminates the edge cases of termless empty lists and varying element types: every entity in the tree is a term with a string at its head which tells the parser how to take it, and a tail of similar entities pertaining to it. Symbols are not a separate type, but a component of the fundamental unit. In practice, these differences do not set termpose sublanguages apart from other languages, as, with the right domain-specific language, anything had by json or lisp or yaml can be easily replicated. Termpose mimicing yaml looks (marginally)better than yaml. Termpose mimicing JSON looks (unambiguously)better than json. Termpose mimicking xml is not even a contest. Termpose mimicking lisp.. well, if you want that I should refer you to http://srfi.schemers.org/srfi-110/srfi-110.html , but termpose would do a commendable job.
+Parsed termpose resolves to a tree of terms and their associated sequences (EG `array(a b c d e)`, 'array' is the term, the letters are the terms in its sequence, and those letters sequences are empty). This convention eliminates the edge cases of termless empty lists and varying element types: every entity in the tree is a term with a string at its head which tells the parser how to take it, and a tail of similar entities pertaining to it. Symbols are not a separate type, but a component of the fundamental unit. In practice, these differences do not set termpose sublanguages apart from other languages, as, with the right domain-specific language, anything had by json or lisp or yaml can be easily replicated. Termpose mimicing yaml looks (marginally)better than yaml. Termpose mimicing JSON looks (unambiguously)better than json. Termpose mimicking xml is not even a contest. Termpose mimicking lisp.. well, if you want that I should refer you to http://srfi.schemers.org/srfi-110/srfi-110.html , but termpose would do a commendable job.
 
 
 ##Syntax
@@ -51,7 +51,7 @@ A B(C)
 #A(B(C) D)
 A B(C
   D
-#equivalent (crazy? Thing is: Since indentation is supported and suffient for expressing containments spread over multiple lines, there is no need to allow brackets to do this. So we don't. Stemming from that, since a bracket cannot possibly continue over multiple lines, we just close them automatically.)
+#equivalent (crazy? Thing is: Since indentation is supported and suffient for expressing containments spread over multiple lines, there is no need to allow brackets to do this. So we don't. Stemming from that, since a bracket cannot possibly continue over multiple lines, we just close them automatically at the end of the line.)
 A B:C D:E
 #A contains B and D, but C and E are contained by their colon buddy, B and D respectively
 A:B:C:D:E
@@ -73,7 +73,7 @@ A "
 #A(B C(D E(F))). Commas start a new term within the line. -->
 
 ##Surely as a burgeoning format the parser is woefully inefficient?
-The community has lead me unto the impression that Jackson, the Json parser for Java is, like, *super fast*. I compared my early, unoptimized, Scala-based termpose parser with Jackson, and there is basically no discernable difference between their performance. Maybe I just have efficient coding habits. Maybe it's the kinda uninformed graphic way I architected the thing. Either way, the termpose parser is perfectly competitive already. On that dimension.
+The community has lead me unto the impression that Jackson, the Json parser for Java is, like, *super fast*. I compared my early, unoptimized, Scala-based termpose parser with Jackson, and there is basically no discernable difference between their performance. Maybe I just have efficient coding habits. Maybe it's the noodley graphic way I architected the thing. Either way, the termpose parser is perfectly competitive already. On that dimension.
 
 ###What if you defined a programming language for the termpose syntax? What would that look like?
 
@@ -118,7 +118,7 @@ reduce or a b c d e
 //"lol. Maybe that's best.
 ```
 
-here's me making a start on defining a universal type system:
+here's me making a start on defining a cross-language type system(see Cap'n Proto if you're interested in that kind of thing):
 ```termpose
 meta
   description "
