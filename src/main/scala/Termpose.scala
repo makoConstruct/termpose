@@ -31,7 +31,7 @@ object Termpose{
 		sb.result
 	}
 		
-	private def mightBeReservedChar(c:Char) = c < 59 //heuristic, never false negatives
+	private def mightBeReservedChar(c:Char) = c < 59 //heuristic, no false negatives
 	//history story: private def mightBeReservedChar(c:Char) = (c&(-60)) == 0 //filters out 94.8% of non-matches. I used to use a magic xor shift and a magic number I'd trauled up from brutespace, til I realized this was all they were doing. How it works: It filters everything greater than 64 and every x for which x%8 < 4 //can't use this beauty no more cause of windows lineendings; '\r'%8 is not less than four.
 	private def escapeSymbol(sb:StringBuilder, str:String){
 		for(c <- str){
@@ -56,9 +56,11 @@ object Termpose{
 	case class TermposeAccessError(msg:String) extends RuntimeException(msg)
 	// import language.dynamic
 	sealed trait Pose extends Stringificable{
-		val v:String
-		def map:Map[String, Seq[Pose]]
-		// def selectDynamic(k:String):String = map.get(k) match{
+		val v:Symbol
+		val line:Int
+		val column:Int
+		def map:Map[Symbol, Seq[Pose]]
+		// def selectDynamic(k:Symbol):Symbol = map.get(k) match{
 		// 	case Some(p) =>
 		// 		if(p.tail.length == 1){
 		// 			p.tail(0)
@@ -70,23 +72,23 @@ object Termpose{
 		// 	case None =>
 		// 		throw new TermposeAccessError("no such field")
 		// }
-		def getValue(k:String):Option[String] = map.get(k).flatMap { p =>
+		def getValue(k:Symbol):Option[Symbol] = map.get(k).flatMap { p =>
 			if(p.tail.length == 1)
 				Some(p.tail(0).term)
 			else None
 		}
-		def getSub(k:String):Option[Pose] = map.get(k).flatMap { p =>
+		def getSub(k:Symbol):Option[Pose] = map.get(k).flatMap { p =>
 			if(p.length == 0)
 				Some(p(0))
 			else
 				None
 		}
 		def apply(k:Int):Pose = tail(k)
-		def term:String = v
+		def term:Symbol = v
 		def tail:Seq[Pose]
 		protected def stringifySymbol(sb:StringBuilder) =
 			if(
-				v.exists { c =>
+				v.name.exists { c =>
 					mightBeReservedChar(c) && (
 						c match{
 							case ' ' => true
@@ -102,10 +104,10 @@ object Termpose{
 				}
 			){
 				sb += '"'
-				escapeSymbol(sb, v)
+				escapeSymbol(sb, v.name)
 				sb += '"'
 			}else{
-				sb ++= v
+				sb ++= v.name
 			}
 		def jsonString:String ={
 			val sb = new StringBuilder
@@ -114,21 +116,21 @@ object Termpose{
 		}
 		def buildJsonString(sb:StringBuilder){
 			sb += '"'
-			escapeSymbol(sb, v)
+			escapeSymbol(sb, v.name)
 			sb += '"'
 		}
 	}
 	
-	case class Leaf(val v:String) extends Pose{
+	class Leaf(val v:Symbol, val line:Int, val column:Int) extends Pose{
 		def tail:Seq[Pose] = Seq.empty
-		lazy val _map:Map[String, Seq[Pose]] = Map.empty
+		lazy val _map:Map[Symbol, Seq[Pose]] = Map.empty
 		def stringify(sb:StringBuilder) = stringifySymbol(sb)
 		def map = _map
 	}
-	case class Term(val v:String, val s:Seq[Pose]) extends Pose {
+	class Term(val v:Symbol, val line:Int, val column:Int, val s:Seq[Pose]) extends Pose {
 		def tail:Seq[Pose] = s
-		lazy val _map:Map[String, Seq[Pose]] = {
-			val m = new HashMap[String, Seq[Pose]]
+		lazy val _map:Map[Symbol, Seq[Pose]] = {
+			val m = new HashMap[Symbol, Seq[Pose]]
 			for(p <- s){
 				m(p.term) = p.tail
 			}
@@ -149,12 +151,12 @@ object Termpose{
 				sb += ')'
 			}
 		}
-		def apply(key:String):Option[Pose] = s.find { t => t.v equals key }
-		def each(key:String):Seq[Pose] = s.filter { t => t.v equals key }
+		def apply(key:Symbol):Option[Pose] = s.find { t => t.v equals key }
+		def each(key:Symbol):Seq[Pose] = s.filter { t => t.v equals key }
 		override def buildJsonString(sb:StringBuilder){
 			sb += '['
 			sb += '"'
-			escapeSymbol(sb, v)
+			escapeSymbol(sb, v.name)
 			sb += '"'
 			for(sub <- s){
 				sb += ','
@@ -168,18 +170,18 @@ object Termpose{
 	
 	class Parser{
 		private class ParsingException(msg:String) extends RuntimeException(msg)
-		private class InterTerm(val symbol:String, val line:Int, val column:Int){
+		private class InterTerm(val symbol:Symbol, val line:Int, val column:Int){
 			val s = ArrayBuffer[InterTerm]()
 			def toPose:Pose = {
 				if(s.isEmpty)
-					Leaf(symbol)
+					new Leaf(symbol, line, column)
 				else
-					Term(symbol, s.map { _.toPose })
+					new Term(symbol, line, column, s.map { _.toPose })
 			}
 		}
 		
 		private val stringBuffer = new StringBuilder(512)
-		private var foremostSymbol:String = ""
+		private var foremostSymbol:Symbol = Symbol("")
 		private var salientIndentation:String = ""
 		private var resultSeq = new ArrayBuffer[InterTerm]
 		private var headTerm:InterTerm = null
@@ -198,12 +200,12 @@ object Termpose{
 		private var previousTailestTermSequence = resultSeq
 		private val multiLineIndent = new StringBuilder
 		private var mlIndent:String = null
-		private var colonHead:InterTerm = null
+		private var containsImmediateNext:InterTerm = null
 		
 		private def reinit{
 			//=___=
 			stringBuffer.clear
-			foremostSymbol = ""
+			foremostSymbol = Symbol("")
 			salientIndentation = ""
 			resultSeq = new ArrayBuffer[InterTerm]
 			headTerm = null
@@ -229,7 +231,7 @@ object Termpose{
 		//the parser consists of a loop that pumps chars from the input string into whatever the current Mode is. Modes jump from one to the next according to cues, sometimes forwarding the cue onto the new mode before it gets any input from the input loop. There is a mode stack, but it is rarely used. Modes are essentially just a Char => Unit (named 'PF', short for Processing Funnel(JJ it's legacy from when they were Partial Functions)). An LF ('\n') is inserted artificially at the end of input to ensure that line end processes are called. CR LFs ("\r\n"s) are filtered to a single LF (This does mean that a windows formatted file will have unix line endings when parsing multiline strings, that is not a significant issue, ignoring the '\r's will probably save more pain than it causes and the escape sequence \r is available if they're explicitly desired).
 		
 		
-		private def interTerm(symbol:String) = new InterTerm(symbol, line, column)
+		private def interTerm(symbol:Symbol) = new InterTerm(symbol, line, column)
 		private def transition(nm:PF){ currentMode = nm }
 		private def pushMode(nm:PF){
 			modes += currentMode
@@ -242,15 +244,15 @@ object Termpose{
 		private def break(message:String):Unit = breakAt(line, column, message)
 		private def breakAt(l:Int, c:Int, message:String):Unit = throw new ParsingException("line:"+l+" column:"+c+", no, bad: "+message)
 		private def finishTakingSymbol ={
-			foremostSymbol = stringBuffer.result
+			foremostSymbol = Symbol(stringBuffer.result)
 			stringBuffer.clear
 			foremostSymbol
 		}
 		private def finishTakingTermAndAttach ={
 			foremostTerm = interTerm(finishTakingSymbol)
-			if(colonHead != null){
-				colonHead.s += foremostTerm
-				colonHead = null
+			if(containsImmediateNext != null){
+				containsImmediateNext.s += foremostTerm
+				containsImmediateNext = null
 			}else if(headTerm == null){
 				headTerm = foremostTerm
 				tailestTermSequence = foremostTerm.s
@@ -287,7 +289,7 @@ object Termpose{
 			
 			indentStack.last._2 += headTerm
 			
-			colonHead = null
+			containsImmediateNext = null
 			previousIndentation = salientIndentation
 			previousTailestTermSequence = tailestTermSequence
 			tailestTermSequence = resultSeq
@@ -302,10 +304,6 @@ object Termpose{
 			// }else{
 			// 	break("line end before closing paren")
 			// }
-		}
-		private def getColonBuddy{
-			colonHead = foremostTerm
-			transition(seekingColonBuddy)
 		}
 		private def closeParen ={
 			if(parenTermStack.isEmpty)
@@ -342,7 +340,8 @@ object Termpose{
 			case ')' =>
 				closeParen
 			case ':' =>
-				getColonBuddy
+				containsImmediateNext = foremostTerm
+				transition(seekingColonBuddy)
 			case ' ' | '\t' => {}
 			case '\n' =>
 				finishLineNormally
@@ -353,10 +352,14 @@ object Termpose{
 				takeTerm(c)
 		}
 		private val takeTerm:PF = (c:Char)=> c match{
-			case ' ' | '\t' | ':' | '\n' | '(' | ')' | '"' =>
+			case ' ' | '\t' | ':' | '\n' | '(' | ')' =>
 				finishTakingTermAndAttach
 				transition(seekingInLine)
 				seekingInLine(c)
+			case '"' =>
+				finishTakingTermAndAttach
+				containsImmediateNext = foremostTerm
+				transition(startingToTakeQuoteTerm)
 			case c:Char =>
 				stringBuffer += c
 		}
@@ -381,7 +384,7 @@ object Termpose{
 			case ':' =>
 				break("double colon wat")
 			case '\n' =>
-				tailestTermSequence = colonHead.s
+				tailestTermSequence = containsImmediateNext.s
 				finishLineNormally
 			case '(' =>
 				//fine whatever I'll just forget the colon ever happened
@@ -496,8 +499,8 @@ object Termpose{
 			val res = try{
 				while(index < s.length){
 					var c = s.charAt(index)
-					if(c == '\r'){
-						if(s.charAt(index) == '\n'){
+					if(c == '\r'){ //handle windows' deviant line endings
+						if(s.charAt(index+1) == '\n'){
 							index += 1
 						}
 						c = '\n'
@@ -522,4 +525,66 @@ object Termpose{
 			res
 		}
 	}
+	
+	def parsingAssertion(pose:Pose, b:Boolean, failMsg:String){
+		if(!b) throw new RuntimeException("parsing failure at line:"+pose.line+" column:"+pose.column+". "+failMsg)
+	}
+	
+	private sealed trait XMLContent
+	private case class XMLPlaintext(s:String) extends XMLContent
+	private case class XMLTag(p:Pose) extends XMLContent
+	def translateTermposeToSingleLineXML(s:String):Try[String] ={
+		val sb = new StringBuilder
+		def takeTag(pose:Pose){
+			val tag:String = pose.term.name
+			val attributes = new ArrayBuffer[(String, String)]
+			val content = new ArrayBuffer[XMLContent]
+			val hasContent = false
+			pose.tail.map{ p =>
+				p.term.name.head match{
+					case '.' => //plaintext
+						parsingAssertion(p, p.tail.size <= 1, "plaintext terms should have one or no child")
+						content += XMLPlaintext(if(p.tail.size == 0) "" else p.tail(0).term.name)
+					case '-' => //attribute
+						parsingAssertion(p, p.tail.size <= 1, "attributes should have no more than one term. This one has "+p.tail.size)
+						//missed an error, if that one term has children, something is wrong.
+						attributes += ((p.term.name.tail, if(p.tail.size == 1) p.tail(0).term.name else ""))
+					case _ => content += XMLTag(p)
+				}
+			}
+			sb += '<'
+			sb ++= tag
+			for((k,v) <- attributes){
+				sb += ' '
+				sb ++= k
+				sb += '='
+				sb += '"'
+				escapeSymbol(sb, v)
+				sb += '"'
+			}
+			if(content.size > 0){
+				for(c <- content){
+					c match {
+						case XMLPlaintext(s) => sb ++= s //bugs enter here. You'll need to escape angle brackets and who knows what else.
+						case XMLTag(t) => takeTag(t)
+					}
+				}
+				sb += '<'
+				sb += '/'
+				sb ++= tag
+				sb += '>'
+			}else{
+				sb += '/'
+				sb += '>'
+			}
+		}
+		new Parser().parse(s).map{ poses =>
+			poses.foreach(takeTag)
+			sb.result
+		}
+	}
+	// def translateTermposeToXMLLines(s:String):Try[Seq[String]] ={
+	// def translateTermposeToXML(s:String, lineEnding:String) = translateXMLKind(s).map( _.reduce(_ ++ lineEnding ++ _) )
+	// def translateTermposeToXMLUnixLineEndings(s:String) = translateTermposeToXML(s, "\n")
+	// def translateTermposeToXMLWindowsLineEndings(s:String) = translateTermposeToXML(s, "\r\n")
 }

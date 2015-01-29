@@ -214,7 +214,10 @@ I think that works out very well. `'` may be used an escape for instances like, 
 
 
 ##How about XML?
-Representing my homepage:
+
+Termpose → single line XML translation is partially implemented, see the function translateTermposeToSingleLineXML.
+
+Here's how one would write the first half of my homepage in termpose's XML dialect:
 ```python
 html
   head
@@ -238,7 +241,6 @@ html
           td -class:rightCol ."mako yass, global handle @makoConstruct.
         ...
 ```
-This doesn't work yet, though, I need to fix `c a"b` to mean `c(a(b))` rather than `c(a b)` as it does now. Note
 
 
 ##pedantic spec notes:

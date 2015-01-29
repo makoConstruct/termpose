@@ -80,7 +80,7 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 			""", "a(b(c) d)")
 		}
 		
-		"put intentation before colon overrun" in{
+		"put indentation before colon overrun" in{
 			expectsEqual("""
 			f
 				a:
@@ -101,6 +101,26 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 		"be able to output as a json array" in{
 			val pinp = gp.parse("f(p l a(9 32 87").success.value
 			Termpose.asJsonString(pinp) === ("[\"f\", \"p\", \"l\", [\"a\", \"9\", \"32\", \"87\"]]")
+		}
+		
+		"put quoted terms adjacent to the term before them inside former term" in {
+			expectsEqual("""
+				f do"alll"
+					daba ab"moko
+					daba dke:ab"moko
+			""", "f(do(alll) daba(ab(moko)) daba(dge(ab(moko))))")
+		}
+		
+		"chain colons according to the spec" in {
+			expectsEqual("""
+				a:b:c:d:
+					d
+					d
+			""", "a(b(c(d(d d))))")
+		}
+		
+		"kinda mostly translate termpose to XML" in {
+			Termpose.translateTermposeToSingleLineXML("html(head(style(.\"body{background-color:black;color:black}\")) body(div(-id(dersite))))").success.value === "<html><head><style>body{background-color:black;color:black}</style></head><body><div id=\"dersite\"></div></html>"
 		}
 	}
 	
