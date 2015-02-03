@@ -75,82 +75,27 @@ A "
 ##Surely as a burgeoning format the parser is woefully inefficient?
 The community has lead me unto the impression that Jackson, the Json parser for Java is, like, *super fast*. I compared my early, unoptimized, Scala-based termpose parser with Jackson, and there is basically no discernable difference between their performance. Maybe I just have efficient coding habits. Maybe it's the noodley graphic way I architected the thing. Either way, the termpose parser is perfectly competitive already. On that dimension.
 
-###What if you defined a programming language for the termpose syntax? What would that look like?
 
-Probably something like this
-```
-let i 0
+###You compare termpose to lisp. Show that its could genuinely serve as a substrate for a nice programming language.
+
+Fine.
+
+```python
+var i 0
 while <(i 5
   print 'Hello
-  println "' worldly people
+  if ==(0 %(i 3
+    then
+      println "' worldly people
+    else
+      println "' anxious dog
   =(i +(i 1
 
+>Hello anxious dog
 >Hello worldly people
 >Hello worldly people
+>Hello anxious dog
 >Hello worldly people
->Hello worldly people
->Hello worldly people
-
-class Dog type_parameters(<(WillBite Professional) <(FavFood Food) //"Note, the one on the right of the < exprs is a type bound, IE, it's saying FavFood must be a subclass of Food") extends:BitingAnimal
-  def meets prof:Professional !:
-    if eq type(prof) WillBite
-      then
-        bite prof
-      else
-        bark prof
-  def bark prof:Professional !:
-    utter prof "he comes, beware, he comes
-  def beg !:
-    utter nearbyPeople "give me {}"(FavFood.name)
-
-//"hmm... there's a case we might not handle so well;
-a or b or c or d or e
-//"No infix exprs. Doesn't work at all.
-or(a or(b or(c or(d e))))
-//"would work but is unsightly
-or(a or(b or(c or(d e
-//"Closing parens at the end of a line is not required, so this is reasonably nice
-or a, or b, or c, or d, e
-//"like coffeescript
-or a, or b, or c, or d e
-//"would work if we cast the comma as being equivalent to an indent, but it's not very readable.
-reduce or a b c d e
-//"lol. Maybe that's best.
-```
-
-here's me making a start on defining a cross-language type system(see Cap'n Proto if you're interested in that kind of thing):
-```termpose
-meta
-  description "
-    notes on DSL:
-    // is a comment
-    - is a list element
-
-type Vessel type_parameters:E mutates subscribable
-  //"makes for reactive streams, has a current state, state changes, you can subscribe to be notified of changes (this is the point of the thing)
-  operation
-    name place
-    in type:E
-  property
-    name value
-    type Option:E
-    //"will return None if queried prior to any running of place()
-    
-type
-  name Number
-  fixed
-      
-type
-  name Integer
-  serves_as Number
-type
-  name U32
-  //"32 bit, signed, little-endian Integer
-  serves_as Integer
-type
-  name U64
-  
-  ... you get the point
 ```
 
 ##Termpose is better for typing json than json
@@ -183,18 +128,7 @@ for
 }
 
 ```
-```termpose
-//"minified
-highlight_line true
-ignored_packages [(Floobits SublimeLinter Vintage {(ref:"http://enema.makopool.com/" name:enema update:yes) [(1 2 3
-indent_guide_options draw_active:true
-"overlay scroll bars" enabled
-"show tab close buttons" false
-tab_size 2
-theme Spacegray.sublime-theme
-word_wrap true
-
-//"pretty printed
+```python
 highlight_line true
 ignored_packages [:
   Floobits
@@ -241,7 +175,3 @@ html
           td -class:rightCol ."mako yass, global handle @makoConstruct.
         ...
 ```
-
-
-##pedantic spec notes:
-When converting in-memory representations to maps, if the same key occurs more than once, the latest occurance should overwrite the earlier ones.
