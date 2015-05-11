@@ -221,7 +221,7 @@ class Parser
 			when ')' then breakToSeekingInline()
 			when '"'
 				@finishTakingTermAndAttach()
-				containsImmediateNext = @foremostTerm
+				@containsImmediateNext = @foremostTerm
 				@transition(@startingToTakeQuoteTerm)
 			else
 				@stringBuffer += c

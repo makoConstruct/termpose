@@ -346,7 +346,7 @@
     };
 
     Parser.prototype.takeTerm = function(c) {
-      var breakToSeekingInline, containsImmediateNext;
+      var breakToSeekingInline;
       breakToSeekingInline = (function(_this) {
         return function() {
           _this.finishTakingTermAndAttach();
@@ -369,7 +369,7 @@
           return breakToSeekingInline();
         case '"':
           this.finishTakingTermAndAttach();
-          containsImmediateNext = this.foremostTerm;
+          this.containsImmediateNext = this.foremostTerm;
           return this.transition(this.startingToTakeQuoteTerm);
         default:
           return this.stringBuffer += c;
