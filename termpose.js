@@ -262,8 +262,8 @@
         if (!startsWith(this.previousIndentation, this.salientIndentation)) {
           this.die("inconsistent indentation", this.headTerm.line, this.headTerm.column);
         }
-        while (this.indentStack[0][0] > this.salientIndentation.length) {
-          if (this.indentStack[0][0] < this.salientIndentation.length) {
+        while (this.indentStack[this.indentStack.length - 1][0] > this.salientIndentation.length) {
+          if (this.indentStack[this.indentStack.length - 1][0] < this.salientIndentation.length) {
             this.die("inconsistent indentation, sibling elements have different indentation", this.headTerm.line, this.headTerm.column);
           }
           this.indentStack.pop();
@@ -408,7 +408,7 @@
           return this.die("double colon wat");
         case '\n':
           this.tailestTermSequence = this.containsImmediateNext.tail;
-          return this.finishLineNormally;
+          return this.finishLineNormally();
         case '(':
           return this.openParen();
         case ')':

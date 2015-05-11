@@ -141,8 +141,8 @@ class Parser
 			if ! startsWith @previousIndentation, @salientIndentation
 				@die("inconsistent indentation", @headTerm.line, @headTerm.column)
 			#pop to enclosing scope
-			while @indentStack[0][0] > @salientIndentation.length
-				if @indentStack[0][0] < @salientIndentation.length
+			while @indentStack[@indentStack.length-1][0] > @salientIndentation.length
+				if @indentStack[@indentStack.length-1][0] < @salientIndentation.length
 					@die("inconsistent indentation, sibling elements have different indentation", @headTerm.line, @headTerm.column)
 				@indentStack.pop()
 		
@@ -248,7 +248,7 @@ class Parser
 			@die("double colon wat")
 		when '\n'
 			@tailestTermSequence = @containsImmediateNext.tail
-			@finishLineNormally
+			@finishLineNormally()
 		when '('
 			#fine whatever I'll just forget the colon ever happened
 			@openParen()
