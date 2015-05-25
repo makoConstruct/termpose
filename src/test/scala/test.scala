@@ -5,7 +5,7 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 	val gp = new Termpose.Parser //tests share a global parser deliberately. If there's any way we can cause state to leak between tests, I damn well want to elicit it, and I can't imagine a better way to get that to happen.
 	def expectsEqual(input:String, output:String) ={
 		val pinp = gp.parse(input).success.value
-		Termpose.minified(pinp) === output
+		assert(Termpose.minified(pinp) == output)
 	}
 	"Parser" should{
 		"generally work" in{
@@ -100,7 +100,7 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 		
 		"be able to output as a json array" in{
 			val pinp = gp.parse("f(p l a(9 32 87").success.value
-			Termpose.asJsonString(pinp) === ("[\"f\", \"p\", \"l\", [\"a\", \"9\", \"32\", \"87\"]]")
+			assert(Termpose.asJsonString(pinp) == ("[[\"f\",\"p\",\"l\",[\"a\",\"9\",\"32\",\"87\"]]]"))
 		}
 		
 		"put quoted terms adjacent to the term before them inside former term" in {
@@ -108,7 +108,14 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 				f do"alll"
 					daba ab"moko
 					daba dke:ab"moko
-			""", "f(do(alll) daba(ab(moko)) daba(dge(ab(moko))))")
+			""", "f(do(alll) daba(ab(moko)) daba(dke(ab(moko))))")
+		}
+		
+		"handle contained quoted terms properly" in {
+			expectsEqual("""
+				a
+					b c"
+						things writ""", "a(b(c(\"things writ\")))")
 		}
 		
 		"chain colons according to the spec" in {
@@ -120,7 +127,7 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 		}
 		
 		"kinda mostly translate termpose to XML" in {
-			Termpose.translateTermposeToSingleLineXML("html(head(style(.\"body{background-color:black;color:black}\")) body(div(-id(dersite))))").success.value === "<html><head><style>body{background-color:black;color:black}</style></head><body><div id=\"dersite\"></div></html>"
+			assert(Termpose.translateTermposeToSingleLineXML("html(head(style(.\"body{background-color:black;color:black}\")) body(div(-id(dersite))))").success.value == "<html><head><style>body{background-color:black;color:black}</style></head><body><div id=\"dersite\"/></body></html>")
 		}
 	}
 	
