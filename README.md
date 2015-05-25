@@ -76,7 +76,7 @@ A "
 The community has lead me unto the impression that Jackson, the Json parser for Java is, like, *super fast*. I compared my early, unoptimized, Scala-based termpose parser with Jackson, and there is basically no discernable difference between their performance. Maybe I just have efficient coding habits. Maybe it's the noodley graphic way I architected the thing. Either way, the termpose parser is perfectly competitive already. On that dimension.
 
 
-###You compare termpose to lisp. Show that its could genuinely serve as a substrate for a nice programming language.
+###You compare termpose to lisp. Show that it could genuinely serve as a substrate for a nice programming language.
 
 Fine.
 
@@ -89,7 +89,7 @@ while <(i 5
       println "' worldly people
     else
       println "' anxious dog
-  =(i +(i 1
+  +=(i 1
 
 >Hello anxious dog
 >Hello worldly people
