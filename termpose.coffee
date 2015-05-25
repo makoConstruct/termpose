@@ -25,6 +25,7 @@ escapeSymbol = (str)->
 	sb
 
 class Term
+	parse = (str)-> new Parser().parse(str)
 	constructor: (@v, @tail = [])->
 	getMap: ->
 		if !@asMap
@@ -79,7 +80,6 @@ class Parser
 		@modes = []
 		@indentStack = [[0, @resultSeq]]
 		@previousIndentation = ""
-		@previousTailestTermSequence = @resultSeq
 		@multiLineIndent = ""
 		@mlIndent = null
 		@containsImmediateNext = null
@@ -122,21 +122,19 @@ class Parser
 			@containsImmediateNext = null
 		else if @headTerm == null
 			@headTerm = @foremostTerm
+			@indentStack[@indentStack.length - 1][1].push @foremostTerm
 			@tailestTermSequence = @foremostTerm.tail
 		else if @parenTermStack.length == 0
 			@headTerm.tail.push @foremostTerm
 		else
 			@parenTermStack[0].tail.push @foremostTerm
 	finishTakingIndentation: =>
+		@previousIndentation = @salientIndentation
 		@salientIndentation = @stringBuffer
-		@stringBuffer = ''
-		@salientIndentation
-	finishLine: =>
-		#now knit this line's data into the previous
 		if @salientIndentation.length > @previousIndentation.length
 			if ! startsWith @salientIndentation, @previousIndentation
 				@die("inconsistent indentation at", @headTerm.line, @headTerm.column)
-			@indentStack.push([@salientIndentation.length, @previousTailestTermSequence])
+			@indentStack.push([@salientIndentation.length, @tailestTermSequence])
 		else if @salientIndentation.length < @previousIndentation.length
 			if ! startsWith @previousIndentation, @salientIndentation
 				@die("inconsistent indentation", @headTerm.line, @headTerm.column)
@@ -145,23 +143,13 @@ class Parser
 				if @indentStack[@indentStack.length-1][0] < @salientIndentation.length
 					@die("inconsistent indentation, sibling elements have different indentation", @headTerm.line, @headTerm.column)
 				@indentStack.pop()
-		
-		@indentStack[@indentStack.length-1][1].push @headTerm
-		
+		@stringBuffer = ''
+		@salientIndentation
+	finishLine: =>
 		@containsImmediateNext = null
-		@previousIndentation = @salientIndentation
-		@previousTailestTermSequence = @tailestTermSequence
-		@tailestTermSequence = @resultSeq
 		@parenTermStack = []
 		@headTerm = null
 		@foremostTerm = null
-	finishLineNormally: => #where as finishing abnormally is what multiline reading does because by the time it finishes it has already eaten the indentation and it doesn't ask whether the parenTermStack's empty
-		# if(parenTermStack.isEmpty){
-			@finishLine()
-			@transition(@eatingIndentation)
-		# }else{
-		# 	die("line end before closing paren")
-		# }
 	closeParen: =>
 		if @parenTermStack.length == 0
 			@die("unbalanced paren")
@@ -170,27 +158,29 @@ class Parser
 	openParen: =>
 		@parenTermStack.push @foremostTerm
 		@transition(@enteringParen)
-	eatingIndentation: (c)=> switch c
-		when '\n'
-			stringBuffer = ''
-		when ':'
-			@die("colon not allowed here")
-		when '('
-			@die("what are you openingggg")
-		when ')'
-			@die("what are you closingggg")
-		when '"'
-			@finishTakingIndentation()
-			@transition(@startingToTakeQuoteTerm)
-		when ' '
-			@stringBuffer += c
-		when '\t'
-			@stringBuffer += c
-		else
-			@finishTakingIndentation()
-			@transition(@takeTerm)
-			@takeTerm(c)
-	seekingInLine: (c)=> switch c
+	eatingIndentation: (fileEnd,c)=>
+		if !fileEnd
+			switch c
+				when '\n'
+					stringBuffer = ''
+				when ':'
+					@die("colon not allowed here")
+				when '('
+					@die("what are you openingggg")
+				when ')'
+					@die("what are you closingggg")
+				when '"'
+					@finishTakingIndentation()
+					@transition(@startingToTakeQuoteTerm)
+				when ' '
+					@stringBuffer += c
+				when '\t'
+					@stringBuffer += c
+				else
+					@finishTakingIndentation()
+					@transition(@takeTerm)
+					@takeTerm(false,c)
+	seekingInLine: (fileEnd,c)=> if !fileEnd then switch c
 		when '('
 			@openParen()
 		when ')'
@@ -201,148 +191,169 @@ class Parser
 		when ' ' then
 		when '\t' then
 		when '\n'
-			@finishLineNormally()
+			@finishLine()
+			@transition(@eatingIndentation)
 		when '"'
 			@transition(@startingToTakeQuoteTerm)
 		else
 			@transition(@takeTerm)
-			@takeTerm(c)
-	takeTerm: (c)=>
-		breakToSeekingInline = =>
+			@takeTerm(false,c)
+	takeTerm: (fileEnd,c)=>
+		if fileEnd
 			@finishTakingTermAndAttach()
-			@transition(@seekingInLine)
-			@seekingInLine(c)
-		switch c
-			when ' ' then breakToSeekingInline()
-			when '\t' then breakToSeekingInline()
-			when ':' then breakToSeekingInline()
-			when '\n' then breakToSeekingInline()
-			when '(' then breakToSeekingInline()
-			when ')' then breakToSeekingInline()
-			when '"'
+		else
+			breakToSeekingInline = =>
 				@finishTakingTermAndAttach()
-				@containsImmediateNext = @foremostTerm
+				@transition(@seekingInLine)
+				@seekingInLine(false,c)
+			switch c
+				when ' ' then breakToSeekingInline()
+				when '\t' then breakToSeekingInline()
+				when ':' then breakToSeekingInline()
+				when '\n' then breakToSeekingInline()
+				when '(' then breakToSeekingInline()
+				when ')' then breakToSeekingInline()
+				when '"'
+					@finishTakingTermAndAttach()
+					@containsImmediateNext = @foremostTerm
+					@transition(@startingToTakeQuoteTerm)
+				else
+					@stringBuffer += c
+	enteringParen: (fileEnd,c)=>
+		if fileEnd
+			@die "end of file before paren close, this has no meaning and does not make sense."
+		else switch c
+			when ' ' then
+			when '\t' then
+			when ':'
+				@die("colon wat")
+			when '('
+				@die("paren opens nothing")
+			when ')'
+				@closeParen()
+			when '"'
+				@transition(@takingSingleLineQuoteTerm)
+			when '\n'
+				@die("newline before paren completion (parens are only for single lines)")
+			else
+				@transition(@takeTerm)
+				@takeTerm(false,c)
+	seekingColonBuddy: (fileEnd,c)=>
+		if fileEnd
+			@die "end of file after a colon, this has no meaning and does not make sense"
+		else switch c
+			when ' ' then
+			when '\t' then
+			when ':'
+				@die "double colon wat"
+			when '\n'
+				@tailestTermSequence = @containsImmediateNext.tail
+				@finishLine()
+				@transition(@eatingIndentation)
+			when '('
+				#fine whatever I'll just forget the colon ever happened
+				@openParen()
+			when ')'
+				@die "closebracket after colon wat"
+			when '"'
 				@transition(@startingToTakeQuoteTerm)
 			else
+				@transition(@takeTerm)
+				@takeTerm(false,c)
+	startingToTakeQuoteTerm: (fileEnd,c)=>
+		if fileEnd
+			@finishTakingTermAndAttach()
+		else switch c
+			when '"'
+				@finishTakingTermAndAttach()
+				@transition(@seekingInLine)
+			when '\n'
+				@transition(@multiLineFirstLine)
+			else
+				@transition(@takingSingleLineQuoteTerm)
+				@takingSingleLineQuoteTerm(false,c)
+	takingSingleLineQuoteTerm: (fileEnd,c)=>
+		if fileEnd
+			@finishTakingTermAndAttach()
+		else switch c
+			when '"'
+				@finishTakingTermAndAttach()
+				@transition(@seekingInLine)
+			when '\\'
+				@pushMode(@takingEscape)
+			when '\n'
+				@finishTakingTermAndAttach()
+				@transition(@seekingInLine)
+				@seekingInLine(fileEnd,'\n')
+			else
 				@stringBuffer += c
-	enteringParen: (c)=> switch c
-		when ' ' then
-		when '\t' then
-		when ':'
-			@die("colon wat")
-		when '('
-			@die("paren opens nothing")
-		when ')'
-			@closeParen()
-		when '"'
-			@transition(@takingSingleLineQuoteTerm)
-		when '\n'
-			@die("newline before paren completion (parens are only for single lines)")
-		else
-			@transition(@takeTerm)
-			@takeTerm(c)
-	seekingColonBuddy: (c)=> switch c
-		when ' ' then
-		when '\t' then
-		when ':'
-			@die("double colon wat")
-		when '\n'
-			@tailestTermSequence = @containsImmediateNext.tail
-			@finishLineNormally()
-		when '('
-			#fine whatever I'll just forget the colon ever happened
-			@openParen()
-		when ')'
-			@die("closebracket after colon wat")
-		when '"'
-			@transition(@startingToTakeQuoteTerm)
-		else
-			@transition(@takeTerm)
-			@takeTerm(c)
-	startingToTakeQuoteTerm: (c)=> switch c
-		when '"'
-			@finishTakingTermAndAttach()
-			@transition(@seekingInLine)
-		when '\n'
-			if !@parenTermStack.length == 0
-				die("newline with unbalanced parens(if you want multiline string syntax, that's an indented block under a single quote)")
-			@stringBuffer = ''
-			@transition(@multiLineFirstLine)
-		when ' '
-			@stringBuffer += c
-		when '\t'
-			@stringBuffer += c
-		else
-			@transition(@takingSingleLineQuoteTerm)
-			@takingSingleLineQuoteTerm(c)
-	takingSingleLineQuoteTerm: (c)=> switch c
-		when '"'
-			@finishTakingTermAndAttach()
-			@transition(@seekingInLine)
-		when '\\'
-			@pushMode(@takingEscape)
-		when '\n'
-			@finishTakingTermAndAttach()
-			@transition(@seekingInLine)
-			@seekingInLine('\n')
-		else
-			@stringBuffer += c
 	#history story: takingQuoteTermThatMustTerminateWithQuote was an artifact from when line dies wern't allowed during parens, it was really just the above with a dieer response to '\n's instead of a handler. We now handle such events reasonably.
-	takingEscape: (c)=>
-		switch c
-			when 'n' then @stringBuffer += '\n'
-			when 'r' then @stringBuffer += '\r'
-			when 't' then @stringBuffer += '\t'
-			when 'h' then @stringBuffer += '☃'
-			else @stringBuffer += c
-		@popMode()
-	multiLineFirstLine: (c)=> switch c
-		when ' '
-			@multiLineIndent += c
-		when '\t'
-			@multiLineIndent += c
+	takingEscape: (fileEnd,c)=>
+		if fileEnd
+			@die("invalid escape sequence, no one can escape the end of the file")
 		else
-			@mlIndent = @multiLineIndent
-			if @mlIndent.length > @salientIndentation.length
-				if startsWith @mlIndent, @salientIndentation
-					@multiLineIndent = ''
-					@transition(@multiLineTakingText)
-					@multiLineTakingText(c)
-				else
-					@die("inconsistent indentation")
+			switch c
+				when 'h' then @stringBuffer += '☃'
+				when 'n' then @stringBuffer += '\n'
+				when 'r' then @stringBuffer += '\r'
+				when 't' then @stringBuffer += '\t'
+				else @stringBuffer += c
+			@popMode()
+	multiLineFirstLine: (fileEnd,c)=>
+		if fileEnd
+			@finishTakingTermAndAttach()
+		else switch c
+			when ' '
+				@multiLineIndent += c
+			when '\t'
+				@multiLineIndent += c
 			else
-				@die("multiline string must be indented")
-	multiLineTakingIndent: (c)=>
-		if c == ' ' or c == '\t'
-			@multiLineIndent += c
-		else
-			nin = @multiLineIndent
-			@multiLineIndent = ''
-			if nin.length >= @mlIndent.length
-				if startsWith nin, @mlIndent
-					@stringBuffer += '\n' #add the newline from the previous line, safe in the knowledge that the multiline string continues up to and beyond that point
-					if nin.length > @mlIndent.length
-						@stringBuffer += @mlIndent.substring(nin.length, @mlIndent.length)
-					@transition(@multiLineTakingText)
-					@multiLineTakingText(c)
+				@mlIndent = @multiLineIndent
+				if @mlIndent.length > @salientIndentation.length
+					if startsWith @mlIndent, @salientIndentation
+						@multiLineIndent = ''
+						@transition(@multiLineTakingText)
+						@multiLineTakingText(false,c)
+					else
+						@die("inconsistent indentation")
 				else
-					@die("inconsistent indentation")
-			else
-				if startsWith @mlIndent, nin
-					#breaking out, returning to usual scanning
 					@finishTakingTermAndAttach()
 					@finishLine()
-					@salientIndentation = nin
-					@transition(@takeTerm)
-					@takeTerm(c)
+					#transfer control to eatingIndentation
+					@stringBuffer = @mlIndent
+					@mlIndent = null
+					@transition(@eatingIndentation)
+					@eatingIndentation(false,c)
+	multiLineTakingIndent: (fileEnd,c)=>
+		if fileEnd
+			@finishTakingTermAndAttach()
+		else if c == ' ' or c == '\t'
+			@multiLineIndent += c
+			minb = @multiLineIndent
+			if minb.length == @mlIndent.length #then we're through with the indent
+				if startsWith minb, @mlIndent
+					@stringBuffer += '\n' #add the newline from the previous line, safe in the knowledge that the multiline string continues up to and beyond that point
+					@multiLineIndent = ''
+					@transition(@multiLineTakingText)
 				else
 					@die("inconsistent indentation")
-	multiLineTakingText: (c)=> switch c
-		when '\n'
-			#stringBuffer += '\n'   will not add the newline until we're sure the multiline string is continuing
-			@transition(@multiLineTakingIndent)
+		else if startsWith @mlIndent, minb
+			#breaking out, returning to usual scanning
+			@finishTakingTermAndAttach()
+			@finishLine()
+			@stringBuffer = @mlIndent
+			@transition(@eatingIndentation)
+			@eatingIndentation(false,c)
 		else
-			@stringBuffer += c
+			@die("inconsistent indentation")
+	multiLineTakingText: (fileEnd,c)=>
+		if fileEnd then @finishTakingTermAndAttach()
+		else switch c
+			when '\n'
+				#stringBuffer += '\n'   will not add the newline until we're sure the multiline string is continuing
+				@transition(@multiLineTakingIndent)
+			else
+				@stringBuffer += c
 	
 	parse: (s)-> #throws a parsing exception if failure
 		#pump characters into the mode of the parser until the read head has been graduated to the end
@@ -353,15 +364,14 @@ class Parser
 				if s[@index+1] == '\n'
 					@index += 1
 				c = '\n'
-			@currentMode(c)
+			@currentMode(false,c)
 			@index += 1
 			if c == '\n'
 				@line += 1
 				@column = 0
 			else
 				@column += 1
-		if s[s.length-1] != '\n'
-			@currentMode('\n') #simulated final newline
+		@currentMode(true,'☠')
 		res = @resultSeq
 		@init()
 		res
