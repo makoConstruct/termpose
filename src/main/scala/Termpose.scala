@@ -1,5 +1,9 @@
 import util.{Try, Success, Failure}
 import collection.mutable.{ArrayBuffer, HashMap, ArrayStack}
+import collection.BufferedIterator
+import java.io.{File}
+import io.Source
+import collection.breakOut
 object Termpose{
 	trait Stringificable{ //has a method for stringifying through a stringBuilder, provides a toString through this
 		def stringify(sb:StringBuilder):Unit
@@ -9,33 +13,18 @@ object Termpose{
 			buf.result
 		}
 	}
-	def asJsonString(ps:Seq[Term]):String ={
-		val sb = new StringBuilder
-		sb += '['
-		if(!ps.isEmpty){
-			ps(0).buildJsonString(sb)
-			for(i <- 1 until ps.length){
-				sb += ','
-				ps(i).buildJsonString(sb)
-			}
-		}
-		sb += ']'
-		sb.result
+	
+	private def escapeIsNeeded(sy:String) = sy.exists {
+		case ' ' => true
+		case '(' => true
+		case ':' => true
+		case '\t' => true
+		case '\n' => true
+		case '\r' => true
+		case ')' => true
+		case _:Char => false
 	}
-	def minified(ps:Seq[Term]):String ={
-		val sb = new StringBuilder
-		if(ps.size > 0){
-			ps(0).stringify(sb)
-			for(i <- 1 until ps.length){
-				sb += ' '
-				ps(i).stringify(sb)
-			}
-		}
-		sb.result
-	}
-		
-	private def mightBeReservedChar(c:Char) = c < 59 //heuristic, no false negatives
-	//history story: private def mightBeReservedChar(c:Char) = (c&(-60)) == 0 //filters out 94.8% of non-matches. I used to use a magic xor shift and a magic number I'd trauled up from brutespace, til I realized this was all they were doing. How it works: It filters everything greater than 64 and every x for which x%8 < 4 //can't use this beauty no more cause of windows lineendings; '\r'%8 is not less than four.
+	
 	private def escapeSymbol(sb:StringBuilder, str:String){
 		for(c <- str){
 			c match{
@@ -56,181 +45,205 @@ object Termpose{
 			}
 		}
 	}
-	case class TermposeAccessError(msg:String) extends RuntimeException(msg)
-	// import language.dynamic
+	
+	// private def overEachAdjacent[A](s:Iterator[A], f:(A,A)=>Unit){
+	// 	if(!s.hasNext) return
+	// 	var prev:A = s.next
+	// 	if(!s.hasNext) return
+	// 	var cur:A = s.next
+	// 	while(true){
+	// 		f(prev, cur)
+	// 		if(!s.hasNext) return
+	// 		prev = cur
+	// 		cur = s.next
+	// 	}
+	// }
+	
 	sealed trait Term extends Stringificable{
-		val v:Symbol
 		val line:Int
 		val column:Int
-		def map:Map[Symbol, Seq[Term]]
-		// def selectDynamic(k:Symbol):Symbol = map.get(k) match{
-		// 	case Some(p) =>
-		// 		if(p.tail.length == 1){
-		// 			p.tail(0)
-		// 		}else if(p.tail.length < 1){
-		// 			throw new TermposeAccessError("empty field "+k)
-		// 		}else{
-		// 			throw new TermposeAccessError("multiple possible matches for field "+k)
-		// 		}
-		// 	case None =>
-		// 		throw new TermposeAccessError("no such field")
-		// }
-		def getValue(k:Symbol):Option[Symbol] = map.get(k).flatMap { p =>
-			if(p.tail.length == 1)
-				Some(p.tail(0).term)
-			else None
-		}
-		def getSub(k:Symbol):Option[Term] = map.get(k).flatMap { p =>
-			if(p.length == 0)
-				Some(p(0))
-			else
-				None
-		}
-		def apply(k:Int):Term = tail(k)
-		def term:Symbol = v
+		def asMap:Map[String, Seq[Term]]
+		def v:String
 		def tail:Seq[Term]
-		protected def stringifySymbol(sb:StringBuilder) =
-			if(
-				v.name.exists { c =>
-					mightBeReservedChar(c) && (
-						c match{
-							case ' ' => true
-							case '(' => true
-							case ':' => true
-							case '\t' => true
-							case '\n' => true
-							case '\r' => true
-							case ')' => true
-							case _:Char => false
-						}
-					)
-				}
-			){
-				sb += '"'
-				escapeSymbol(sb, v.name)
-				sb += '"'
-			}else{
-				sb ++= v.name
-			}
 		def jsonString:String ={
 			val sb = new StringBuilder
 			buildJsonString(sb)
 			sb.result
 		}
+		def buildJsonString(sb:StringBuilder):Unit
+	}
+	object Stri{
+		def apply(s:String) = new Stri(s,0,0)
+		def unapply(s:Stri) = Some(s.v)
+	}
+	class Stri(val sy:String, val line:Int, val column:Int) extends Term{
+		def asMap:Map[String, Seq[Term]] = Map.empty
+		def v:String = sy
+		def tail:Seq[Term] = Seq.empty
+		def stringify(sb:StringBuilder){
+			if(escapeIsNeeded(sy)){
+				sb += '"'
+				escapeSymbol(sb, v)
+				sb += '"'
+			}else{
+				sb ++= v
+			}
+		}
 		def buildJsonString(sb:StringBuilder){
 			sb += '"'
-			escapeSymbol(sb, v.name)
+			escapeSymbol(sb, sy)
 			sb += '"'
 		}
 	}
-	
-	private class Leaf(val v:Symbol, val line:Int, val column:Int) extends Term{
-		def tail:Seq[Term] = Seq.empty
-		lazy val _map:Map[Symbol, Seq[Term]] = Map.empty
-		def stringify(sb:StringBuilder) = stringifySymbol(sb)
-		def map = _map
+	object Seqs{
+		def apply(terms:Term*) = new Seqs(terms,0,0)
+		def from(s:Seq[Term]) = new Seqs(s,0,0)
+		def unapply(s:Seqs):Option[Seq[Term]] = Some(s.s)
 	}
-	private class Branch(val v:Symbol, val line:Int, val column:Int, val s:Seq[Term]) extends Term {
-		def tail:Seq[Term] = s
-		lazy val _map:Map[Symbol, Seq[Term]] = {
-			val m = new HashMap[Symbol, Seq[Term]]
-			for(p <- s){
-				m(p.term) = p.tail
+	class Seqs(val s:Seq[Term], val line:Int, val column:Int) extends Term{
+		def v:String = if(s.length >= 1){
+			s(0) match{
+				case Stri(sy)=> sy
+				case _=> ""
 			}
-			m.toMap
-		}
-		def map = _map
-		def stringify(sb:StringBuilder) ={
-			stringifySymbol(sb)
-			if(!s.isEmpty){
-				sb += '('
-				s.head.stringify(sb)
-				for(i <- 1 until s.length){
+		}else{ "" }
+		private lazy val _asMap:Map[String, Seq[Term]] = s.map{
+			case sexp:Seqs=>
+				if(sexp.s.length >= 1){
+					sexp.s(0) match{
+						case Stri(sy)=> Some((sy, sexp.tail))
+						case _=> None
+					}
+				}else None
+			case _=> None
+		}.flatten.toMap
+		def asMap:Map[String, Seq[Term]] = _asMap
+		def tail:Seq[Term] = s.tail
+		def stringify(sb:StringBuilder){
+			sb += '('
+			if(s.length >= 1){
+				val iter = s.iterator
+				iter.next.stringify(sb)
+				for(e <- iter){
 					sb += ' '
-					s(i).stringify(sb)
+					e.stringify(sb)
 				}
-				sb += ')'
 			}
+			sb += ')'
 		}
-		def apply(key:Symbol):Option[Term] = s.find { t => t.v equals key }
-		def each(key:Symbol):Seq[Term] = s.filter { t => t.v equals key }
-		override def buildJsonString(sb:StringBuilder){
+		def buildJsonString(sb:StringBuilder){
 			sb += '['
-			sb += '"'
-			escapeSymbol(sb, v.name)
-			sb += '"'
-			for(sub <- s){
+			val iter = s.iterator
+			if(iter.hasNext){
+				iter.next.buildJsonString(sb)
+			}
+			while(iter.hasNext){
 				sb += ','
-				sub.buildJsonString(sb)
+				iter.next.buildJsonString(sb)
 			}
 			sb += ']'
 		}
 	}
 	
-	
+	class ParsingException(msg:String) extends RuntimeException(msg)
 	
 	class Parser{
-		private class ParsingException(msg:String) extends RuntimeException(msg)
-		private class InterTerm(val symbol:Symbol, val line:Int, val column:Int){
-			val s = ArrayBuffer[InterTerm]()
-			def toTerm:Term = {
-				if(s.isEmpty)
-					new Leaf(symbol, line, column)
-				else
-					new Branch(symbol, line, column, s.map { _.toTerm })
+		private sealed trait InterTerm{
+			val line:Int
+			val column:Int
+			def toTerm:Term
+			var pointing:PointsInterTerm
+		}
+		private def dropSeqLayerIfSole(pt:PointsInterTerm){ //assumes pt is Sq
+			val arb = pt.t.asInstanceOf[Sq].s
+			if(arb.length == 1){
+				val soleEl = arb(0).t
+				soleEl.pointing = pt
+				pt.t = soleEl
 			}
+		}
+		private def growSeqsLayer(pi:PointsInterTerm):Sq ={
+			val oldEl = pi.t
+			val newPIT = new PointsInterTerm(oldEl)
+			oldEl.pointing = newPIT
+			val newSq = new Sq(ArrayBuffer(newPIT), line, column, pi)
+			newSq
+		}
+		private class PointsInterTerm(var t:InterTerm) //sometimes an interterm might want to reattach partway through the process. It should be attached through a PointsInterTerm which it knows so it can do that.
+		private def interSq:PointsInterTerm ={
+			val pt = new PointsInterTerm(null)
+			new Sq(new ArrayBuffer(), line, column, pt)
+			pt
+		}
+		private def interSq(ar:ArrayBuffer[PointsInterTerm]):PointsInterTerm ={
+			val pt = new PointsInterTerm(null)
+			new Sq(ar, line, column, pt)
+			pt
+		}
+		private def interSt(sy:Symbol):PointsInterTerm ={
+			val pt = new PointsInterTerm(null)
+			new St(sy, line, column, pt)
+			pt
+		}
+		private class Sq(val s:ArrayBuffer[PointsInterTerm], val line:Int, val column:Int, override var pointing:PointsInterTerm) extends InterTerm{
+			pointing.t = this
+			def toTerm:Term = toSeqs
+			def toSeqs = new Seqs(s.map{ _.t.toTerm }, line, column)
+		}
+		private class St(val sy:Symbol, val line:Int, val column:Int, override var pointing:PointsInterTerm) extends InterTerm{
+			pointing.t = this
+			def toTerm:Term = new Stri(sy.name, line, column)
 		}
 		
 		private val stringBuffer = new StringBuilder(512)
-		private var foremostSymbol:Symbol = Symbol("")
+		private var previousIndentation:String = ""
 		private var salientIndentation:String = ""
-		private var resultSeq = new ArrayBuffer[InterTerm]
-		private var headTerm:InterTerm = null
-		private var foremostTerm:InterTerm = null
-		private val parenTermStack = new ArrayBuffer[InterTerm]
-		private var tailestTermSequence:ArrayBuffer[InterTerm] = resultSeq
-		private val parenParentStack = new ArrayBuffer[InterTerm]
+		private var hasFoundLine = false
+		private var rootArBuf:ArrayBuffer[PointsInterTerm] = new ArrayBuffer()
+		private val parenTermStack:ArrayBuffer[PointsInterTerm] = ArrayBuffer()
 		private var line = 0
 		private var column = 0
 		private var index = 0
+		private var lastAttachedTerm:PointsInterTerm = null
 		private type PF = (Boolean, Char) => Unit
 		private var currentMode:PF = null
 		private val modes = new ArrayStack[PF]
-		private val indentStack = ArrayStack[(Int, ArrayBuffer[InterTerm])]((0, resultSeq))  //indentation length, tailestTermSequence. It is enough to keep track of length. We can derive ∀(a,b∈Line.Indentation) a.length = b.length → a = b from the prefix checking that is done before adding to the stack
-		private var previousIndentation = ""
+		private val indentStack = ArrayStack[(Int, ArrayBuffer[PointsInterTerm])]((0, rootArBuf))  //indentation length, tailestTermSequence. It is enough to keep track of length. We can derive ∀(a,b∈Line.Indentation) a.length = b.length → a = b from the prefix checking that is done before adding to the stack
 		private val multilineStringIndentBuffer = new StringBuilder
 		private var multilineStringsIndent:String = null
-		private var containsImmediateNext:InterTerm = null
+		private var containsImmediateNext:Sq = null
 		
 		private def reinit{
 			//=___=
 			stringBuffer.clear
-			foremostSymbol = Symbol("")
+			previousIndentation = ""
 			salientIndentation = ""
-			resultSeq = new ArrayBuffer[InterTerm]
-			headTerm = null
-			foremostTerm = null
+			hasFoundLine = false
 			parenTermStack.clear
-			tailestTermSequence = resultSeq
-			parenParentStack.clear
 			line = 0 
 			column = 0
 			index = 0
 			currentMode = null
+			lastAttachedTerm = null
 			modes.clear
+			rootArBuf = new ArrayBuffer()
 			indentStack.clear
-			indentStack.push((0, resultSeq))
-			previousIndentation = ""
+			indentStack.push((0, rootArBuf))
 			multilineStringIndentBuffer.clear
 			multilineStringsIndent = null
 		}
 		
 		
 		//general notes:
-		//the parser consists of a loop that pumps chars from the input string into whatever the current Mode is. Modes jump from one to the next according to cues, sometimes forwarding the cue onto the new mode before it gets any input from the input loop. There is a mode stack, but it is rarely used. Modes are essentially just a Char => Unit (named 'PF', short for Processing Funnel(JJ it's legacy from when they were Partial Functions)). An LF ('\n') is inserted artificially at the end of input to ensure that line end processes are called. CR LFs ("\r\n"s) are filtered to a single LF (This does mean that a windows formatted file will have unix line endings when parsing multiline strings, that is not a significant issue, ignoring the '\r's will probably save more pain than it causes and the escape sequence \r is available if they're explicitly desired).
+		//the parser consists of a loop that pumps chars from the input string into whatever the current Mode is. Modes jump from one to the next according to cues, sometimes forwarding the cue onto the new mode before it gets any input from the input loop. There is a mode stack, but it is rarely used. Modes are essentially just a Char => Unit (named 'PF', short for Processing Funnel(JJ it's legacy from when they were Partial Functions)). CR LFs ("\r\n"s) are filtered to a single LF (This does mean that a windows formatted file will have unix line endings when parsing multiline strings, that is not a significant issue, ignoring the '\r's will probably save more pain than it causes and the escape sequence \r is available if they're explicitly desired).
+		//terms are not attached until they are fully formed. You see, the type and address of a term can change when brackets are appended after it. Say you're reading a(f)(g), you finish reading "a", now you have a symbol. Can you attach it yet? No, because it becomes a Seqs when you find the (, and once you find the ), can you attach the Seqs? No, because it needs to be wrapped in a new seqs when You come to the next (, only once you're sure there're no more parens can you attach the thing.
+		//I think.
+		//There are other ways I could have handled this, but figuring out which one is best seems like it'd take more effort than just finishing this as it is.
 		
-		
-		private def interTerm(symbol:Symbol) = new InterTerm(symbol, line, column)
+		// key aspects of global state to regard:
+		// stringBuffer:StringBuilder    where indentation and symbols are collected and cut off
+		// indentStack:ArrayBuffer[(Int, ArrayBuffer[InterTerm])]    encodes the levels of indentation we've traversed and the parent container for each level
+		// parenStack:ArrayBuffer[ArrayBuffer[InterTerm]]    encodes the levels of parens we've traversed and the container for each level. The first entry is the root line, which has no parens.
 		private def transition(nm:PF){ currentMode = nm }
 		private def pushMode(nm:PF){
 			modes push currentMode
@@ -239,197 +252,191 @@ object Termpose{
 		private def popMode{
 			currentMode = modes.pop()
 		}
-		private def break(message:String):Unit = breakAt(line, column, message)
-		private def breakAt(l:Int, c:Int, message:String):Unit = throw new ParsingException("line:"+l+" column:"+c+", no, bad: "+message)
-		private def finishTakingSymbol ={
-			foremostSymbol = Symbol(stringBuffer.result)
-			stringBuffer.clear
-			foremostSymbol
-		}
-		private def finishTakingTermAndAttach ={
-			foremostTerm = interTerm(finishTakingSymbol)
+		private def break(message:String):Nothing = breakAt(line, column, message)
+		private def breakAt(l:Int, c:Int, message:String):Nothing = throw new ParsingException("line:"+l+" column:"+c+", no, bad: "+message)
+		private def receiveForemostRecepticle:ArrayBuffer[PointsInterTerm] ={ //note side effects
 			if(containsImmediateNext != null){
-				containsImmediateNext.s += foremostTerm
+				val ret = containsImmediateNext.s
 				containsImmediateNext = null
-			}else if(headTerm == null){
-				headTerm = foremostTerm
-				indentStack.top._2 += foremostTerm
-				tailestTermSequence = foremostTerm.s
-			}else if(parenTermStack.isEmpty){
-				headTerm.s += foremostTerm
+				ret
 			}else{
-				parenTermStack.last.s += foremostTerm
+				if(parenTermStack.isEmpty){
+					val rootParenLevel = interSq
+					parenTermStack += rootParenLevel
+					indentStack.top._2 += rootParenLevel
+				}
+				parenTermStack.last.t.asInstanceOf[Sq].s
 			}
 		}
-		private def finishTakingIndentation ={
+		private def attach(t:PointsInterTerm){
+			receiveForemostRecepticle += t
+			lastAttachedTerm = t
+		}
+		private def finishTakingSymbolAndAttach:PointsInterTerm ={
+			val newSt = interSt(Symbol(stringBuffer.result))
+			attach(newSt)
+			stringBuffer.clear
+			newSt
+		}
+		private def finishTakingIndentationAndAdjustLineAttachment{
+			//Iff there is no indented content or that indented content falls within an inner paren(iff the parenTermStack is longer than one), and the line only has one item at root, the root element in the parenstack should drop a seq layer so that it is just that element. In all other case, leave it as a sequence.
+			
 			previousIndentation = salientIndentation
 			salientIndentation = stringBuffer.result
-			if(salientIndentation.length > previousIndentation.length){
-				if(! salientIndentation.startsWith(previousIndentation)){
-					breakAt(headTerm.line, headTerm.column, "inconsistent indentation at")
-				}
-				indentStack.push((salientIndentation.length, tailestTermSequence))
-			}else if(salientIndentation.length < previousIndentation.length){
-				if(! previousIndentation.startsWith(salientIndentation)){
-					breakAt(headTerm.line, headTerm.column, "inconsistent indentation")
-				}
-				//pop to enclosing scope
-				while(indentStack.top._1 > salientIndentation.length){
-					if(indentStack.top._1 < salientIndentation.length){
-						breakAt(headTerm.line, headTerm.column, "inconsistent indentation, sibling elements have different indentation")
-					}
-					indentStack.pop()
-				}
-			}
 			stringBuffer.clear
-			salientIndentation
+			if(hasFoundLine){
+				if(salientIndentation.length > previousIndentation.length){
+					if(! salientIndentation.startsWith(previousIndentation)){
+						breakAt(line - salientIndentation.length, column, "inconsistent indentation at")
+					}
+					
+					if(parenTermStack.length > 1 || containsImmediateNext != null) dropSeqLayerIfSole(parenTermStack.head) //if antecedents and IsSole, the root element contains the indented stuff
+					
+					indentStack.push((salientIndentation.length, receiveForemostRecepticle))
+				}else{
+					
+					dropSeqLayerIfSole(parenTermStack.head)
+					
+					containsImmediateNext = null
+					if(salientIndentation.length < previousIndentation.length){
+						if(! previousIndentation.startsWith(salientIndentation)){
+							breakAt(line, column, "inconsistent indentation")
+						}
+						//pop to enclosing scope
+						while(indentStack.top._1 > salientIndentation.length){
+							if(indentStack.top._1 < salientIndentation.length){
+								breakAt(line, column, "inconsistent indentation, sibling elements have different indentation")
+							}
+							indentStack.pop()
+						}
+					}
+				}
+				parenTermStack.clear
+			}else{
+				hasFoundLine = true
+			}
 		}
-		private def finishLine ={
-			containsImmediateNext = null
-			parenTermStack.clear
-			headTerm = null
-			foremostTerm = null
-		}
-		private def closeParen ={
-			if(parenTermStack.isEmpty)
+		private def closeParen{
+			if(parenTermStack.length <= 1) //not supposed to be <= 0, the bottom level is the root line, and must be retained
 				break("unbalanced paren")
+			containsImmediateNext = null
 			parenTermStack.trimEnd(1)
-			transition(seekingInLine)
 		}
-		private def openParen ={
-			parenTermStack += foremostTerm
-			transition(enteringParen)
+		private def receiveFinishedSymbol:PointsInterTerm ={
+			val ret = interSt(Symbol(stringBuffer.result))
+			stringBuffer.clear
+			ret
 		}
 		private val eatingIndentation:PF = (fileEnd:Boolean, c:Char)=>
-			if(!fileEnd) c match{
+			if(fileEnd){
+				stringBuffer.clear
+				finishTakingIndentationAndAdjustLineAttachment
+			}else c match{
 				case '\n' =>
 					stringBuffer.clear
-				case ':' =>
-					break("colon not allowed here")
-				case '(' =>
-					break("what are you openingggg")
+				case ':' | '(' =>
+					finishTakingIndentationAndAdjustLineAttachment
+					transition(seekingTerm)
+					seekingTerm(false,c)
 				case ')' =>
-					break("what are you closingggg")
+					break("nothing to close")
+				case '"' =>
+					finishTakingIndentationAndAdjustLineAttachment
+					transition(buildingQuotedSymbol)
 				case ' ' | '\t' =>
 					stringBuffer += c
-				case '"' =>
-					finishTakingIndentation
-					transition(startingToTakeQuoteTerm)
 				case c:Char =>
-					finishTakingIndentation
-					transition(takeTerm)
-					takeTerm(false,c)
+					finishTakingIndentationAndAdjustLineAttachment
+					transition(buildingSymbol)
+					buildingSymbol(false,c)
 			}
-		private val seekingInLine:PF = (fileEnd:Boolean, c:Char)=> 
-			if(!fileEnd) c match{
+		private val seekingTerm:PF = (fileEnd:Boolean, c:Char)=> 
+			if(fileEnd){
+				finishTakingIndentationAndAdjustLineAttachment
+			}else c match {
 				case '(' =>
-					openParen
+					val newSq = interSq
+					attach(newSq)
+					parenTermStack += newSq
 				case ')' =>
 					closeParen
+					transition(immediatelyAfterTerm)
 				case ':' =>
-					containsImmediateNext = foremostTerm
-					transition(seekingColonBuddy)
+					val newSq = interSq
+					attach(newSq)
+					containsImmediateNext = newSq.t.asInstanceOf[Sq]
 				case '\n' =>
-					finishLine
 					transition(eatingIndentation)
 				case ' ' | '\t' => {}
 				case '"' =>
-					transition(startingToTakeQuoteTerm)
+					transition(buildingQuotedSymbol)
 				case c:Char =>
-					transition(takeTerm)
-					takeTerm(false,c)
+					transition(buildingSymbol)
+					buildingSymbol(false, c)
 			}
-		private val takeTerm:PF = (fileEnd:Boolean, c:Char)=>
+		private var immediatelyAfterTerm:PF = (fileEnd:Boolean, c:Char)=>
 			if(fileEnd){
-				finishTakingTermAndAttach
-			}else
-				c match{
-					case ' ' | '\t' | ':' | '\n' | '(' | ')' =>
-						finishTakingTermAndAttach
-						transition(seekingInLine)
-						seekingInLine(false,c)
-					case '"' =>
-						finishTakingTermAndAttach
-						containsImmediateNext = foremostTerm
-						transition(startingToTakeQuoteTerm)
-					case c:Char =>
-						stringBuffer += c
-				}
-		private val enteringParen:PF = (fileEnd:Boolean, c:Char)=>
-			if(fileEnd)
-				break("end of file before paren close, this has no meaning and does not make sense.")
-			else
-				c match{
-					case ' ' | '\t' => {}
-					case ':' =>
-						break("colon wat")
-					case '(' =>
-						break("paren opens nothing")
-					case ')' =>
-						closeParen
-					case '"' =>
-						transition(takingSingleLineQuoteTerm)
-					case '\n' =>
-						break("newline before paren completion (parens are only for single lines)")
-					case c:Char =>
-						transition(takeTerm)
-						takeTerm(false,c)
-				}
-		private val seekingColonBuddy:PF = (fileEnd:Boolean, c:Char)=>
-			if(fileEnd)
-				break("end of file after a colon, this has no meaning and does not make sense.")
-			else
-				c match{
-					case ' ' | '\t' => {}
-					case ':' =>
-						break("double colon wat")
-					case '\n' =>
-						tailestTermSequence = containsImmediateNext.s
-						finishLine
-						transition(eatingIndentation)
-					case '(' =>
-						//fine whatever I'll just forget the colon ever happened
-						openParen
-					case ')' =>
-						break("closebracket after colon wat")
-					case '"' =>
-						transition(startingToTakeQuoteTerm)
-					case c:Char =>
-						transition(takeTerm)
-						takeTerm(false,c)
-				}
-		private val startingToTakeQuoteTerm:PF = (fileEnd:Boolean, c:Char)=>
-			if(fileEnd)
-				finishTakingTermAndAttach
-			else
-				c match{
-					case '"' =>
-						finishTakingTermAndAttach
-						transition(seekingInLine)
-					case '\n' =>
+				finishTakingIndentationAndAdjustLineAttachment
+			}else c match{
+				case '(' =>
+					val newLevel = lastAttachedTerm
+					growSeqsLayer(newLevel)
+					parenTermStack += newLevel
+					transition(seekingTerm)
+				case ')' =>
+					closeParen
+				case ':' =>
+					containsImmediateNext = growSeqsLayer(lastAttachedTerm)
+					transition(seekingTerm)
+				case '\n' =>
+					transition(eatingIndentation)
+				case ' ' | '\t' =>
+					transition(seekingTerm)
+				case '"' =>
+					containsImmediateNext = growSeqsLayer(lastAttachedTerm)
+					transition(buildingQuotedSymbol)
+				case c:Char =>
+					break("You have to put a space here. Yes I know the fact that I can say that means I could just pretend there's a space there and let you go ahead, but I wont be doing that, as I am an incorrigible formatting nazi.")
+			}
+		private val buildingSymbol:PF = (fileEnd:Boolean, c:Char)=>
+			if(fileEnd){
+				finishTakingSymbolAndAttach
+				finishTakingIndentationAndAdjustLineAttachment
+			}else c match{
+				case ' ' | '\t' =>
+					finishTakingSymbolAndAttach
+					transition(seekingTerm)
+				case ':' | '\n' | '(' | ')' =>
+					finishTakingSymbolAndAttach
+					transition(immediatelyAfterTerm)
+					immediatelyAfterTerm(false,c)
+				case '"' =>
+					finishTakingSymbolAndAttach
+					transition(immediatelyAfterTerm)
+					immediatelyAfterTerm(false,c)
+				case c:Char =>
+					stringBuffer += c
+			}
+		private val buildingQuotedSymbol:PF = (fileEnd:Boolean, c:Char)=>
+			if(fileEnd){
+				finishTakingSymbolAndAttach
+				finishTakingIndentationAndAdjustLineAttachment
+			}else c match{
+				case '"' =>
+					finishTakingSymbolAndAttach
+					transition(immediatelyAfterTerm)
+				case '\\' =>
+					pushMode(takingEscape)
+				case '\n' =>
+					if(stringBuffer.isEmpty){
 						transition(multiLineFirstLine)
-					case c:Char =>
-						transition(takingSingleLineQuoteTerm)
-						takingSingleLineQuoteTerm(false,c)
-				}
-		private val takingSingleLineQuoteTerm:PF = (fileEnd:Boolean, c:Char)=>
-			if(fileEnd)
-				finishTakingTermAndAttach
-			else
-				c match{
-					case '"' =>
-						finishTakingTermAndAttach
-						transition(seekingInLine)
-					case '\\' =>
-						pushMode(takingEscape)
-					case '\n' =>
-						finishTakingTermAndAttach
-						transition(seekingInLine)
-						seekingInLine(false,'\n')
-					case c:Char =>
-						stringBuffer += c
-				}
-		//boring history story: takingQuoteTermThatMustTerminateWithQuote was an artifact from when line breaks wern't allowed during parens, it was really just the above with a breaker response to '\n's instead of a handler. We now handle such events reasonably.
+					}else{
+						finishTakingSymbolAndAttach
+						transition(eatingIndentation)
+					}
+				case c:Char =>
+					stringBuffer += c
+			}
 		private val takingEscape:PF = (fileEnd:Boolean, c:Char)=>
 			if(fileEnd)
 				break("invalid escape sequence, no one can escape the end of the file")
@@ -444,69 +451,70 @@ object Termpose{
 				popMode
 			}
 		private val multiLineFirstLine:PF = (fileEnd:Boolean, c:Char)=>
-			if(fileEnd)
-				finishTakingTermAndAttach
-			else
-				c match{
-					case ' ' | '\t' =>
-						multilineStringIndentBuffer += c
-					case c:Char =>
-						multilineStringsIndent = multilineStringIndentBuffer.result
-						if(multilineStringsIndent.length > salientIndentation.length){
-							if(multilineStringsIndent.startsWith(salientIndentation)){
-								multilineStringIndentBuffer.clear
-								transition(multiLineTakingText)
-								multiLineTakingText(false,c)
-							}else{
-								break("inconsistent indentation")
-							}
-						}else{
-							finishTakingTermAndAttach
-							finishLine
-							//transfer control to eatingIndentation
-							stringBuffer.clear
-							stringBuffer ++= multilineStringsIndent
-							multilineStringsIndent = null
-							transition(eatingIndentation)
-							eatingIndentation(false,c)
-						}
-				}
-		private val multiLineTakingIndent:PF = (fileEnd:Boolean, c:Char)=>
-			if(fileEnd)
-				finishTakingTermAndAttach
-			else
-				if(c == ' ' || c == '\t'){
+			if(fileEnd){
+				finishTakingSymbolAndAttach
+				finishTakingIndentationAndAdjustLineAttachment
+			}else c match{
+				case ' ' | '\t' =>
 					multilineStringIndentBuffer += c
-					if(multilineStringIndentBuffer.length == multilineStringsIndent.length){ //then we're through with the indent
-						if(multilineStringIndentBuffer startsWith multilineStringsIndent){
-							//now we know that it continues, we can insert the endline from the previous line
-							stringBuffer += '\n'
+				case c:Char =>
+					multilineStringsIndent = multilineStringIndentBuffer.result
+					if(multilineStringsIndent.length > salientIndentation.length){
+						if(multilineStringsIndent.startsWith(salientIndentation)){
 							transition(multiLineTakingText)
-							multilineStringIndentBuffer.clear
+							multiLineTakingText(false,c)
 						}else{
 							break("inconsistent indentation")
 						}
-					}
-				}else{
-					val indentAsItWas = multilineStringIndentBuffer.result
-					multilineStringIndentBuffer.clear
-					//assert(indentAsItWas.length < multilineStringsIndent.length)
-					if(multilineStringsIndent startsWith indentAsItWas){
-						//breaking out, transfer control to eatingIndentation
-						finishTakingTermAndAttach
-						finishLine
+					}else{
+						finishTakingSymbolAndAttach
+						//transfer control to eatingIndentation
 						stringBuffer.clear
-						stringBuffer ++= indentAsItWas
+						stringBuffer ++= multilineStringsIndent
+						multilineStringsIndent = null
 						transition(eatingIndentation)
 						eatingIndentation(false,c)
+					}
+					multilineStringIndentBuffer.clear
+			}
+		private val multiLineTakingIndent:PF = (fileEnd:Boolean, c:Char)=>
+			if(fileEnd){
+				finishTakingSymbolAndAttach
+				finishTakingIndentationAndAdjustLineAttachment
+			}else if(c == ' ' || c == '\t'){
+				multilineStringIndentBuffer += c
+				if(multilineStringIndentBuffer.length == multilineStringsIndent.length){ //then we're through with the indent
+					if(multilineStringIndentBuffer startsWith multilineStringsIndent){
+						//now we know that it continues, we can insert the endline from the previous line
+						stringBuffer += '\n'
+						transition(multiLineTakingText)
 					}else{
 						break("inconsistent indentation")
 					}
+					multilineStringIndentBuffer.clear
 				}
+			}else if(c == '\n'){
+				multilineStringIndentBuffer.clear //ignores whitespace lines
+			}else{
+				val indentAsItWas = multilineStringIndentBuffer.result
+				multilineStringIndentBuffer.clear
+				//assert(indentAsItWas.length < multilineStringsIndent.length)
+				if(multilineStringsIndent startsWith indentAsItWas){
+					//breaking out, transfer control to eatingIndentation
+					finishTakingSymbolAndAttach
+					stringBuffer.clear
+					stringBuffer ++= indentAsItWas
+					transition(eatingIndentation)
+					eatingIndentation(false,c)
+				}else{
+					break("inconsistent indentation")
+				}
+			}
 		private val multiLineTakingText:PF = (fileEnd:Boolean, c:Char)=>
-			if(fileEnd)
-				finishTakingTermAndAttach
-			else c match{
+			if(fileEnd){
+				finishTakingSymbolAndAttach
+				finishTakingIndentationAndAdjustLineAttachment
+			}else c match{
 				case '\n' =>
 					// stringBuffer += '\n'   will not add the newline until we're sure the multiline string is continuing
 					transition(multiLineTakingIndent)
@@ -515,17 +523,17 @@ object Termpose{
 			}
 		
 		
-		def parse(s:String):Try[Seq[Term]] ={
+		def parseToSeqs(s:BufferedIterator[Char]):Try[Seqs] ={
 			//pump characters into the mode of the parser until the read head has been graduated to the end
 			transition(eatingIndentation)
 			val res = try{
-				while(index < s.length){
-					var c = s.charAt(index)
+				while(s.hasNext){
+					var c = s.next
 					if(c == '\r'){ //handle windows' deviant line endings
-						if(s.charAt(index+1) == '\n'){
-							index += 1
-						}
 						c = '\n'
+						if(s.hasNext && s.head == '\n'){ //if the \r has a \n following it, don't register that
+							s.next
+						}
 					}
 					currentMode(false,c)
 					index += 1
@@ -537,10 +545,9 @@ object Termpose{
 					}
 				}
 				currentMode(true,'☠')
-				Success(resultSeq.map { _.toTerm })
+				Success(Seqs.from(rootArBuf.map{_.t.toTerm}))
 			}catch{
-				case pe:ParsingException =>
-					Failure(pe)
+				case pe:ParsingException => Failure(pe)
 			}
 			reinit
 			res
@@ -554,22 +561,22 @@ object Termpose{
 	private sealed trait XMLContent
 	private case class XMLPlaintext(s:String) extends XMLContent
 	private case class XMLTag(p:Term) extends XMLContent
-	def translateTermposeToSingleLineXML(s:String, contentlessElements:Boolean = false):Try[String] ={
+	def translateTermposeToSingleLineXML(s:Seqs, contentlessElements:Boolean = false):Try[String] ={
 		val sb = new StringBuilder
 		def takeTag(term:Term){
-			val tag:String = term.term.name
+			val tag:String = term.v
 			val attributes = new ArrayBuffer[(String, String)]
 			val content = new ArrayBuffer[XMLContent]
 			val hasContent = false
-			term.tail.map{ p =>
-				p.term.name.head match{
+			term.tail.foreach{ p =>
+				p.v.head match{
 					case '.' => //plaintext
 						parsingAssertion(p, p.tail.size <= 1, "plaintext terms should have one or no child")
-						content += XMLPlaintext(if(p.tail.size == 0) "" else p.tail(0).term.name)
+						content += XMLPlaintext(if(p.tail.size == 0) "" else p.tail(0).v)
 					case '-' => //attribute
 						parsingAssertion(p, p.tail.size <= 1, "attributes should have no more than one term. This one has "+p.tail.size)
 						//missed an error, if that one term has children, something is wrong.
-						attributes += ((p.term.name.tail, if(p.tail.size == 1) p.tail(0).term.name else ""))
+						attributes += ((p.v.tail, if(p.tail.size == 1) p.tail(0).v else ""))
 					case _ => content += XMLTag(p)
 				}
 			}
@@ -600,9 +607,9 @@ object Termpose{
 				sb += '>'
 			}
 		}
-		new Parser().parse(s).map{ poses =>
-			poses.foreach(takeTag)
-			sb.result
+		Try{
+			s.s.foreach(takeTag)
+			sb.result()
 		}
 	}
 	// def translateTermposeToXMLLines(s:String):Try[Seq[String]] ={
@@ -610,7 +617,15 @@ object Termpose{
 	// def translateTermposeToXMLUnixLineEndings(s:String) = translateTermposeToXML(s, "\n")
 	// def translateTermposeToXMLWindowsLineEndings(s:String) = translateTermposeToXML(s, "\r\n")
 	
-	def parse(s:String):Try[Seq[Term]] ={
-		new Parser().parse(s)
+	//basically parse is intended for parsing data that is all supposed to be on a single line. toString is its inverse.
+	def parse(s:String):Try[Term] = parse(s.iterator.buffered)
+	def parse(s:BufferedIterator[Char]):Try[Term] = new Parser().parseToSeqs(s).flatMap{ s:Seqs=>
+		if(s.s.length == 0) Failure(new ParsingException("input string does not encode any terms"))
+		else if(s.s.length == 1) Success(s.s(0))
+		else Success(s)
 	}
+	//parseMultipleLines is intended for files that contain multiple terms appearing on multiple lines, and it consistently puts all lines in a root Seqs, even if there is only one or no lines. This means it does not invert (EG; parseFile(term.toString).toString does not equal term, it equals Seqs(term)) but its behavior is more consistent and predictable than parse() in cases where an input may or may not be multiline, or empty. Naturally the parseFile methods have parseMultipleLines behavior.
+	def parseMultiLine(s:String):Try[Seqs] = new Parser().parseToSeqs(s.iterator.buffered)
+	def parseFile(path:String):Try[Seqs] = Try{Source.fromFile(path).buffered}.flatMap{ ci=> new Parser().parseToSeqs(ci) }
+	def parseFile(f:File):Try[Seqs] = Try{Source.fromFile(f).buffered}.flatMap{ ci=> new Parser().parseToSeqs(ci) }
 }
