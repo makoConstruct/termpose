@@ -46,19 +46,6 @@ object Termpose{
 		}
 	}
 	
-	// private def overEachAdjacent[A](s:Iterator[A], f:(A,A)=>Unit){
-	// 	if(!s.hasNext) return
-	// 	var prev:A = s.next
-	// 	if(!s.hasNext) return
-	// 	var cur:A = s.next
-	// 	while(true){
-	// 		f(prev, cur)
-	// 		if(!s.hasNext) return
-	// 		prev = cur
-	// 		cur = s.next
-	// 	}
-	// }
-	
 	sealed trait Term extends Stringificable{
 		val line:Int
 		val column:Int
@@ -624,7 +611,7 @@ object Termpose{
 		else if(s.s.length == 1) Success(s.s(0))
 		else Success(s)
 	}
-	//parseMultipleLines is intended for files that contain multiple terms appearing on multiple lines, and it consistently puts all lines in a root Seqs, even if there is only one or no lines. This means it does not invert (EG; parseFile(term.toString).toString does not equal term, it equals Seqs(term)) but its behavior is more consistent and predictable than parse() in cases where an input may or may not be multiline, or empty. Naturally the parseFile methods have parseMultipleLines behavior.
+	//parseMultipleLines is intended for files that contain multiple terms appearing on multiple lines, and it consistently puts all lines in a single root Seqs, even if there is only one or no lines. This means it does not invert (EG; parseFile(term.toString).toString does not equal term, it equals Seqs(term)) but its behavior is more consistent and predictable than parse() in cases where an input may or may not be multiline, or empty. Naturally the parseFile methods have parseMultipleLines behavior.
 	def parseMultiLine(s:String):Try[Seqs] = new Parser().parseToSeqs(s.iterator.buffered)
 	def parseFile(path:String):Try[Seqs] = Try{Source.fromFile(path).buffered}.flatMap{ ci=> new Parser().parseToSeqs(ci) }
 	def parseFile(f:File):Try[Seqs] = Try{Source.fromFile(f).buffered}.flatMap{ ci=> new Parser().parseToSeqs(ci) }

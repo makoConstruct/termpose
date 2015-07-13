@@ -2,11 +2,15 @@ import collection.mutable.ArrayBuffer
 import org.scalatest._
 import util.{Try, Success, Failure}
 class TermposeParserSpec extends WordSpec with Matchers with TryValues{
-	val gp = new Termpose.Parser //tests share a global parser deliberately. If there's any way we can cause state to leak between tests, I damn well want to elicit it, and I can't imagine a better way to get that to happen.
 	def expectsEqual(input:String, output:String) ={
-		val pinp = gp.parse(input).success.value
-		assert(Termpose.minified(pinp) == output)
+		val pinp = Termpose.parse(input).success.value
+		assert(pinp.toString == output)
 	}
+	def expectsEqualMultiLine(input:String, output:String) ={
+		val pinp = Termpose.parseMultiLine(input).success.value
+		assert(pinp.toString == output)
+	}
+	
 	"Parser" should{
 		"generally work" in{
 			expectsEqual("""
@@ -14,24 +18,24 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 			""", "a")
 			expectsEqual("""
 			a(b(c(d)))
-			""", "a(b(c(d)))")
+			""", "(a (b (c d)))")
 			expectsEqual("""
 			a b
-			""", "a(b)")
+			""", "(a b)")
 			expectsEqual("""
 			a b c
-			""", "a(b c)")
+			""", "(a b c)")
 			expectsEqual("""
 			a
 			  b
 			  c
-			""", "a(b c)")
+			""", "(a b c)")
 			expectsEqual("""
 			a b
 			  c
-			""", "a(b c)")
+			""", "(a b c)")
 			expectsEqual("""
-			Aaron b""", "Aaron(b)")
+			Aaron b""", "(Aaron b)")
 			expectsEqual("""
 			Aaron
 				because
@@ -41,23 +45,23 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 						in pens
 				keep
 				swimming
-			""", "Aaron(because always(keep dogs(in(pens))) keep swimming)")
-			expectsEqual("""
+			""", "(Aaron because (always keep (dogs (in pens))) keep swimming)")
+			expectsEqualMultiLine("""
 			Oglomere
 			Oglomore
-			""", "Oglomere Oglomore")
+			""", "(Oglomere Oglomore)")
 			expectsEqual("""
 			"horrid clown"
 				make "my day"
 				horrid clown
 					jp awesome:ross
-			""", "\"horrid clown\"(make(\"my day\") horrid(clown jp(awesome(ross))))")
+			""", "(\"horrid clown\" (make \"my day\") (horrid clown (jp (awesome ross))))")
 			expectsEqual("""
 			how about a "
 				~M~U~L~T~I~L~I~N~E~
 				~S~T~R~I~N~G~
 			//"YOU LIKE?"
-			""", "how(about a \"~M~U~L~T~I~L~I~N~E~\\n~S~T~R~I~N~G~\") //(\"YOU LIKE?\")")
+			""", "((how about a \"~M~U~L~T~I~L~I~N~E~\\n~S~T~R~I~N~G~\") (// \"YOU LIKE?\"))")
 			expectsEqual("""
 			hobobo
 				green witches:
@@ -65,19 +69,26 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 					mora
 					bonell
 				emero
-			""", "hobobo(green(witches(glon mora bonell)) emero)")
-			expectsEqual("""a(bb(aod(igjd(ss
+			""", "(hobobo (green (witches glon mora bonell)) emero)")
+			expectsEqual("""a(bb(aod(igjd(ss))
 				ojfjf
 				jjj(s:
-					2""", "a(bb(aod(igjd(ss))) ojfjf jjj(s(2)))")
+					2""", "(a (bb (aod (igjd ss)) ojfjf (jjj (s 2))))")
 		}
 		
+		"do S-expression syntax number one" in {
+			expectsEqual("(a b (c d))", "(a b (c d))")
+		}
+		
+		"do S-expression syntax with indents" in {
+			expectsEqual("a (b c\n\td (e f g)", "(a (b c (d (e f g))))")
+		}
 		
 		"handle weird whitespace" in{
 			expectsEqual("""
 			a (  b  (  c  )    )  
 			      	d
-			""", "a(b(c) d)")
+			""", "(a (b (c)) d)")
 		}
 		
 		"put indentation before colon overrun" in{
@@ -85,37 +96,45 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 			f
 				a:
 				b
-			""", "f(a b)")
+			""", "(f (a) b)")
 		}
 		
 		"interpret windows style line endings correctly" in{
-			expectsEqual("\nf\n\ta\r\n\tb", "f(a b)") //apparently multiline strings in scala ignore escape sequences.
+			expectsEqual("\nf\n\ta\r\n\tb", "(f a b)") //apparently multiline strings in scala ignore escape sequences.
+		}
+		
+		"perceive double spaced lines in multiline strings properly" in{
+			expectsEqual("f \"\n\ta\n\t\n\ta", "(f \"a\\n\\na\")")
 		}
 		
 		"properly handle escaped unicode snowman" in{
 			expectsEqual("""
 			f "MERRY HOLIDAY \h\h\h\h\h\h
-			""", "f(\"MERRY HOLIDAY ☃☃☃☃☃☃\")")
+			""", "(f \"MERRY HOLIDAY ☃☃☃☃☃☃\")")
 		}
 		
 		"be able to output as a json array" in{
-			val pinp = gp.parse("f(p l a(9 32 87").success.value
-			assert(Termpose.asJsonString(pinp) == ("[[\"f\",\"p\",\"l\",[\"a\",\"9\",\"32\",\"87\"]]]"))
+			val pinp = Termpose.parse("f(p l a(9 32 87").success.value
+			assert(pinp.jsonString == ("[\"f\",\"p\",\"l\",[\"a\",\"9\",\"32\",\"87\"]]"))
 		}
 		
-		"put quoted terms adjacent to the term before them inside former term" in {
+		"put quoted terms adjacent to the term before them inside former term" in{
+			expectsEqual("a\"b\"", "(a b)")
+		}
+		
+		"insert adjacent quoted terms in a complex example" in {
 			expectsEqual("""
 				f do"alll"
 					daba ab"moko
 					daba dke:ab"moko
-			""", "f(do(alll) daba(ab(moko)) daba(dke(ab(moko))))")
+			""", "(f (do alll) (daba (ab moko)) (daba (dke (ab moko))))")
 		}
 		
 		"handle contained quoted terms properly" in {
 			expectsEqual("""
 				a
 					b c"
-						things writ""", "a(b(c(\"things writ\")))")
+						things writ""", "(a (b (c \"things writ\")))")
 		}
 		
 		"chain colons according to the spec" in {
@@ -123,43 +142,41 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 				a:b:c:d:
 					d
 					d
-			""", "a(b(c(d(d d))))")
+			""", "(a (b (c (d d d))))")
+		}
+		
+		"not contain next line with open parens without indentation" in{
+			expectsEqual("A(B\nA(B", "((A B) (A B))")
+		}
+		
+		"nest empty lists for chained colons" in {
+			expectsEqual(":::", "((()))")
+		}
+		
+		"contain thing in chained colons" in {
+			expectsEqual(":::abio\n\tbobo", "((((abio))) bobo)")
+		}
+		
+		"contain thing that contains indented colons in chained colons" in {
+			expectsEqual(":::a:b(c d\n\tbobo", "((((a (b c d bobo)))))")
 		}
 		
 		"kinda mostly translate termpose to XML" in {
-			assert(Termpose.translateTermposeToSingleLineXML("html(head(style(.\"body{background-color:black;color:black}\")) body(div(-id(dersite))))").success.value == "<html><head><style>body{background-color:black;color:black}</style></head><body><div id=\"dersite\"/></body></html>")
+			val poses = Termpose.parseMultiLine("html(head(style(.\"body{background-color:black;color:black}\")) body(div(-id(dersite))))").success.value
+			assert(Termpose.translateTermposeToSingleLineXML(poses).success.value == "<html><head><style>body{background-color:black;color:black}</style></head><body><div id=\"dersite\"/></body></html>")
+		}
+		
+		"respond discerningly to open and closed containing expressions" in {
+			expectsEqual("a b\n\tn", "(a b n)") //open
+			expectsEqual("a(b(c\n\tn", "(a (b c n))") //open
+			expectsEqual("a\n\tn", "(a n)") //closed
+			expectsEqual("a:b\n\tn", "((a b) n)") //closed
+			expectsEqual("a(b)\n\tn", "((a b) n)") //closed
+			expectsEqual("(a b)\n\tn", "((a b) n)") //closed
+		}
+		
+		"further test root child extraction" in {
+			expectsEqual("a b( c\n\td", "(a (b c d))")
 		}
 	}
-	
-	
-	// this file used to have no dependencies. Then I started using sbt + maven and it made getting nice and bloated so easy that I just don't care any more. Praise be to the march unto modernity!
-	// val p = new Termpose.Parser
-	// for(i <- 0 until allTests.length){
-	// 	val test = allTests(i)
-	// 	try{
-	// 		p.parse(test.input) match{
-	// 			case Success(s)=>
-	// 				val str = s.map { _.toString } .reduce { (l,r) => l ++ " " ++ r }
-	// 				if(str equals test.output)
-	// 					println(i + ": success")
-	// 				else{
-	// 					val midstring = test.name match{
-	// 						case Some(quality)=> ": failure to ensure that {"+quality+"}, expected  "
-	// 						case None => ": failure, expected  "
-	// 					}
-	// 					println(Console.RED + i + midstring + test.output +".  got  "+str+"."+Console.RESET)
-	// 				}
-	// 			case Failure(e)=>
-	// 				println(Console.RED + i + ": failure, parser says:")
-	// 				println("  "+e.getMessage+Console.RESET)
-	// 		}
-	// 	}catch{
-	// 		case e:Exception =>
-	// 			val name = test.name match{
-	// 				case Some(quality)=> "critical error concerning {"+quality+"}. "
-	// 				case None => "critical error. "
-	// 			}
-	// 			println(Console.MAGENTA+ name +e.toString+Console.RESET)
-	// 	}
-	// }
 }

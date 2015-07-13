@@ -40,13 +40,13 @@ import std.TermposeSerialize
 struct Vector x:Float y:Float
 
 impl Add for Vector
-  deffun + self:Vector other:Vector ->:Vector
+  fun + self:Vector other:Vector ->:Vector
     Vector
       + self.x other.x
       + self.y other.y
 impl Copy Clone TermposeSerialize for Vector
 
-deffun * m:Number v:Vector -> Vector(*(m v.x) *(m v.y))
+fun * m:Number v:Vector -> Vector(*(m v.x) *(m v.y))
 
 println toSexp(*(5 Vector(1 3)
 
@@ -57,13 +57,28 @@ We were always able to use S-Expressions instead of XML, Json Toml, Yaml or what
 
 Termpose takes that something out of the picture.
 
-##Tell us about the implementation?
-Termpose.scala is a streaming state-machine parser. This in combination with the obstinately design-led nature of the application has lead to very ugly code, and required a lot of documentation of the mutable state. HOWEVER, this style results in pretty well optimal efficiency both in time and memory. It also makes it quite straightforward to build event-driven parsers if the need ever arises(for instance, if you had 80GB of termpose logs and you wanted to parse through them for a particular structure without parsing the whole thing into a Seqs and pulling the entire lot into memory, it wouldn't be too hard for us to implement that functionality)
+##Platform support?
 
-Mako is considering porting termpose to [Haxe](https://github.com/HaxeFoundation/haxe) to make supporting all major targets at once quite easy.
+| language | status | the closest thing we have to documentation |
+| ---------|--------|------ |
+| Scala | Fly | [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
+| Javascript | Imminent | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
+| C# | Imminent | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
+| Java | Works | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
+| Python | Works | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
+| C++ | Maybe Imminent, uncertain about the generated code | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
+
+###key
+| Fly | No docs, but the API is quite comprehensive |
+| Imminent | Already has support from the basic Haxe API and mako will elevate it to Fly the moment someone gives them a well designed, idiomatic interface to hook up. |
+| Works | Haxe support, but the basic Haxe-support API for the parser and Term Tree data structure is minimal and crude. However, anyone can connect the basic API up to something more idiomatic very easily. |
+
+
+##Tell us about the implementation?
+Termpose is implemented in the style of a streaming state-machine. This in combination with the obstinately design-led nature of the application has lead to very ugly code, which required a lot of documentation of the mutable state. HOWEVER, this style gets us pretty well optimal time and memory efficiency. It also makes it quite straightforward to build event-driven parsers(IE, parsers that can find specific structures at specific places in a giant masses of termpose without parsing the entire thing into memory first) if the need ever arises.
+
 
 ##Termpose-formatted XML dialect
-
 Termpose → XML translation is partially implemented, see the function translateTermposeToSingleLineXML.
 
 Here's how one would write the first half of Mako's homepage in termpose's XML dialect:
@@ -91,7 +106,7 @@ html
         ...
 ```
 
-##Termpose could be better at Json than Json
+##Termpose is better at expressing Json than Json
 
 ```javascript
 {
