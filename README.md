@@ -1,4 +1,6 @@
 ##Termpose - a sensitive markup language
+
+[![Join the chat at https://gitter.im/makoConstruct/termpose](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/makoConstruct/termpose?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 Termpose is an extremely flexible markup language with an elegant syntax.
 
 Termpose pays attention to your indentation. Expressions like
