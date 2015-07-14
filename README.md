@@ -1,5 +1,6 @@
 ##Termpose - a sensitive markup language
-Termpose is an extremely flexible markup language with an elegant syntax.
+
+Termpose is an extremely flexible markup language with an elegant syntax. [![Join the chat at https://gitter.im/makoConstruct/termpose](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/makoConstruct/termpose?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 Termpose pays attention to your indentation. Expressions like
 ```
@@ -9,7 +10,7 @@ a
         d
     e
 ```
-will be equivalent to `a(b c(d) e)`, which in turn equates to, and will serialize as the termpose expression `(a b (c d) e)`.
+will equate to `a(b c(d) e)`, which in turn equates to, and will serialize as the termpose expression `(a b (c d) e)`.
 
 Termpose tries to keep out of your namespace, attributing its own meanings to the characters `":()`, but leaving ```\/?-+=[]*&^%$#@!`~;'.,<>``` for your domain-specific languages to define as they please.
 
@@ -61,17 +62,12 @@ Termpose takes that something out of the picture.
 
 | language | status | the closest thing we have to documentation |
 | ---------|--------|------ |
-| Scala | Fly | [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
-| Javascript | Imminent | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
-| C# | Imminent | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
-| Java | Works | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
-| Python | Works | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
-| C++ | Maybe Imminent, uncertain about the generated code | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
-
-###key
-| Fly | No docs, but the API is quite comprehensive |
-| Imminent | Already has support from the basic Haxe API and mako will elevate it to Fly the moment someone gives them a well designed, idiomatic interface to hook up. |
-| Works | Haxe support, but the basic Haxe-support API for the parser and Term Tree data structure is minimal and crude. However, anyone can connect the basic API up to something more idiomatic very easily. |
+| Scala | Very nice | [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
+| Javascript | Proper API coming soon | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
+| C# | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
+| Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
+| Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
+| C++ | Uncertain, will probably do it if the generated Haxe cpp is miraculously not awful | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
 
 
 ##Tell us about the implementation?
