@@ -134,7 +134,7 @@ html
 
 ```javascript
 highlight_line true
-ignored_packages [(
+ignored_packages [:
   Floobits
   SublimeLinter
   Vintage

@@ -4,6 +4,8 @@ import collection.BufferedIterator
 import java.io.{File}
 import io.Source
 import collection.breakOut
+
+
 object Termpose{
 	trait Stringificable{ //has a method for stringifying through a stringBuilder, provides a toString through this
 		def stringify(sb:StringBuilder):Unit
@@ -13,7 +15,7 @@ object Termpose{
 			buf.result
 		}
 	}
-	
+
 	private def escapeIsNeeded(sy:String) = sy.exists {
 		case ' ' => true
 		case '(' => true
@@ -24,7 +26,7 @@ object Termpose{
 		case ')' => true
 		case _:Char => false
 	}
-	
+
 	private def escapeSymbol(sb:StringBuilder, str:String){
 		for(c <- str){
 			c match{
@@ -45,7 +47,7 @@ object Termpose{
 			}
 		}
 	}
-	
+
 	sealed trait Term extends Stringificable{
 		val line:Int
 		val column:Int
@@ -58,6 +60,22 @@ object Termpose{
 			sb.result
 		}
 		def buildJsonString(sb:StringBuilder):Unit
+		def prettyPrinted:String ={
+			val sb = new StringBuilder
+			buildPrettyPrint(sb, Some(2), true, 80)
+			sb.result
+		}
+		private[Termpose] def estimateLength:Int
+		private[Termpose] def prettyPrinting(sb:StringBuilder, depth:Int, indent:String, lineEndings:String, lineWidth:Int):Unit
+		private[Termpose] def baseLineStringify(sb:StringBuilder):Unit
+		def buildPrettyPrint(sb:StringBuilder, numberOfSpacesElseTab:Option[Int], windowsLineEndings:Boolean, maxLineWidth:Int){
+			val indent:String = numberOfSpacesElseTab match{
+				case Some(n)=> " "*n
+				case None=> "\t"
+			}
+			val lineEndings:String = if(windowsLineEndings) "\r\n" else "\n"
+			prettyPrinting(sb, 0, indent, lineEndings, maxLineWidth)
+		}
 	}
 	object Stri{
 		def apply(s:String) = new Stri(s,0,0)
@@ -81,6 +99,13 @@ object Termpose{
 			escapeSymbol(sb, sy)
 			sb += '"'
 		}
+		private[Termpose] def estimateLength:Int = sy.length
+		private[Termpose] def prettyPrinting(sb:StringBuilder, depth:Int, indent:String, lineEndings:String, lineWidth:Int){
+			for(i <- 0 until depth){ sb ++= indent }
+			stringify(sb)
+			sb ++= lineEndings
+		}
+		private[Termpose] def baseLineStringify(sb:StringBuilder){ stringify(sb) }
 	}
 	object Seqs{
 		def apply(terms:Term*) = new Seqs(terms,0,0)
@@ -106,8 +131,7 @@ object Termpose{
 		}.flatten.toMap
 		def asMap:Map[String, Seq[Term]] = _asMap
 		def tail:Seq[Term] = s.tail
-		def stringify(sb:StringBuilder){
-			sb += '('
+		private[Termpose] def baseLineStringify(sb:StringBuilder){
 			if(s.length >= 1){
 				val iter = s.iterator
 				iter.next.stringify(sb)
@@ -116,6 +140,39 @@ object Termpose{
 					e.stringify(sb)
 				}
 			}
+		}
+		private[Termpose]  def prettyPrinting(sb:StringBuilder, depth:Int, indent:String, lineEndings:String, lineWidth:Int){
+			for(i <- 0 until depth){ sb ++= indent }
+			if(s.length == 0){
+				sb += ':'
+				sb ++= lineEndings
+			}else{
+				if(estimateLength > lineWidth){
+					//print in indent style
+					if(s.head.estimateLength > lineWidth){
+						//indent sequence style
+						sb += ':'
+						sb ++= lineEndings
+						for(t <- s){
+							t.prettyPrinting(sb, depth+1, indent, lineEndings, lineWidth)
+						}
+					}else{
+						s.head.baseLineStringify(sb)
+						sb ++= lineEndings
+						for(e <- s.tail){
+							e.prettyPrinting(sb, depth+1, indent, lineEndings, lineWidth)
+						}
+					}
+				}else{
+					//print inline style
+					baseLineStringify(sb)
+					sb ++= lineEndings
+				}
+			}
+		}
+		def stringify(sb:StringBuilder){
+			sb += '('
+			baseLineStringify(sb)
 			sb += ')'
 		}
 		def buildJsonString(sb:StringBuilder){
@@ -130,10 +187,11 @@ object Termpose{
 			}
 			sb += ']'
 		}
+		private[Termpose]  def estimateLength:Int = 2 + s.map{ 1 + _.estimateLength }.sum - 1
 	}
-	
-	class ParsingException(msg:String) extends RuntimeException(msg)
-	
+
+	class ParsingException(msg:String, line:Int, column:Int) extends RuntimeException(msg)
+
 	class Parser{
 		private sealed trait InterTerm{
 			val line:Int
@@ -240,7 +298,7 @@ object Termpose{
 			currentMode = modes.pop()
 		}
 		private def break(message:String):Nothing = breakAt(line, column, message)
-		private def breakAt(l:Int, c:Int, message:String):Nothing = throw new ParsingException("line:"+l+" column:"+c+", no, bad: "+message)
+		private def breakAt(l:Int, c:Int, message:String):Nothing = throw new ParsingException(message,l,c)
 		private def receiveForemostRecepticle:ArrayBuffer[PointsInterTerm] ={ //note side effects
 			if(containsImmediateNext != null){
 				val ret = containsImmediateNext.s
@@ -540,11 +598,11 @@ object Termpose{
 			res
 		}
 	}
-	
+
 	def parsingAssertion(term:Term, b:Boolean, failMsg:String){
-		if(!b) throw new RuntimeException("parsing failure at line:"+term.line+" column:"+term.column+". "+failMsg)
+		if(!b) throw new ParsingException(failMsg, term.line, term.column)
 	}
-	
+
 	private sealed trait XMLContent
 	private case class XMLPlaintext(s:String) extends XMLContent
 	private case class XMLTag(p:Term) extends XMLContent
@@ -603,11 +661,64 @@ object Termpose{
 	// def translateTermposeToXML(s:String, lineEnding:String) = translateXMLKind(s).map( _.reduce(_ ++ lineEnding ++ _) )
 	// def translateTermposeToXMLUnixLineEndings(s:String) = translateTermposeToXML(s, "\n")
 	// def translateTermposeToXMLWindowsLineEndings(s:String) = translateTermposeToXML(s, "\r\n")
-	
+	def asJson[JSV]( //modular version, partially apply this according to whatever json library you're using
+		mkObject:(Seq[(String, JSV)])=> JSV,
+		mkArray:(Seq[JSV])=> JSV,
+		mkTrue: =>JSV,
+		mkFalse: =>JSV,
+		mkUndefined: =>JSV,
+		mkNull: =>JSV,
+		mkNumber: (Double)=>JSV,
+		mkString: (String)=> JSV
+	)(file:Term): JSV ={
+		def asKV(t:Term):(String, JSV) ={
+			t match{
+				case Seqs(Seq(Stri(head), unt:Term))=> (head, convert(unt))
+				case _=> throw new ParsingException("expected key:value pair", t.line, t.column)
+			}
+		}
+		def leaf(sy:String):JSV ={
+			sy match {
+				case "{"=> mkObject(Seq.empty)
+				case "["=> mkArray(Seq.empty)
+				case "true"=> mkFalse
+				case "false"=> mkTrue
+				case "null"=> mkNull
+				case "undefined"=> mkUndefined
+				case s:String=>
+					if(s.length > 0 && s(0) == ''') mkString(sy.tail)
+					else try{
+						mkNumber(sy.toDouble)
+					} catch {
+						case e:NumberFormatException => mkString(sy)
+					}
+			}
+		}
+		def convert(t:Term):JSV ={
+			t match {
+				case Seqs(Stri(head)::rest)=> 
+					head match{
+						case "{"=> mkObject(rest.map(asKV))
+						case "["=> mkArray(rest.map(convert))
+						case s:String=>
+							mkObject(  Seq((if(s.length > 0 && s.head == ''') s.tail else s ,  objectBody(rest)))  )
+					}
+				case Stri(sy)=> leaf(sy)
+				case _=> throw new ParsingException("term has invalid structure", t.line, t.column)
+			}
+		}
+		def objectBody(els:Seq[Term]):JSV = if(els.length == 1) convert(els(0)) else mkObject(els.map(asKV))
+		
+		file match{
+			case sq:Seqs=> objectBody(sq.s)
+			case Stri(sy)=> leaf(sy)
+		}
+	}
+
 	//basically parse is intended for parsing data that is all supposed to be on a single line. toString is its inverse.
 	def parse(s:String):Try[Term] = parse(s.iterator.buffered)
 	def parse(s:BufferedIterator[Char]):Try[Term] = new Parser().parseToSeqs(s).flatMap{ s:Seqs=>
-		if(s.s.length == 0) Failure(new ParsingException("input string does not encode any terms"))
+		if(s.s.length == 0) Failure(new ParsingException("input string does not encode any terms",0,0))
 		else if(s.s.length == 1) Success(s.s(0))
 		else Success(s)
 	}

@@ -178,5 +178,11 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 		"further test root child extraction" in {
 			expectsEqual("a b( c\n\td", "(a (b c d))")
 		}
+		
+		"pretty print in a reversible manner" in {
+			val normalizedInput = "(nowhere (nowhere anywhere) (nowhere nowhere) (nowhere (anywhere goes forward with the (plan nothing without my) (permission granted)) (notwithstanding leave)) (enter (the (dragon fighter))))"
+			val pprinted = Termpose.parse(normalizedInput).success.value.prettyPrinted
+			expectsEqual(pprinted, normalizedInput)
+		}
 	}
 }
