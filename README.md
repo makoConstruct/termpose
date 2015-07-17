@@ -67,7 +67,7 @@ Termpose takes that something out of the picture.
 | C# | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
 | Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
 | Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
-| C++ | Uncertain, will probably do it if the generated Haxe cpp is miraculously not awful | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
+| C++/C/Rust | Bad. Can't produce idiomatic interfaces for C++ with Haxe as far as I can tell. Haxe is GC'd. May port to rust one day. | - |
 
 
 ##Tell us about the implementation?
