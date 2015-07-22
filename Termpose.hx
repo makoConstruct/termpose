@@ -193,6 +193,7 @@ private class St implements InterTerm{
 typedef PF = Bool -> Int -> Void;
 
 @:expose class Parser{
+	public function new(){}
 	public static function prefixes(shorter:String, longer:String):Bool{
 		if(shorter.length > longer.length){
 			return false;
@@ -640,4 +641,10 @@ typedef PF = Bool -> Int -> Void;
 		return res;
 	}
 	public function parseStringToSeqs(s:String):Seqs { return parseToSeqs(new StringIterator(s)); }
+}
+
+
+
+@:expose class Termpose{
+	public static function parse(s:String):Seqs { return new Parser().parseToSeqs(new StringIterator(s)); }
 }

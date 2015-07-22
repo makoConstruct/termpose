@@ -41,13 +41,13 @@ import std.TermposeSerialize
 struct Vector x:Float y:Float
 
 impl Add for Vector
-  fun + self:Vector other:Vector ->:Vector
+  defun + self:Vector other:Vector ->:Vector
     Vector
       + self.x other.x
       + self.y other.y
 impl Copy Clone TermposeSerialize for Vector
 
-fun * m:Number v:Vector -> Vector(*(m v.x) *(m v.y))
+defun * m:Number v:Vector -> Vector(*(m v.x) *(m v.y))
 
 println toSexp(*(5 Vector(1 3)
 
@@ -63,11 +63,12 @@ Termpose takes that something out of the picture.
 | language | status | the closest thing we have to documentation |
 | ---------|--------|------ |
 | Scala | Very nice | [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
-| Javascript | Proper API coming soon | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
-| C# | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
-| Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
-| Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/termpose.hx) |
-| C++/C/Rust | Bad. Can't produce idiomatic interfaces for C++ with Haxe as far as I can tell. Haxe is GC'd. May port to rust one day. | - |
+| Javascript | Proper API coming soon | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| Haxe | Pretty good. Should get better soon. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| C# | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| C++/C/Rust | Bad. Can't produce idiomatic interfaces for C++ with Haxe as far as I can tell. Haxe is garbage collected. May port to rust one day. | - |
 
 
 ##Tell us about the implementation?
