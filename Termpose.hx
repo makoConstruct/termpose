@@ -1,8 +1,8 @@
 import haxe.ds.Vector;
 
 class Stringificable{ //has a method for stringifying through a StringBuf, provides a toString through this
-	function stringify(sb:StringBuf){}
-	function toString():String {
+	public function stringify(sb:StringBuf){}
+	public function toString():String {
 		var buf = new StringBuf();
 		stringify(buf);
 		return buf.toString();
@@ -71,75 +71,189 @@ class StringIterator implements BufferedIterator<Int> {
 
 
 @:expose class Term extends Stringificable{
-	var line:Int;
-	var column:Int;
-	function jsonString():String{
+	public var line (default, null):Int;
+	public var column (default, null):Int;
+	public function jsonString():String{
 		var sb = new StringBuf();
 		buildJsonString(sb);
 		return sb.toString();
 	}
-	function buildJsonString(sb:StringBuf){}
+	public function s():Null<Vector<Term>> return null;
+	public function v():Null<String> return null;
+	public function buildJsonString(sb:StringBuf){}
+	public function prettyPrint():String{
+		var sb = new StringBuf();
+		buildPrettyPrint(sb, 2, true, 80);
+		return sb.toString();
+	}
+	public function buildPrettyPrint(sb:StringBuf, numberOfSpacesElseTab:Null<Int>, windowsLineEndings:Bool, maxLineWidth:Int){
+		var indent:String = if(numberOfSpacesElseTab != null){ Parser.repeatString(" ",numberOfSpacesElseTab); }else{ "\t"; };
+		var lineEndings:String = if(windowsLineEndings){ "\r\n"; }else{ "\n"; };
+		buildPrettyPrinting(sb, 0, indent, lineEndings, maxLineWidth);
+	}
+	private function buildPrettyPrinting(sb:StringBuf, depth:Int, indent:String, lineEndings:String, lineWidth:Int){
+		if(this.v() != null){
+			for(i in 0...depth){ sb.addSub(indent,0); }
+			stringify(sb);
+			sb.addSub(lineEndings,0);
+		}else{
+			var ts:Vector<Term> = this.s();
+			for(i in 0...depth){ sb.addSub(indent,0); }
+			if(ts.length == 0){
+				sb.addChar(':'.code);
+				sb.addSub(lineEndings,0);
+			}else{
+				if(estimateLength() > lineWidth){
+					//print in indent style
+					if(ts[0].estimateLength() > lineWidth){
+						//indent sequence style
+						sb.addChar(':'.code);
+						sb.addSub(lineEndings,0);
+						for(t in ts){
+							t.buildPrettyPrinting(sb, depth+1, indent, lineEndings, lineWidth);
+						}
+					}else{
+						ts[0].baseLinePrettyStringify(sb);
+						sb.addSub(lineEndings,0);
+						for(i in 0...ts.length){
+							var e = ts[i];
+							e.buildPrettyPrinting(sb, depth+1, indent, lineEndings, lineWidth);
+						}
+					}
+				}else{
+					//print inline style
+					baseLinePrettyStringify(sb);
+					sb.addSub(lineEndings,0);
+				}
+			}
+		}
+	}
+	public function sexpStringify(sb:StringBuf){stringify(sb);}
+	public function prettyStringify(sb:StringBuf){}
+	private function baseLineStringify(sb:StringBuf){}
+	private function baseLinePrettyStringify(sb:StringBuf){}
+	private function estimateLength():Int{
+		if(this.s() != null){
+			var sum = 0;
+			for(t in this.s()){
+				sum += t.estimateLength() + 1;
+			}
+			return 2 + sum - 1;
+		}else{
+			return this.v().length + 2;
+		}
+	}
 }
 
 @:expose class Stri extends Term{
-	public var sy:String;
-	public function new(sy:String, line:Int, column:Int){
-		this.sy = sy;
+	public var vp:String;
+	override public function s():Null<Vector<Term>> return null;
+	override public function v():Null<String> return vp;
+	public function new(vp:String, line:Int, column:Int){
+		this.vp = vp;
 		this.line = line;
 		this.column = column;
 	}
-	override function stringify(sb:StringBuf){
-		if(Parser.escapeIsNeeded(sy)){
+	override public function stringify(sb:StringBuf){
+		if(Parser.escapeIsNeeded(vp)){
 			sb.addChar('"'.code);
-			Parser.escapeSymbol(sb, sy);
+			Parser.escapeSymbol(sb, vp);
 			sb.addChar('"'.code);
 		}else{
-			sb.addSub(sy,0);
+			sb.addSub(vp,0);
 		}
 	}
-	override function buildJsonString(sb:StringBuf){
+	override public function prettyStringify(sb:StringBuf){stringify(sb);}
+	override private function baseLineStringify(sb:StringBuf){stringify(sb);}
+	override public function buildJsonString(sb:StringBuf){
 		sb.addChar('"'.code);
-		Parser.escapeSymbol(sb, sy);
+		if(Parser.escapeIsNeeded(vp)){
+			Parser.escapeSymbol(sb, vp);
+		}else{
+			sb.addSub(vp,0);
+		}
 		sb.addChar('"'.code);
 	}
 }
 
 @:expose class Seqs extends Term{
-	public var s:Vector<Term>;
+	public var sp:Vector<Term>;
+	override public function s():Null<Vector<Term>> return sp;
+	override public function v():Null<String> return null;
 	public function new(s:Vector<Term>, line:Int, column:Int){
-		this.s = s;
+		this.sp = s;
 		this.line = line;
 		this.column = column;
 	}
 	// function name():String{
 	// 	if(s.length >= 1){
 	// 		switch(s(0)){
-	// 			case Stri(sy): return sy;
+	// 			case Stri(v): return v;
 	// 			case _: return "";
 	// 		}
 	// 	}else{ return ""; }
 	// }
-	override function stringify(sb:StringBuf){
-		sb.addChar('('.code);
-		if(s.length >= 1){
-			s.get(0).stringify(sb);
-			for(i in 1...s.length){
-				sb.addChar(' '.code);
-				s.get(i).stringify(sb);
+	override public function stringify(sbuf:StringBuf){
+		sbuf.addChar('('.code);
+		baseLineStringify(sbuf);
+		sbuf.addChar(')'.code);
+	}
+	override private function baseLineStringify(sbuf:StringBuf){
+		if(sp.length >= 1){
+			sp.get(0).stringify(sbuf);
+			for(i in 1...sp.length){
+				sbuf.addChar(' '.code);
+				sp.get(i).stringify(sbuf);
 			}
 		}
-		sb.addChar(')'.code);
 	}
-	override function buildJsonString(sb:StringBuf){
-		sb.addChar('['.code);
-		if(s.length > 0){
-			s.get(0).buildJsonString(sb);
+	override private function baseLinePrettyStringify(sbuf:StringBuf){
+		if(sp.length >= 1){
+			sp.get(0).prettyStringify(sbuf);
+			for(i in 1...sp.length){
+				sbuf.addChar(' '.code);
+				sp.get(i).prettyStringify(sbuf);
+			}
 		}
-		for(i in 1...s.length){
-			sb.addChar(','.code);
-			s.get(i).buildJsonString(sb);
+	}
+	override public function prettyStringify(sb:StringBuf){
+		if(sp.length == 0){
+			sb.addChar(':'.code);
+		}else if(sp.length == 2){
+			sp[0].prettyStringify(sb);
+			sb.addChar(':'.code);
+			sp[1].prettyStringify(sb);
+		}else{
+			var starts:Int;
+			if(sp[0].v() != null){
+				sp[0].stringify(sb);
+				sb.addChar('('.code);
+				if(sp.length >= 1){
+					sp[1].prettyStringify(sb);
+				}
+				starts = 2;
+			}else{
+				sb.addChar('('.code);
+				sp[0].prettyStringify(sb);
+				starts = 1;
+			}
+			for(i in starts...sp.length){
+				sb.addChar(' '.code);
+				sp[i].prettyStringify(sb);
+			}
+			sb.addChar(')'.code);
 		}
-		sb.addChar(']'.code);
+	}
+	override public function buildJsonString(sbuf:StringBuf){
+		sbuf.addChar('['.code);
+		if(sp.length > 0){
+			sp.get(0).buildJsonString(sbuf);
+		}
+		for(i in 1...sp.length){
+			sbuf.addChar(','.code);
+			sp.get(i).buildJsonString(sbuf);
+		}
+		sbuf.addChar(']'.code);
 	}
 }
 
@@ -205,6 +319,13 @@ typedef PF = Bool -> Int -> Void;
 			}
 			return true;
 		}
+	}
+	public static function repeatString(str:String, n:Int):String{
+		var sb = new StringBuf();
+		for(i in 0...n){
+			sb.addSub(str,0);
+		}
+		return sb.toString();
 	}
 	public static function escapeIsNeeded(sy:String):Bool {
 		for(i in 0...sy.length){
@@ -314,13 +435,7 @@ typedef PF = Bool -> Int -> Void;
 		multilineStringsIndent = null;
 	}
 	
-	
-	//general notes:
-	//the parser consists of a loop that pumps chars from the input string into whatever the current Mode is. Modes jump from one to the next according to cues, sometimes forwarding the cue onto the new mode before it gets any input from the input loop. There is a mode stack, but it is rarely used. Modes are essentially just a Char => Void (named 'PF', short for Processing Funnel(JJ it's legacy from when they were Partial Functions)). CR LFs ("\r\n"s) are filtered to a single LF (This does mean that a windows formatted file will have unix line endings when parsing multiline strings, that is not a significant issue, ignoring the '\r's will probably save more pain than it causes and the escape sequence \r is available if they're explicitly desired).
-	//terms are not attached until they are fully formed. You see, the type and address of a term can change when brackets are appended after it. Say you're reading a(f)(g), you finish reading "a", now you have a symbol. Can you attach it yet? No, because it becomes a Seqs when you find the (, and once you find the ), can you attach the Seqs? No, because it needs to be wrapped in a new seqs when You come to the next (, only once you're sure there're no more parens can you attach the thing.
-	//I think.
-	//There are other ways I could have handled this, but figuring out which one is best seems like it'd take more effort than just finishing this as it is.
-	
+	// for more discussion, see Termpose.scala
 	// key aspects of global state to regard:
 	// stringBuffer:StringBuf    where indentation and symbols are collected and cut off
 	// indentStack:Array[(Int, Array[InterTerm])]    encodes the levels of indentation we've traversed and the parent container for each level
@@ -646,5 +761,11 @@ typedef PF = Bool -> Int -> Void;
 
 
 @:expose class Termpose{
-	public static function parse(s:String):Seqs { return new Parser().parseToSeqs(new StringIterator(s)); }
+	public static function parseMultiline(s:String):Seqs return new Parser().parseToSeqs(new StringIterator(s));
+	public static function parse(s:String):Term {
+		var res = parseToSeqs(s);
+		var ress = res.s();
+		if(ress.length == 1) return ress[0];
+		else return res;
+	}
 }

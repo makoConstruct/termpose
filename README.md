@@ -64,7 +64,7 @@ Termpose takes that something out of the picture.
 | ---------|--------|------ |
 | Scala | Very nice | [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
 | Javascript | Proper API coming soon | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| Haxe | Pretty good. Should get better soon. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| Haxe | Pretty good. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | C# | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
