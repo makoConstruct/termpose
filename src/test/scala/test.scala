@@ -185,4 +185,23 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 			expectsEqual(pprinted, normalizedInput)
 		}
 	}
+	
+	
+	def resolvesTo[T](input:String, output:T, typer:Termpose.Typer[T]) ={
+		assert(typer.check(Termpose.parse(input).success.value).get == output)
+	}
+	
+	"Typer" should {
+		"type primitives" in {
+			import Termpose.typers._
+			resolvesTo("true", true, BoolTyper)
+			resolvesTo("false", false, BoolTyper)
+			resolvesTo("97", 97, IntTyper)
+			resolvesTo("hams", "hams", StringTyper)
+		}
+		"type collections" in {
+			import Termpose.typers._
+			resolvesTo("1 2 3", Seq(1, 2, 3), SeqTyper(IntTyper))
+		}
+	}
 }

@@ -280,10 +280,8 @@ object Termpose{
 		
 		
 		//general notes:
-		//the parser consists of a loop that pumps chars from the input string into whatever the current Mode is. Modes jump from one to the next according to cues, sometimes forwarding the cue onto the new mode before it gets any input from the input loop. There is a mode stack, but it is rarely used. Modes are essentially just a Char => Unit (named 'PF', short for Processing Funnel(JJ it's legacy from when they were Partial Functions)). CR LFs ("\r\n"s) are filtered to a single LF (This does mean that a windows formatted file will have unix line endings when parsing multiline strings, that is not a significant issue, ignoring the '\r's will probably save more pain than it causes and the escape sequence \r is available if they're explicitly desired).
-		//terms are not attached until they are fully formed. You see, the type and address of a term can change when brackets are appended after it. Say you're reading a(f)(g), you finish reading "a", now you have a symbol. Can you attach it yet? No, because it becomes a Seqs when you find the (, and once you find the ), can you attach the Seqs? No, because it needs to be wrapped in a new seqs when You come to the next (, only once you're sure there're no more parens can you attach the thing.
-		//I think.
-		//There are other ways I could have handled this, but figuring out which one is best seems like it'd take more effort than just finishing this as it is.
+		//the parser consists of a loop that pumps chars from the input string into whatever the current Mode is. Modes jump from one to the next according to cues, sometimes forwarding the cue onto the new mode before it gets any input from the input loop. There is a mode stack, but it is rarely used. Modes are essentially just a (Bool, Char) => Unit (named 'PF', short for Processing Funnel(JJ it's legacy from when they were Partial Functions)) where the Bool is on whenn the input has reached the end of the file. CR LFs ("\r\n"s) are filtered to a single LF (This does mean that a windows formatted file will have unix line endings when parsing multiline strings, that is not a significant issue, ignoring the '\r's will probably save more pain than it causes and the escape sequence \r is available if they're explicitly desired).
+		//terms are attached through PointsInterTerms, so that the term itself can change, update its PointsInterTerm, and still remain attached. I had tried delaying the attachment of a term until it was fully formed, but this turned out to be a terrible way of doing things.
 		
 		// key aspects of global state to regard:
 		// stringBuffer:StringBuilder    where indentation and symbols are collected and cut off
@@ -726,4 +724,164 @@ object Termpose{
 	def parseMultiLine(s:String):Try[Seqs] = new Parser().parseToSeqs(s.iterator.buffered)
 	def parseFile(path:String):Try[Seqs] = Try{Source.fromFile(path).buffered}.flatMap{ ci=> new Parser().parseToSeqs(ci) }
 	def parseFile(f:File):Try[Seqs] = Try{Source.fromFile(f).buffered}.flatMap{ ci=> new Parser().parseToSeqs(ci) }
+
+
+
+
+	
+	object Typer{
+		def fail(term:Term, msg:String):TyperFailure = TyperFailure(Seq(new TyperError(term.line, term.column, msg)))
+	}
+	trait Typer[T]{
+		def check(term:Term):TypingResult[T]
+		def typeName:String
+	}
+
+	class TyperError(val line:Int, val column:Int, val message:String)
+	class TyperException(ers:Seq[TyperError]) extends java.lang.RuntimeException {
+		override def toString = ers.map{ er=> "Type error. line:"+er.line+" column:"+er.column+". "+er.message }.reduce{ _+"\n"+_ }
+	}
+
+	sealed trait TypingResult[+T]{
+		def map[O](f:T=>O):TypingResult[O] = this match {
+			case TyperSuccess(v)=> TyperSuccess(f(v))
+			case tf:TyperFailure=> tf
+		}
+		def get:T = this match{
+			case TyperSuccess(v)=> v
+			case tf:TyperFailure=> throw tf.asException
+		}
+	}
+	case class TyperSuccess[+T](val v:T) extends TypingResult[T]
+	case class TyperFailure(val errors:Seq[TyperError]) extends TypingResult[Nothing]{
+		def asException = new TyperException(errors.toSeq)
+	}
+
+	object typers{
+		object IntTyper extends Typer[Int]{
+			def typeName = "int"
+			def check(term:Term):TypingResult[Int] ={
+				term match {
+					case Stri(v)=>{
+						try{
+							TyperSuccess(v.toInt)
+						}catch{
+							case e:java.lang.NumberFormatException => Typer.fail(term, "requires int")
+						}
+					}
+					case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
+				}
+			}
+			
+		}
+
+		object FloatTyper extends Typer[Float]{
+			def typeName = "float"
+			def check(term:Term):TypingResult[Float] ={
+				term match {
+					case Stri(v)=>{ try{
+						TyperSuccess(v.toFloat)
+					}catch{
+						case e:java.lang.NumberFormatException => Typer.fail(term, "requires float")
+					}}
+					case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
+				}
+			}
+			
+		}
+
+		object StringTyper extends Typer[String]{
+			def typeName = "string"
+			def check(term:Term):TypingResult[String] ={
+				term match {
+					case Stri(v)=> TyperSuccess(v)
+					case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
+				}
+			}
+			
+		}
+		
+		object EnumTyper{ def apply[T](f:PartialFunction[String, T], nameOfType:String) = new EnumTyper(f,nameOfType) } 
+		class EnumTyper[T](f:PartialFunction[String, T], nameOfType:String) extends Typer[T]{
+			def typeName = nameOfType
+			def check(term:Term):TypingResult[T] ={
+				term match{
+					case Stri(v)=> f.lift(v) match {
+						case Some(t)=> TyperSuccess(t)
+						case None => Typer.fail(term, "this needs to be a "+nameOfType)
+					}
+					case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
+				}
+			}
+		}
+
+		object BoolTyper extends EnumTyper( {case "true"=> true; case "false"=> false},  "bool" )
+
+		object SeqTyper{
+			def apply[T](tred:Typer[T]) = new SeqTyper()(tred)
+			def elsToResult[T](els:Seq[Term], tred:Typer[T]):TypingResult[Seq[T]] ={ //don't mind this, pretty internal
+				val results = new ArrayBuffer[T]() 
+				val errors = new ArrayBuffer[TyperError]()
+				for(t <- els){
+					tred.check(t) match {
+						case TyperSuccess(v) =>
+							if(errors.length == 0){
+								results += v
+							} //otherwise, read is already fail, don't bother keeping the result around
+						case TyperFailure(ers) => errors ++= ers
+					}
+				}
+				if(errors.length > 0) TyperFailure(errors.toSeq)
+				else TyperSuccess(results.toSeq)
+			}
+		}
+		class SeqTyper[T](implicit tred:Typer[T]) extends Typer[Seq[T]]{
+			def typeName = "list("+tred.typeName+")"
+			def check(term:Term):TypingResult[Seq[T]] ={
+				term match {
+					case Stri(v)=> Typer.fail(term, "this needs to be a "+typeName+", but it's a leaf term")
+					case Seqs(els)=> SeqTyper.elsToResult(els, tred)
+				}
+			}
+		}
+
+		object PairTyper{ def apply[K,V](kred:Typer[K], vred:Typer[V]) = new PairTyper()(kred, vred) } 
+		class PairTyper[K,V](implicit val kred:Typer[K], val vred:Typer[V]) extends Typer[(K,V)]{
+			def typeName = "("+kred.typeName+" "+vred.typeName+")"
+			def check(term:Term):TypingResult[(K,V)] ={
+				term match{
+					case s:Stri => Typer.fail(term, "this needs to be a ("+kred.typeName+" "+vred.typeName+") pair, but it's a leaf term")
+					case Seqs(s)=>
+						if(s.length == 2){
+							(kred.check(s(0)), vred.check(s(1))) match {
+								case (TyperSuccess(k), TyperSuccess(v))=> TyperSuccess((k,v))
+								case (tf:TyperFailure, TyperSuccess(_))=> tf
+								case (TyperSuccess(_), tf:TyperFailure)=> tf
+								case (tfa:TyperFailure, tfb:TyperFailure)=> TyperFailure(tfa.errors ++ tfb.errors)
+							}
+						}else{
+							Typer.fail(term, "there are too many elements under this term, should only b a ("+kred.typeName+" "+vred.typeName+") pair.")
+						}
+				}
+			}
+		}
+
+		object MapTyper{ def apply[K,V](kred:Typer[K], vred:Typer[V]) = new MapTyper()(kred, vred) } 
+		class MapTyper[K,V](implicit val kred:Typer[K], val vred:Typer[V]) extends Typer[Map[K,V]]{
+			def typeName = "map("+kred.typeName+" "+vred.typeName+")"
+			def check(term:Term):TypingResult[Map[K,V]] ={
+				term match {
+					case Stri(v)=> Typer.fail(term, "this needs to be a "+typeName+", but it's a leaf term")
+					case Seqs(els)=> SeqTyper.elsToResult(els, PairTyper(kred,vred)).map{ sps => sps.toMap }
+				}
+			}
+		}
+		
+		// class NamedFeildTyper[T](name:String)(implicit tred:Typer[T]) extends Typer[T] {
+		// 	def typeName = tred.typeName
+		// }
+
+		// class StructTyper[T*, O](f:T* => O)(implicit tred*:T*){} //you can see how fake and impossible this definition is. Going to need macros. End of stories.
+	}
+
 }
