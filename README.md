@@ -58,6 +58,8 @@ We were always able to use S-Expressions instead of XML, Json Toml, Yaml or what
 
 Termpose takes that something out of the picture.
 
+Further introduction: https://github.com/makoConstruct/termpose/wiki/Introducing-Termpose!-(To-Scala)
+
 ##Platform support?
 
 | language | status | the closest thing we have to documentation |

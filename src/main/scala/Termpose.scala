@@ -1,6 +1,7 @@
 import util.{Try, Success, Failure}
 import collection.mutable.{ArrayBuffer, HashMap, ArrayStack}
 import collection.BufferedIterator
+import collection.Traversable
 import java.io.{File}
 import io.Source
 import collection.breakOut
@@ -45,6 +46,18 @@ object Termpose{
 				case c:Char =>
 					sb += c
 			}
+		}
+	}
+	
+	private def escape(s:String):String ={
+		if(escapeIsNeeded(s)){
+			val sb = new StringBuilder(s.length+7)
+			sb += '"'
+			escapeSymbol(sb, s)
+			sb += '"'
+			sb.result
+		}else{
+			s
 		}
 	}
 
@@ -190,7 +203,7 @@ object Termpose{
 		private[Termpose]  def estimateLength:Int = 2 + s.map{ 1 + _.estimateLength }.sum - 1
 	}
 
-	class ParsingException(msg:String, line:Int, column:Int) extends RuntimeException(msg)
+	class ParsingException(val msg:String, val line:Int, val column:Int) extends RuntimeException(msg)
 
 	class Parser{
 		private sealed trait InterTerm{
@@ -731,157 +744,247 @@ object Termpose{
 	
 	object Typer{
 		def fail(term:Term, msg:String):TyperFailure = TyperFailure(Seq(new TyperError(term.line, term.column, msg)))
+		def ersToString(ers:Traversable[TyperError]):String = ers.map{ er=> "line:"+er.line+" column:"+er.column+". "+er.message }.reduce{ _+"\n"+_ }
+		def resultFromTry[T](t:Try[T]):TyperResult[T] = t match {
+			case Success(v)=> TyperSuccess(v)
+			case Failure(e:ParsingException)=> TyperFailure(Seq(new TyperError(e.line,e.column,e.msg)))
+			case Failure(e)=> TyperFailure(Seq(new TyperError(0,0, "Critical parsing failure. "+e.toString)))
+		}
 	}
 	trait Typer[T]{
-		def check(term:Term):TypingResult[T]
+		def check(term:Term):TyperResult[T]
+		def checkFile(f:File):TyperResult[T] = Typer.resultFromTry(parseFile(f)).flatMap{ t => check(t) }
 		def typeName:String
 	}
 
 	class TyperError(val line:Int, val column:Int, val message:String)
 	class TyperException(ers:Seq[TyperError]) extends java.lang.RuntimeException {
-		override def toString = ers.map{ er=> "Type error. line:"+er.line+" column:"+er.column+". "+er.message }.reduce{ _+"\n"+_ }
+		override def getMessage = Typer.ersToString(ers)
 	}
 
-	sealed trait TypingResult[+T]{
-		def map[O](f:T=>O):TypingResult[O] = this match {
+	sealed trait TyperResult[+T]{
+		def map[O](f:T=>O):TyperResult[O] = this match {
 			case TyperSuccess(v)=> TyperSuccess(f(v))
 			case tf:TyperFailure=> tf
 		}
-		def get:T = this match{
+		def flatMap[O](f:T=>TyperResult[O]):TyperResult[O] = this match {
+			case TyperSuccess(v)=> f(v)
+			case tf:TyperFailure=> tf
+		}
+		def get:T = this match {
 			case TyperSuccess(v)=> v
 			case tf:TyperFailure=> throw tf.asException
 		}
 	}
-	case class TyperSuccess[+T](val v:T) extends TypingResult[T]
-	case class TyperFailure(val errors:Seq[TyperError]) extends TypingResult[Nothing]{
+	case class TyperSuccess[+T](val v:T) extends TyperResult[T]
+	case class TyperFailure(val errors:Seq[TyperError]) extends TyperResult[Nothing]{
 		def asException = new TyperException(errors.toSeq)
+		override def toString = Typer.ersToString(errors)
 	}
 
-	object typers{
-		object IntTyper extends Typer[Int]{
-			def typeName = "int"
-			def check(term:Term):TypingResult[Int] ={
-				term match {
-					case Stri(v)=>{
-						try{
-							TyperSuccess(v.toInt)
-						}catch{
-							case e:java.lang.NumberFormatException => Typer.fail(term, "requires int")
-						}
+	object IntTyper extends Typer[Int]{
+		def typeName = "int"
+		def check(term:Term):TyperResult[Int] = term match {
+			case Stri(v)=>{
+				try{
+					TyperSuccess(v.toInt)
+				}catch{
+					case e:java.lang.NumberFormatException => Typer.fail(term, "requires int")
+				}
+			}
+			case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
+		}
+	}
+
+	object FloatTyper extends Typer[Float]{
+		def typeName = "float"
+		def check(term:Term):TyperResult[Float] = term match {
+			case Stri(v)=>{ try{
+				TyperSuccess(v.toFloat)
+			}catch{
+				case e:java.lang.NumberFormatException => Typer.fail(term, "requires float")
+			}}
+			case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
+		}
+	}
+
+	object StringTyper extends Typer[String]{
+		def typeName = "string"
+		def check(term:Term):TyperResult[String] = term match {
+			case Stri(v)=> TyperSuccess(v)
+			case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
+		}
+	}
+	
+	class EnumTyper[T](f:PartialFunction[String, T], nameOfType:String) extends Typer[T]{
+		def typeName = nameOfType
+		def check(term:Term):TyperResult[T] ={
+			term match{
+				case Stri(v)=> f.lift(v) match {
+					case Some(t)=> TyperSuccess(t)
+					case None => Typer.fail(term, "this needs to be a "+nameOfType)
+				}
+				case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
+			}
+		}
+	}
+
+	object BoolTyper extends EnumTyper( {case "true"=> true; case "false"=> false},  "bool" )
+	
+	object TermTyper extends Typer[Term] { //noop, basically
+		def typeName = "term"
+		def check(term:Term) = TyperSuccess(term)
+	}
+
+	object SeqTyper{
+		def elsToResult[T](els:Seq[Term], tred:Typer[T]):TyperResult[Seq[T]] ={ //don't mind this, pretty internal
+			val results = new ArrayBuffer[T]() 
+			val errors = new ArrayBuffer[TyperError]()
+			for(t <- els){
+				tred.check(t) match {
+					case TyperSuccess(v) =>
+						if(errors.length == 0){
+							results += v
+						} //otherwise, read is already fail, don't bother keeping the result around
+					case TyperFailure(ers) => errors ++= ers
+				}
+			}
+			if(errors.length > 0) TyperFailure(errors.toSeq)
+			else TyperSuccess(results.toSeq)
+		}
+		def elsToPermissiveResult[T](els:Seq[Term], tred:Typer[T]):TyperSuccess[Seq[T]] ={
+			val results = new ArrayBuffer[T]() 
+			for(t <- els){
+				tred.check(t) match {
+					case TyperSuccess(v) => results += v
+					case _ => {}
+				}
+			}
+			TyperSuccess(results.toSeq)
+		}
+	}
+	class SeqTyper[T](implicit tred:Typer[T]) extends Typer[Seq[T]]{
+		def typeName = "list("+tred.typeName+")"
+		def check(term:Term):TyperResult[Seq[T]] = term match {
+			case Stri(v)=> Typer.fail(term, "this needs to be a "+typeName+", but it's a leaf term")
+			case Seqs(els)=> SeqTyper.elsToResult(els, tred)
+		}
+	}
+	class PermissiveSeqTyper[T](implicit tred:Typer[T]) extends Typer[Seq[T]]{
+		def typeName = "list("+tred.typeName+")"
+		def check(term:Term):TyperResult[Seq[T]] = term match {
+			case Stri(v)=> Typer.fail(term, "this needs to be a "+typeName+", but it's a leaf term")
+			case Seqs(els)=> SeqTyper.elsToPermissiveResult(els, tred)
+		}
+	}
+
+	class PairTyper[K,V](implicit val kred:Typer[K], val vred:Typer[V]) extends Typer[(K,V)]{
+		def typeName = "("+kred.typeName+" "+vred.typeName+")"
+		def check(term:Term):TyperResult[(K,V)] = term match{
+			case s:Stri => Typer.fail(term, "this needs to be a ("+kred.typeName+" "+vred.typeName+") pair, but it's a leaf term")
+			case Seqs(s)=>
+				if(s.length == 2){
+					(kred.check(s(0)), vred.check(s(1))) match {
+						case (TyperSuccess(k), TyperSuccess(v))=> TyperSuccess((k,v))
+						case (tf:TyperFailure, TyperSuccess(_))=> tf
+						case (TyperSuccess(_), tf:TyperFailure)=> tf
+						case (tfa:TyperFailure, tfb:TyperFailure)=> TyperFailure(tfa.errors ++ tfb.errors)
 					}
-					case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
+				}else{
+					Typer.fail(term, "there are too many elements under this term, should only b a ("+kred.typeName+" "+vred.typeName+") pair.")
 				}
-			}
-			
 		}
+	}
 
-		object FloatTyper extends Typer[Float]{
-			def typeName = "float"
-			def check(term:Term):TypingResult[Float] ={
-				term match {
-					case Stri(v)=>{ try{
-						TyperSuccess(v.toFloat)
-					}catch{
-						case e:java.lang.NumberFormatException => Typer.fail(term, "requires float")
-					}}
-					case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
+	class MapTyper[K,V](implicit val kred:Typer[K], val vred:Typer[V]) extends Typer[Map[K,V]]{
+		def typeName = "map("+kred.typeName+" "+vred.typeName+")"
+		def check(term:Term):TyperResult[Map[K,V]] = term match {
+			case Stri(v)=> Typer.fail(term, "this needs to be a "+typeName+", but it's a leaf term")
+			case Seqs(els)=> SeqTyper.elsToResult(els, new PairTyper()(kred,vred)).map{ sps => sps.toMap }
+		}
+	}
+	class PermissiveMapTyper[K,V](implicit val kred:Typer[K], val vred:Typer[V]) extends Typer[Map[K,V]]{
+		def typeName = "map("+kred.typeName+" "+vred.typeName+")"
+		def check(term:Term):TyperResult[Map[K,V]] = term match {
+			case Stri(v)=> Typer.fail(term, "this needs to be a "+typeName+", but it's a leaf term")
+			case Seqs(els)=> SeqTyper.elsToPermissiveResult(els, new PairTyper()(kred,vred)).map{ sps => sps.toMap }
+		}
+	}
+	
+	class NamedFieldTyper[T](name:String)(implicit tred:Typer[T]) extends Typer[T] {
+		def typeName = "field(\'"+escape(name)+" "+tred.typeName+")"
+		def check(term:Term):TyperResult[T] = term match {
+			case Stri(v)=> Typer.fail(term, "this needs to be a "+typeName+", but it's a leaf term. Note you need to include the fieldname literal there.")
+			case Seqs(Seq(Stri(n), tit))=> if(n == name){
+					tred.check(tit)
+				}else{
+					Typer.fail(term, "field name needs to be "+name+", but it's "+n)
 				}
-			}
-			
+			case _ => Typer.fail(term, "this needs to be a "+typeName)
 		}
-
-		object StringTyper extends Typer[String]{
-			def typeName = "string"
-			def check(term:Term):TypingResult[String] ={
-				term match {
-					case Stri(v)=> TyperSuccess(v)
-					case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
-				}
-			}
-			
-		}
-		
-		object EnumTyper{ def apply[T](f:PartialFunction[String, T], nameOfType:String) = new EnumTyper(f,nameOfType) } 
-		class EnumTyper[T](f:PartialFunction[String, T], nameOfType:String) extends Typer[T]{
-			def typeName = nameOfType
-			def check(term:Term):TypingResult[T] ={
-				term match{
-					case Stri(v)=> f.lift(v) match {
-						case Some(t)=> TyperSuccess(t)
-						case None => Typer.fail(term, "this needs to be a "+nameOfType)
-					}
-					case _ => Typer.fail(term, "this needs to be a "+typeName+", but it's a list term")
-				}
-			}
-		}
-
-		object BoolTyper extends EnumTyper( {case "true"=> true; case "false"=> false},  "bool" )
-
-		object SeqTyper{
-			def apply[T](tred:Typer[T]) = new SeqTyper()(tred)
-			def elsToResult[T](els:Seq[Term], tred:Typer[T]):TypingResult[Seq[T]] ={ //don't mind this, pretty internal
-				val results = new ArrayBuffer[T]() 
-				val errors = new ArrayBuffer[TyperError]()
-				for(t <- els){
-					tred.check(t) match {
-						case TyperSuccess(v) =>
-							if(errors.length == 0){
-								results += v
-							} //otherwise, read is already fail, don't bother keeping the result around
-						case TyperFailure(ers) => errors ++= ers
+	}
+	
+	class SeekingTyper[T](implicit tred:Typer[T]) extends Typer[T] { //looks for a named field of the given type. None iff no such field of that type.
+		def typeName = tred.typeName
+		def check(term:Term):TyperResult[T] = term match {
+			case Seqs(els)=>
+				for(et <- els){
+					tred.check(et) match {
+						case ts:TyperSuccess[T]=>
+							return ts
+						case _=> {}
 					}
 				}
-				if(errors.length > 0) TyperFailure(errors.toSeq)
-				else TyperSuccess(results.toSeq)
-			}
+				Typer.fail(term, "this list needs to contain a "+tred.typeName)
+			case _ => Typer.fail(term, "needs to be a list in which we may seek a "+tred.typeName+", but it's a leaf term")
 		}
-		class SeqTyper[T](implicit tred:Typer[T]) extends Typer[Seq[T]]{
-			def typeName = "list("+tred.typeName+")"
-			def check(term:Term):TypingResult[Seq[T]] ={
-				term match {
-					case Stri(v)=> Typer.fail(term, "this needs to be a "+typeName+", but it's a leaf term")
-					case Seqs(els)=> SeqTyper.elsToResult(els, tred)
-				}
-			}
+	}
+	
+	class OptionTyper[T](implicit tred:Typer[T]) extends Typer[Option[T]] {
+		def typeName = "option("+tred.typeName+")"
+		def check(term:Term):TyperResult[Option[T]] = tred.check(term) match {
+			case TyperSuccess(v)=> TyperSuccess(Some(v))
+			case tf:TyperFailure=> TyperSuccess(None)
 		}
-
-		object PairTyper{ def apply[K,V](kred:Typer[K], vred:Typer[V]) = new PairTyper()(kred, vred) } 
-		class PairTyper[K,V](implicit val kred:Typer[K], val vred:Typer[V]) extends Typer[(K,V)]{
-			def typeName = "("+kred.typeName+" "+vred.typeName+")"
-			def check(term:Term):TypingResult[(K,V)] ={
-				term match{
-					case s:Stri => Typer.fail(term, "this needs to be a ("+kred.typeName+" "+vred.typeName+") pair, but it's a leaf term")
-					case Seqs(s)=>
-						if(s.length == 2){
-							(kred.check(s(0)), vred.check(s(1))) match {
-								case (TyperSuccess(k), TyperSuccess(v))=> TyperSuccess((k,v))
-								case (tf:TyperFailure, TyperSuccess(_))=> tf
-								case (TyperSuccess(_), tf:TyperFailure)=> tf
-								case (tfa:TyperFailure, tfb:TyperFailure)=> TyperFailure(tfa.errors ++ tfb.errors)
+	}
+	
+	class TailTyper[T](name:String)(implicit tred:Typer[T]) extends Typer[T] {
+		def typeName = tred.typeName
+		def check(term:Term):TyperResult[T] = term match {
+			case Seqs(els)=>
+				if(els.length > 0){
+					els(0) match {
+						case Stri(n)=>
+							if(n == name){
+								tred.check(new Seqs(els.tail, term.line, term.column))
+							}else{
+								Typer.fail(term, "needs to have head term "+name+", but it had "+n)
 							}
-						}else{
-							Typer.fail(term, "there are too many elements under this term, should only b a ("+kred.typeName+" "+vred.typeName+") pair.")
-						}
+						case _=> Typer.fail(term, "needs to start with the string "+name+", but it starts with a list")
+					}
+				}else{
+					Typer.fail(term, "needs to start with the string "+name+", but it is empty")
 				}
-			}
+			case _=> Typer.fail(term, "needs to be a "+typeName+" prefixed with "+name+", but it is a leaf term")
 		}
-
-		object MapTyper{ def apply[K,V](kred:Typer[K], vred:Typer[V]) = new MapTyper()(kred, vred) } 
-		class MapTyper[K,V](implicit val kred:Typer[K], val vred:Typer[V]) extends Typer[Map[K,V]]{
-			def typeName = "map("+kred.typeName+" "+vred.typeName+")"
-			def check(term:Term):TypingResult[Map[K,V]] ={
-				term match {
-					case Stri(v)=> Typer.fail(term, "this needs to be a "+typeName+", but it's a leaf term")
-					case Seqs(els)=> SeqTyper.elsToResult(els, PairTyper(kred,vred)).map{ sps => sps.toMap }
-				}
-			}
-		}
-		
-		// class NamedFeildTyper[T](name:String)(implicit tred:Typer[T]) extends Typer[T] {
-		// 	def typeName = tred.typeName
-		// }
-
-		// class StructTyper[T*, O](f:T* => O)(implicit tred*:T*){} //you can see how fake and impossible this definition is. Going to need macros. End of stories.
 	}
 
+	// class StructTyper[T*, O](f:T* => O)(implicit tred*:T*){} //you can see how fake and impossible this definition is. Going to need macros. End of stories.
+	
+	object dsl{
+		def int = IntTyper
+		def float = FloatTyper
+		def bool = BoolTyper
+		def string = StringTyper
+		def enum[T](f:PartialFunction[String, T], nameOfType:String) = new EnumTyper(f,nameOfType)
+		def seq[T](tred:Typer[T]) = new SeqTyper()(tred)
+		def seqAgreeable[T](tred:Typer[T]) = new PermissiveSeqTyper()(tred)
+		def pair[K,V](kred:Typer[K], vred:Typer[V]) = new PairTyper()(kred, vred)
+		def map[K,V](kred:Typer[K], vred:Typer[V]) = new MapTyper()(kred, vred)
+		def mapAgreeable[K,V](kred:Typer[K], vred:Typer[V]) = new PermissiveMapTyper()(kred, vred)
+		def optional[T](tred:Typer[T]) = new OptionTyper()(tred)
+		def property[T](name:String, tred:Typer[T]) = new NamedFieldTyper(name)(tred)
+		def contained[T](tred:Typer[T]) = new SeekingTyper()(tred)
+		def tailAfter[T](name:String, tred:Typer[T]) = new TailTyper(name)(tred)
+	}
 }

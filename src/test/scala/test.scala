@@ -1,4 +1,5 @@
 import collection.mutable.ArrayBuffer
+import java.lang.RuntimeException
 import org.scalatest._
 import util.{Try, Success, Failure}
 class TermposeParserSpec extends WordSpec with Matchers with TryValues{
@@ -192,16 +193,37 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 	}
 	
 	"Typer" should {
+		import Termpose.dsl._
 		"type primitives" in {
-			import Termpose.typers._
-			resolvesTo("true", true, BoolTyper)
-			resolvesTo("false", false, BoolTyper)
-			resolvesTo("97", 97, IntTyper)
-			resolvesTo("hams", "hams", StringTyper)
+			resolvesTo("true", true, bool)
+			resolvesTo("false", false, bool)
+			resolvesTo("97", 97, int)
+			resolvesTo("hams", "hams", string)
 		}
 		"type collections" in {
-			import Termpose.typers._
-			resolvesTo("1 2 3", Seq(1, 2, 3), SeqTyper(IntTyper))
+			resolvesTo("1 2 3", Seq(1, 2, 3), seq(int))
 		}
+		"be able to ignore collection elements that don't fit the types" in {
+			resolvesTo("a b s:1 d:ham e:9", Map("s"->1, "e"->9), mapAgreeable(string, int))
+		}
+		"get optional members" in {
+			resolvesTo("(a:hogs)", Some("hogs"), optional(contained(property("a", string))))
+			resolvesTo("(for:hogs nothing:impresses)", None, optional(contained(property("a", string))))
+			resolvesTo("(for:hogs nothing:impresses)", Some("impresses"), optional(contained(property("nothing", string))))
+		}
+		"operate over tails" in {
+			resolvesTo("(0 1 2 fire 3)", Seq(1, 2, 3), tailAfter("0", seqAgreeable(int)))
+			resolvesTo("(0 1 2 fire 3)", None, optional(tailAfter("1", seqAgreeable(int))))
+		}
+		// "be able to resolve multiple typings" in {
+		// 	resolvesTo("a:hogs", (Some("hogs"), Map("a"->"hogs")), simultaneously(sought(property("a",string)), map(string,string))
+		// }
+		// "have automatic facilities for case classes" in {
+		// 	sealed trait Alt
+		// 	case class A(a:Int) extends Alt
+		// 	resolvesTo("A 2", A(2), discriminatedUnion(Alt))
+		// 	resolvesTo("A a:2", A(2), discriminatedUnionWithFieldNames(Alt))
+		// 	resolvesTo("A 2", A(2), construct(A))
+		// }
 	}
 }
