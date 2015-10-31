@@ -1,16 +1,30 @@
+[![Join the chat at https://gitter.im/makoConstruct/termpose](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/makoConstruct/termpose?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 ##Termpose - a sensitive markup language
 
-Termpose is an extremely flexible markup language with an elegant syntax. [![Join the chat at https://gitter.im/makoConstruct/termpose](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/makoConstruct/termpose?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+Termpose is an extremely flexible markup language with an elegant syntax.
 
-Termpose pays attention to your indentation. Expressions like
+The quickest way to explain termpose is this:
 ```
 a
     b
     c
         d
     e
+    f g
+    h i j
+    k l(m n)
 ```
-will equate to `a(b c(d) e)`, which in turn equates to, and will serialize as the termpose expression `(a b (c d) e)`.
+equals
+```
+a(b c(d) e f(g) h(i j) k(l(m n)))
+```
+which could also be phrased as the s-expression:
+```
+(a b (c d) e (f g) (h i j) (k (l m n)))
+```
+
+Termpose provides an absolutely minimal, extremely robust syntax for expressing structures in strings.
 
 Termpose tries to keep out of your namespace, attributing its own meanings to the characters `":()`, but leaving ```\/?-+=[]*&^%$#@!`~;'.,<>``` for your domain-specific languages to define as they please.
 
@@ -64,7 +78,7 @@ Further introduction: https://github.com/makoConstruct/termpose/wiki/Introducing
 
 | language | status | the closest thing we have to documentation |
 | ---------|--------|------ |
-| Scala | Very nice | [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
+| Scala | Very nice | [This brief intro](https://github.com/makoConstruct/termpose/wiki/Introducing-Termpose!-(To-Scala)) and the [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
 | Javascript | Proper API coming soon | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Haxe | Pretty good. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | C# | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
@@ -88,9 +102,11 @@ html
     meta -charset:utf-8
     link -rel:"shortcut icon" -href:DGFavicon.png
     style ."
-      CSS plaintext...
+      CSS plaintext
+      ...
     script -language:javascript ."
-      Javascript plaintext...
+      Javascript plaintext
+      ...
   body
     div -id:centerControlled
       table tbody:
