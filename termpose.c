@@ -121,6 +121,8 @@ void* makeCopy(void* in, size_t len){
 	return ret;
 }
 
+char* strCopy(char* v){ return makeCopy(v, strlen(v)+1); }
+
 
 //buffers
 typedef struct CharBuffer {
@@ -175,7 +177,9 @@ void addString(CharBuffer* t, char* c, u32 len){
 }
 void addRune(CharBuffer* t, Rune c){
 	reserveCapacityAfterLength(t, UTF_SIZ);
-	t->len += utf8encode(c, t->v + t->len);
+	size_t lengthAdded = utf8encode(c, t->v + t->len);
+	t->len += lengthAdded;
+	// return lengthAdded; //considered returning this for error detection, but in practice it's better to deal with bad runes when you get them rather than when you process them.
 }
 void clearCharBuffer(CharBuffer* t){
 	t->len = 0;
@@ -187,12 +191,12 @@ char* rendStr(CharBuffer* t){ //drains the CharBuffer and yeilds its contents, n
 char* copyLengthedStringAndClear(CharBuffer* t, u32* rlen){ //alert, returns NULL if empty
 	u32 tl = t->len;
 	*rlen = tl;
+	t->len = 0;
 	if(tl){
 		char* out = malloc((tl)*sizeof(char));
 		memcpy(out, t->v, tl*sizeof(char));
 		return out;
 	}else{
-		t->len = 0;
 		return NULL;
 	}
 }
@@ -335,11 +339,8 @@ void destroyTerm(Term* v){
 
 //term stringification:
 bool escapeIsNeeded(char* v, size_t len){
-	unsigned progress=0;
-	while(progress < len){
-		Rune vi;
-		progress += utf8decode(v+progress, &vi, len-progress);
-		switch(vi){
+	for(int i=0; i<len; ++i){
+		switch(v[i]){
 			case ' ': return true; break;
 			case '(': return true; break;
 			case ':': return true; break;
@@ -410,7 +411,7 @@ void stringifyingTerm(CharBuffer* cb, Term* t){
 		stringifyingSeqs(cb, (Seqs*)t);
 	}
 }
-char* stringifyTerm(Term* t){
+char* stringifyTerm(Term* t){ //returns null if one of the strings contained invalid unicode.
 	CharBuffer cb;
 	initCharBuffer(&cb, 0, 128);
 	stringifyingTerm(&cb, t);
@@ -483,16 +484,21 @@ void drainInterTerm(InterTerm* t){
 }
 
 
-void dropSeqLayerIfSole(InterSeqs* pt){
+
+typedef struct Parser Parser;
+void updateStateAboutInterTermMove(Parser* p, InterTerm* to, InterTerm* from);
+void dropSeqLayerIfSole(Parser* p, InterSeqs* pt){
+	assert(pt->tag == 0);
 	PtrBuffer* arb = &pt->s;
 	if(arb->len == 1){
 		InterTerm* soleEl = arb->v[0];
-		drainPtrBuffer(&pt->s);
+		drainPtrBuffer(arb);
 		memcpy(pt, soleEl, sizeof(InterTerm));
 		free(soleEl);
+		updateStateAboutInterTermMove(p, (InterTerm*)pt, soleEl);
 	}
 }
-void exudeSeqs(InterTerm* pi){ //pi becomes interSeqs, its previous content is copied out and linked as its new first element.
+void exudeSeqs(Parser* p, InterTerm* pi){ //pi becomes interSeqs, its previous content is copied out and linked as its new first element.
 	assert( pi->seqs.line == pi->stri.line && pi->seqs.column == pi->stri.column ); //it should not matter which interpretation of the union type we use.
 	u32 l = pi->seqs.line;
 	u32 c = pi->seqs.column;
@@ -500,6 +506,7 @@ void exudeSeqs(InterTerm* pi){ //pi becomes interSeqs, its previous content is c
 	memcpy(nit, pi, sizeof(InterTerm));
 	initInterSeqs(pi, l,c);
 	addPtr(&pi->seqs.s, nit);
+	updateStateAboutInterTermMove(p, nit, pi);
 }
 
 
@@ -553,7 +560,6 @@ typedef struct Parser{
 	char* multilineStringsIndent;  u32 multilineStringsIndentLength;
 	PtrBuffer* containsImmediateNext; //[InterTerm*]
 } Parser;
-
 void initParser(Parser* p){
 	initCharBuffer(&p->stringBuffer,0,256);
 	p->previousIndentation = NULL;  p->previousIndentationLength = 0;
@@ -606,6 +612,19 @@ void drainParser(Parser* p){
 // indentStack:ArrayBuffer[(Int, ArrayBuffer[InterTerm])]    encodes the levels of indentation we've traversed and the parent container for each level
 // parenStack:ArrayBuffer[ArrayBuffer[InterTerm]]    encodes the levels of parens we've traversed and the container for each level. The first entry is the root line, which has no parens.
 
+
+void updateStateAboutInterTermMove(Parser* p, InterTerm* to, InterTerm* from){ //there are only a few key references which need to be updated when a move occurs
+	if(p->lastAttachedTerm == from) p->lastAttachedTerm = to;
+	if(p->containsImmediateNext == &from->seqs.s) p->containsImmediateNext = &to->seqs.s;
+	InterTerm** ptsv = (InterTerm**)p->parenTermStack.v;
+	u32 ptsl = p->parenTermStack.len;
+	for(int i=0; i<ptsl; ++i){
+		if(ptsv[i] == from){
+			ptsv[i] = to;
+			break;
+		}
+	}
+}
 void transition(Parser* p, PF nm){ p->currentMode = nm; }
 void pushMode(Parser* p, PF nm){
 	addPtr(&p->modes, p->currentMode);
@@ -639,7 +658,7 @@ PtrBuffer* receiveForemostRecepticle(Parser* p){ //note side effects
 		if(p->parenTermStack.len == 0){
 			InterSeqs* rootParenLevel = interSq(p);
 			addPtr(&p->parenTermStack, rootParenLevel);
-			addPtr(p->indentStack.v[p->indentStack.len-1].tailestTermSequence, rootParenLevel);
+			addPtr(lastLine(&p->indentStack)->tailestTermSequence, rootParenLevel);
 		}
 		return &((InterTerm*)lastPtr(&p->parenTermStack))->seqs.s;
 	}
@@ -665,6 +684,8 @@ void finishTakingIndentationAndAdjustLineAttachment(Parser* p){
 	);
 	if(p->hasFoundLine){
 		if(p->salientIndentationLength > p->previousIndentationLength){
+			//only in this case  p->salientIndentationLength > p->previousIndentationLength && p->parenTermStack.len == 0 && p->containsImmediateNext == NULL && multiple entries on the root line || multiple entries on the root line,  is an extra root line seqs needed
+			//
 			if( strncmp(
 				p->previousIndentation,
 				p->salientIndentation,
@@ -675,13 +696,13 @@ void finishTakingIndentationAndAdjustLineAttachment(Parser* p){
 			}
 			
 			if(p->parenTermStack.len > 1 || p->containsImmediateNext != NULL){
-				dropSeqLayerIfSole((InterSeqs*)firstPtr(&p->parenTermStack)); //if antecedents and IsSole, the root element contains the indented stuff
+				dropSeqLayerIfSole(p, (InterSeqs*)firstPtr(&p->parenTermStack)); //if this line is in some way open to the next and there's only one root element, then it will not be the head term of a seqs with the indented content, drop the seqs that was going to be that.
 			}
 			
 			emplaceNewLine(&p->indentStack, p->salientIndentationLength, receiveForemostRecepticle(p));
 		}else{
 			
-			dropSeqLayerIfSole((InterSeqs*)firstPtr(&p->parenTermStack));
+			dropSeqLayerIfSole(p, (InterSeqs*)firstPtr(&p->parenTermStack));
 			
 			p->containsImmediateNext = NULL;
 			if(p->salientIndentationLength < p->previousIndentationLength){
@@ -799,7 +820,7 @@ void immediatelyAfterTerm(Parser* p, bool fileEnd, Rune c){
 		switch(c){
 		case '(':
 			newLevel = p->lastAttachedTerm;
-			exudeSeqs(newLevel);
+			exudeSeqs(p, newLevel);
 			addPtr(&p->parenTermStack, newLevel);
 			transition(p, seekingTerm);
 		break;
@@ -808,7 +829,7 @@ void immediatelyAfterTerm(Parser* p, bool fileEnd, Rune c){
 		break;
 		case ':':
 			newLevel = p->lastAttachedTerm;
-			exudeSeqs(newLevel);
+			exudeSeqs(p, newLevel);
 			p->containsImmediateNext = &newLevel->seqs.s;
 			transition(p, seekingTerm);
 		break;
@@ -821,7 +842,7 @@ void immediatelyAfterTerm(Parser* p, bool fileEnd, Rune c){
 		break;
 		case '"':
 			newLevel = p->lastAttachedTerm;
-			exudeSeqs(newLevel);
+			exudeSeqs(p, newLevel);
 			p->containsImmediateNext = &newLevel->seqs.s;
 			transition(p, buildingQuotedSymbol);
 		break;
@@ -988,6 +1009,10 @@ void parseLengthedToSeqsTakingParserRef(Parser* p, char const* unicodeString, un
 	while(i < length){
 		Rune c;
 		i += utf8decode(unicodeString+i, &c, length-i);
+		if(c == UTF_INVALID){
+			lodgeError(p, "not valid unicode");
+			goto error;
+		}
 		if(c == '\r'){ //handle windows' deviant line endings
 			c = '\n';
 			if(i < length && unicodeString[i] == '\n'){ //if the \r has a \n following it, don't register that
@@ -995,10 +1020,7 @@ void parseLengthedToSeqsTakingParserRef(Parser* p, char const* unicodeString, un
 			}
 		}
 		p->currentMode(p,false,c);
-		if(p->error && errorOut != NULL){
-			*errorOut = p->error;
-			return;
-		}
+		if(p->error) goto error;
 		p->index += 1;
 		if(c == '\n'){
 			p->line += 1;
@@ -1010,14 +1032,15 @@ void parseLengthedToSeqsTakingParserRef(Parser* p, char const* unicodeString, un
 	p->currentMode(p,true,0);
 	
 	if(p->error){
+		error:
 		if(errorOut != NULL){
-			*errorOut = p->error;
+			*errorOut = strCopy(p->error);
 		}
 		return;
 	}else{
 		//build term from interterm
 		u32 rarl = p->rootArBuf.len;
-		Term* outArr = malloc(sizeof(Term*)*rarl);
+		Term* outArr = malloc(rarl*sizeof(Term));
 		InterTerm** rarv = (InterTerm**)p->rootArBuf.v;
 		for(int i=0; i<rarl; ++i){
 			termMimicInterterm(outArr+i, rarv[i]);
@@ -1038,7 +1061,12 @@ void parseLengthedToPrealocatedSeqs(char const * unicodeString, unsigned length,
 Term* parseLengthedToSeqs(char const * unicodeString, unsigned length, char** errorOut){
 	Term* t = malloc(sizeof(Term));
 	parseLengthedToPrealocatedSeqs(unicodeString, length, t, errorOut);
-	return t;
+	if(*errorOut){
+		free(t);
+		return NULL;
+	}else{
+		return t;
+	}
 }
 
 Term* parseToSeqs(char const* unicodeString, char** errorOut){
