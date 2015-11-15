@@ -86,7 +86,8 @@ Further introduction: https://github.com/makoConstruct/termpose/wiki/Introducing
 | C# | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| C | low-level char* → Term* API is implemented and without leaks. | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
+| C | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
+| Rust/C++ | now that we have the C implementation this should be straightforward and I'll get on it | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
 
 
 ##Tell us about the implementation?
