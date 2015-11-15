@@ -8,6 +8,7 @@
 // #define ANSI_COLOR_MAGENTA "\x1b[35m"
 // #define ANSI_COLOR_CYAN    "\x1b[36m"
 
+#define COLOR 1
 #ifdef COLOR
 	#define ANSI_COLOR_RED     "\x1b[31m"
 	#define ANSI_COLOR_GREEN   "\x1b[32m"
@@ -18,9 +19,8 @@
 	#define ANSI_COLOR_RESET ""
 #endif
 
-void test(char const* input, char const* output){
-	char* err;
-	Term* result = parseToSeqs(input, &err);
+
+void compare(Term* result, char* err, char const* output){
 	if(result){
 		char* strf = stringifyTerm(result);
 		if(strcmp(strf, output) == 0){
@@ -34,25 +34,37 @@ void test(char const* input, char const* output){
 		printf(ANSI_COLOR_RED "[fail]" ANSI_COLOR_RESET " %s\n", err);
 		free(err);
 	}
-	
 }
 
+void testParseAsList(char const* input, char const* output){
+	char* err;
+	Term* result = parseAsList(input, &err);
+	compare(result, err, output);
+}
+
+void testParse(char const* input, char const* output){
+	char* err;
+	Term* result = parse(input, &err);
+	compare(result, err, output);
+}
+
+
 int main(int argc, char** argv){
-	test(
+	testParseAsList(
 		"a\n"
 		"  a\n"
 		"  b c",
 		"((a a (b c)))");
-	test(
+	testParseAsList(
 		"a\n"
 		"a\n"
 		"b c",
 		"(a a (b c))");
-	test(
+	testParseAsList(
 		"a\n"
 		" b:\n"
 		"  c", "((a (b c)))");
-	test(
+	testParseAsList(
 		"animol\n"
 		"anmal\n"
 		" oglomere:\n"
@@ -60,5 +72,6 @@ int main(int argc, char** argv){
 		"   no more no\n"
 		"  heronymous",
 		"(animol (anmal (oglomere (hemisphere (ok (no more no))) heronymous)))");
-	
+	testParse("harry has a:larry nice", "(harry has (a larry) nice)");
+	testParse("harry has a:larry nice\nhori ana he", "((harry has (a larry) nice) (hori ana he))");
 }

@@ -70,7 +70,7 @@ println toSexp(*(5 Vector(1 3)
 >(Vector 5 15)
 ```
 
-We were always able to use S-Expressions instead of XML, Json Toml, Yaml or whatever else, but there was something about that syntax that made the prospect unpalatable.
+We were always able to use S-Expressions instead of XML, Json, Toml, Yaml or whatever else, but there was something about that syntax that made the prospect unpalatable.
 
 Termpose takes that something out of the picture.
 
@@ -86,7 +86,7 @@ Further introduction: https://github.com/makoConstruct/termpose/wiki/Introducing
 | C# | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| C++/C/Rust | I'm working on a C implementation. It's mostly working but it's still a bit rough. | - |
+| C | low-level char* → Term* API is implemented and without leaks. | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
 
 
 ##Tell us about the implementation?

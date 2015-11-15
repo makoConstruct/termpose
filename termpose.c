@@ -308,29 +308,36 @@ LineDetail* lastLine(LineBuffer* t){ return &t->v[t->len - 1]; }
 
 
 void initSeqs(Term* ret, Term* s, uint32_t nTerms, uint32_t line, uint32_t column){
-	ret->seqs.tag = 0;
-	ret->seqs.nTerms = nTerms;
-	ret->seqs.s = s;
+	ret->tag = 0;
+	ret->len = nTerms;
+	ret->line = line;
+	ret->column = column;
+	ret->con = s;
 }
-Seqs* newSeqs(Term* s, uint32_t nTerms, uint32_t line, uint32_t column){
-	new(Seqs, ret);
-	initSeqs((Term*)ret, s, nTerms, line, column);
+Term* newSeqs(Term* s, uint32_t nTerms, uint32_t line, uint32_t column){
+	new(Term, ret);
+	initSeqs(ret, s, nTerms, line, column);
 	return ret;
 }
-Stri* newStri(char* v, uint32_t length, uint32_t line, uint32_t column){
-	new(Stri, ret);
+Term* newStri(char* v, uint32_t length, uint32_t line, uint32_t column){
+	new(Term, ret);
 	ret->tag = 1;
-	ret->length = length;
-	ret->v = v;
+	ret->len = length;
+	ret->line = line;
+	ret->column = column;
+	ret->str = v;
 	return ret;
 }
 uint8_t isStri(Term* v){ return *(uint8_t*)v; } 
 void drainTerm(Term* v){
-	if(isStri(v)){
-		free(v->stri.v);
-	}else{
-		free(v->seqs.s);
+	Term* sv = v->con; //doesn't so much assume that this is a list term as it just doesn't matter for the free that comes later
+	if(!isStri(v)){
+		uint32_t sl = v->len;
+		for(int i=0; i<sl; ++i){
+			drainTerm(sv+i);
+		}
 	}
+	free(sv);
 }
 void destroyTerm(Term* v){
 	drainTerm(v);
@@ -381,20 +388,22 @@ void escapeSymbol(CharBuffer* outUnicode, char* in, u32 len){
 		}
 	}
 }
-void stringifyingStri(CharBuffer* cb, Stri* v){
-	if(escapeIsNeeded(v->v, v->length)){
+void stringifyingStri(CharBuffer* cb, Term* v){
+	uint32_t vl = v->len;
+	char* s = v->str;
+	if(escapeIsNeeded(s, vl)){
 		addChar(cb, '"');
-		escapeSymbol(cb, v->v, v->length);
+		escapeSymbol(cb, s, vl);
 		addChar(cb, '"');
 	}else{
-		addString(cb, v->v, v->length);
+		addString(cb, s, vl);
 	}
 }
 void stringifyingTerm(CharBuffer* cb, Term* t);
-void stringifyingSeqs(CharBuffer* cb, Seqs* v){
+void stringifyingSeqs(CharBuffer* cb, Term* v){
 	addChar(cb, '(');
-	uint32_t tl = v->nTerms;
-	Term* ts = v->s;
+	uint32_t tl = v->len;
+	Term* ts = v->con;
 	if(tl >= 1){
 		stringifyingTerm(cb, ts);
 	}
@@ -406,9 +415,9 @@ void stringifyingSeqs(CharBuffer* cb, Seqs* v){
 }
 void stringifyingTerm(CharBuffer* cb, Term* t){
 	if(isStri(t)){
-		stringifyingStri(cb, (Stri*)t);
+		stringifyingStri(cb, t);
 	}else{
-		stringifyingSeqs(cb, (Seqs*)t);
+		stringifyingSeqs(cb, t);
 	}
 }
 char* stringifyTerm(Term* t){ //returns null if one of the strings contained invalid unicode.
@@ -512,21 +521,21 @@ void exudeSeqs(Parser* p, InterTerm* pi){ //pi becomes interSeqs, its previous c
 
 void termMimicInterterm(Term* t, InterTerm* v){
 	if(isInterStri(v)){
-		t->stri.tag = 1;
+		t->tag = 1;
 		char* tsv = v->stri.v;
 		u32 stl = strlen(tsv);
-		t->stri.v = makeCopy(tsv, (stl+1)*sizeof(char));
-		t->stri.length = stl;
-		t->stri.line = v->stri.line;
-		t->stri.column = v->stri.column;
+		t->str = makeCopy(tsv, (stl+1)*sizeof(char));
+		t->len = stl;
+		t->line = v->stri.line;
+		t->column = v->stri.column;
 	}else{
-		t->seqs.tag = 0;
+		t->tag = 0;
 		u32 slen = v->seqs.s.len;
 		Term* innerTerms = malloc(slen*sizeof(Term));
-		t->seqs.s = innerTerms;
-		t->seqs.nTerms = slen;
-		t->seqs.line = v->seqs.line;
-		t->seqs.column = v->seqs.column;
+		t->con = innerTerms;
+		t->len = slen;
+		t->line = v->seqs.line;
+		t->column = v->seqs.column;
 		InterTerm** sarr = (InterTerm**)v->seqs.s.v;
 		for(int i=0; i<slen; ++i){
 			termMimicInterterm(innerTerms+i, sarr[i]);
@@ -593,7 +602,7 @@ void drainParser(Parser* p){
 		drainInterTerm(it);
 		free(it);
 	}
-	clearPtrBuffer(rab);
+	drainPtrBuffer(rab);
 	drainPtrBuffer(&p->parenTermStack);
 	drainPtrBuffer(&p->modes);
 	freeIfSome(p->error);
@@ -1069,6 +1078,17 @@ Term* parseLengthedToSeqs(char const * unicodeString, unsigned length, char** er
 	}
 }
 
-Term* parseToSeqs(char const* unicodeString, char** errorOut){
+Term* parseAsList(char const* unicodeString, char** errorOut){
 	return parseLengthedToSeqs(unicodeString, strlen(unicodeString), errorOut);
+}
+
+Term* parse(char const* unicodeString, char** errorOut){
+	Term* ret = parseAsList(unicodeString, errorOut);
+	if(ret->len == 1){
+		Term* truRet = ret->con;
+		free(ret);
+		return truRet;
+	}else{
+		return ret;
+	}
 }
