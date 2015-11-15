@@ -4,27 +4,29 @@
 
 Termpose is an extremely flexible markup language with an elegant syntax.
 
-The quickest way to explain termpose is this:
+I think the quickest way to explain is that this arbitrary termpose structure:
 ```
-a
-    b
-    c
-        d
-    e
-    f g
-    h i j
-    k l(m n)
+alpha
+    bacchus
+    calea
+        drummond
+    ephemeral fog gloves
+    high intimacy(jade knossos)
+    liminal maker:nymph orphic:pull
+    quiet reconciliation successor transient:
+        umbrage
+        verity
 ```
-equals
+equals this:
 ```
-a(b c(d) e f(g) h(i j) k(l(m n)))
+alpha(bacchus callea(drummon) ephemeral(fog gloves) high(intimacy(jade knossos)) liminal(maker(nymph) orphic(pull)) quiet(reconciliation successor transient(umbrage verity)))
 ```
-which could also be phrased as the s-expression:
+which could also be posed in the style of an s-expression:
 ```
-(a b (c d) e (f g) (h i j) (k (l m n)))
+(alpha bacchus (callea drummon) (ephemeral fog gloves) (high (intimacy jade knossos)) (liminal (maker nymph) (orphic pull)) (quiet reconciliation successor (transient umbrage verity)))
 ```
 
-Termpose provides an absolutely minimal, extremely robust syntax for expressing structures in strings.
+Termpose is a minimal, extremely robust syntax for expressing tree structures of strings, and all that can be built from those.
 
 Termpose tries to keep out of your namespace, attributing its own meanings to the characters `":()`, but leaving ```\/?-+=[]*&^%$#@!`~;'.,<>``` for your domain-specific languages to define as they please.
 
