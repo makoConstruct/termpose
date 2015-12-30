@@ -87,7 +87,8 @@ Further introduction: https://github.com/makoConstruct/termpose/wiki/Introducing
 | Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | C | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
-| Rust/C++ | now that we have the C implementation this should be straightforward and I'll get on it | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
+| Rust | Now that we have the C implementation this should be straightforward and I'll get to it at some point | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
+| C++ | Term API is complete. In the process of replicating scala's combinator stuff. | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
 
 
 ##Tell us about the implementation?
@@ -101,13 +102,13 @@ Here's how one would write the first half of Mako's homepage in termpose's XML d
 ```python
 html
   head
-    title ."about mako
+    title >"about mako
     meta -charset:utf-8
     link -rel:"shortcut icon" -href:DGFavicon.png
-    style ."
+    style >"
       CSS plaintext
       ...
-    script -language:javascript ."
+    script -language:javascript >"
       Javascript plaintext
       ...
   body
@@ -119,12 +120,14 @@ html
             div -id:downgust
               canvas -height:43 -width:43
         tr
-          td -class:leftCol ."who
-          td -class:rightCol ."mako yass, global handle @makoConstruct.
+          td -class:leftCol >"who
+          td -class:rightCol >"mako yass, global handle @makoConstruct.
         ...
 ```
 
-##Termpose is better at expressing Json than Json
+##Termpose Json dialect
+
+The data
 
 ```javascript
 {
@@ -154,14 +157,19 @@ html
 
 ```
 
+is jas expressed as
+
+
 ```javascript
 highlight_line true
+
 ignored_packages [:
   Floobits
   SublimeLinter
   Vintage
   { ref:"http://enema.makopool.com/" name:enema update:yes
   [ 1 2 3
+
 indent_guide_options
   draw_active true
 "overlay scroll bars" enabled
@@ -170,7 +178,10 @@ tab_size 2
 theme Spacegray.sublime-theme
 word_wrap true
 ```
-`'` may be used an escape for instances like, say, representing the string `"true"` with `'true`(parsed termpose has no record of whether there were double quotes, so `"true"` would be indistinguishable from `true`).
+
+(`'` may be used an escape for instances like, say, representing the string `"true"` with `'true`(parsed termpose has no record of whether there were double quotes, so `"true"` would be indistinguishable from `true`).)
+
+The scala API has a function that can be easily patched to check json-formatted termpose into whatever JSON representation classes your project uses.
 
 
 ###Spec by example

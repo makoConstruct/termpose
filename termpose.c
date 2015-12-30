@@ -86,24 +86,18 @@ size_t utf8validate(Rune *u, size_t i){
 
 
 
-void clearStr(char** c){
-	if(*c != "" && *c != NULL){
-		free(*c);
-		*c = "";
-	}
-}
-
-void freeIfSome(void* v){ if(v != NULL) free(v); }
 
 
 
 
-#define new(type, identifier) type* identifier = malloc(sizeof(type))
+
 typedef uint32_t u32;
 typedef uint8_t u8;
+#ifndef __cplusplus
 typedef uint8_t bool;
 #define true 1
 #define false 0
+#endif
 u32 min(u32 a, u32 b){ return a < b ? a : b; }
 u32 max(u32 a, u32 b){ return a < b ? b : a; }
 u32 ceilPowerTwo(u32 v){
@@ -121,7 +115,13 @@ void* makeCopy(void* in, size_t len){
 	return ret;
 }
 
-char* strCopy(char* v){ return makeCopy(v, strlen(v)+1); }
+char* strCopy(char* v){ return (char*)makeCopy(v, strlen(v)+1); }
+
+void destroyStr(char* str){ free(str); }
+
+void freeIfSome(void* v){ if(v != NULL) free(v); }
+
+
 
 
 //buffers
@@ -131,12 +131,12 @@ typedef struct CharBuffer {
 	u32 cap;
 } CharBuffer;
 void initCharBuffer(CharBuffer* cb, u32 initialLen, u32 initialCapacity){
-	cb->v = malloc(initialCapacity*sizeof(char));
+	cb->v = (char*)malloc(initialCapacity*sizeof(char));
 	cb->len = initialLen;
 	cb->cap = initialCapacity;
 }
 CharBuffer* newCharBuf(u32 initialLen){
-	new(CharBuffer, ret);
+	CharBuffer* ret = (CharBuffer*)malloc(sizeof(CharBuffer));
 	initCharBuffer(ret,initialLen,ceilPowerTwo(initialLen));
 	return ret;
 }
@@ -144,7 +144,7 @@ void reserveCapacityAfterLength(CharBuffer* t, u32 extraCap){
 	u32 finalCap = t->len + extraCap;
 	if(t->cap < finalCap){
 		u32 newCap = ceilPowerTwo(finalCap);
-		t->v = realloc(t->v, newCap);
+		t->v = (char*)realloc(t->v, newCap);
 		t->cap = newCap;
 	}
 }
@@ -152,7 +152,7 @@ void addChar(CharBuffer* t, char c){
 	u32 tl = t->len;
 	if(tl >= t->cap){
 		u32 newCap = t->cap*2;
-		t->v = realloc(t->v, newCap*sizeof(char));
+		t->v = (char*)realloc(t->v, newCap*sizeof(char));
 		t->cap = newCap;
 	}
 	t->v[tl] = c;
@@ -186,14 +186,14 @@ void clearCharBuffer(CharBuffer* t){
 }
 char* rendStr(CharBuffer* t){ //drains the CharBuffer and yeilds its contents, null-terminated
 	addChar(t, 0);
-	return realloc(t->v, sizeof(char)*t->len);
+	return (char*)realloc(t->v, sizeof(char)*t->len);
 }
 char* copyLengthedStringAndClear(CharBuffer* t, u32* rlen){ //alert, returns NULL if empty
 	u32 tl = t->len;
 	*rlen = tl;
 	t->len = 0;
 	if(tl){
-		char* out = malloc((tl)*sizeof(char));
+		char* out = (char*)malloc((tl)*sizeof(char));
 		memcpy(out, t->v, tl*sizeof(char));
 		return out;
 	}else{
@@ -201,7 +201,7 @@ char* copyLengthedStringAndClear(CharBuffer* t, u32* rlen){ //alert, returns NUL
 	}
 }
 char* copyOutNullTerminatedString(CharBuffer* t){
-	char* out = malloc((t->len+1)*sizeof(char));
+	char* out = (char*)malloc((t->len+1)*sizeof(char));
 	memcpy(out, t->v, t->len*sizeof(char));
 	out[t->len] = 0;
 	t->len = 0;
@@ -218,17 +218,17 @@ typedef struct PtrBuffer{
 	u32 cap;
 } PtrBuffer;
 void initPtrBuffer(PtrBuffer* cb, u32 initialLen, u32 initialCapacity){
-	cb->v = malloc(initialCapacity*sizeof(void*));
+	cb->v = (void**)malloc(initialCapacity*sizeof(void*));
 	cb->len = initialLen;
 	cb->cap = initialCapacity;
 }
 void initEmptyPtrBuffer(PtrBuffer* cb, u32 initialCapacity){
-	cb->v = malloc(initialCapacity*sizeof(void*));
+	cb->v = (void**)malloc(initialCapacity*sizeof(void*));
 	cb->len = 0;
 	cb->cap = initialCapacity;
 }
 PtrBuffer* newPtrBuf(u32 initialLen){
-	new(PtrBuffer, ret);
+	PtrBuffer* ret = (PtrBuffer*)malloc(sizeof(PtrBuffer));
 	initPtrBuffer(ret,initialLen,ceilPowerTwo(initialLen));
 	return ret;
 }
@@ -236,7 +236,7 @@ void addPtr(PtrBuffer* t, void* c){
 	u32 tl = t->len;
 	if(tl >= t->cap){
 		u32 newCap = t->cap*2;
-		t->v = realloc(t->v, newCap*sizeof(void*));
+		t->v = (void**)realloc(t->v, newCap*sizeof(void*));
 		t->cap = newCap;
 	}
 	t->v[tl] = c;
@@ -268,12 +268,12 @@ typedef struct LineBuffer{
 	u32 cap;
 } LineBuffer;
 void initLineBuffer(LineBuffer* cb, u32 initialLen, u32 initialCapacity){
-	cb->v = malloc(initialCapacity*sizeof(LineDetail));
+	cb->v = (LineDetail*)malloc(initialCapacity*sizeof(LineDetail));
 	cb->len = initialLen;
 	cb->cap = initialCapacity;
 }
 LineBuffer* newLineBuf(u32 initialLen){
-	new(LineBuffer, ret);
+	LineBuffer* ret = (LineBuffer*)malloc(sizeof(LineBuffer));
 	initLineBuffer(ret,initialLen,ceilPowerTwo(initialLen));
 	return ret;
 }
@@ -281,7 +281,7 @@ LineDetail* emplaceNewLine(LineBuffer* t, u32 indentationLength, PtrBuffer* tail
 	u32 tl = t->len;
 	if(tl >= t->cap){
 		u32 newCap = t->cap*2;
-		t->v = realloc(t->v, newCap*sizeof(LineDetail));
+		t->v = (LineDetail*)realloc(t->v, newCap*sizeof(LineDetail));
 		t->cap = newCap;
 	}
 	LineDetail* ret = t->v + tl;
@@ -315,12 +315,12 @@ void initSeqs(Term* ret, Term* s, uint32_t nTerms, uint32_t line, uint32_t colum
 	ret->con = s;
 }
 Term* newSeqs(Term* s, uint32_t nTerms, uint32_t line, uint32_t column){
-	new(Term, ret);
+	Term* ret = (Term*)malloc(sizeof(Term));
 	initSeqs(ret, s, nTerms, line, column);
 	return ret;
 }
 Term* newStri(char* v, uint32_t length, uint32_t line, uint32_t column){
-	new(Term, ret);
+	Term* ret = (Term*)malloc(sizeof(Term));
 	ret->tag = 1;
 	ret->len = length;
 	ret->line = line;
@@ -457,12 +457,12 @@ void initInterSeqs(InterTerm* ret, u32 line, u32 column){
 	initPtrBuffer(&ret->seqs.s,0,4);
 }
 InterSeqs* newInterSeqs(u32 line, u32 column){
-	InterTerm* ret = malloc(sizeof(InterTerm));
+	InterTerm* ret = (InterTerm*)malloc(sizeof(InterTerm));
 	initInterSeqs(ret,line,column);
 	return (InterSeqs*)ret;
 }
 InterStri* newInterStri(u32 line, u32 column, char* v){
-	InterTerm* ret = malloc(sizeof(InterTerm));
+	InterTerm* ret = (InterTerm*)malloc(sizeof(InterTerm));
 	ret->stri.tag = 1;
 	ret->stri.line = line;
 	ret->stri.column = column;
@@ -500,7 +500,7 @@ void dropSeqLayerIfSole(Parser* p, InterSeqs* pt){
 	assert(pt->tag == 0);
 	PtrBuffer* arb = &pt->s;
 	if(arb->len == 1){
-		InterTerm* soleEl = arb->v[0];
+		InterTerm* soleEl = (InterTerm*)arb->v[0];
 		drainPtrBuffer(arb);
 		memcpy(pt, soleEl, sizeof(InterTerm));
 		free(soleEl);
@@ -511,7 +511,7 @@ void exudeSeqs(Parser* p, InterTerm* pi){ //pi becomes interSeqs, its previous c
 	assert( pi->seqs.line == pi->stri.line && pi->seqs.column == pi->stri.column ); //it should not matter which interpretation of the union type we use.
 	u32 l = pi->seqs.line;
 	u32 c = pi->seqs.column;
-	InterTerm* nit = malloc(sizeof(InterTerm));
+	InterTerm* nit = (InterTerm*)malloc(sizeof(InterTerm));
 	memcpy(nit, pi, sizeof(InterTerm));
 	initInterSeqs(pi, l,c);
 	addPtr(&pi->seqs.s, nit);
@@ -524,14 +524,14 @@ void termMimicInterterm(Term* t, InterTerm* v){
 		t->tag = 1;
 		char* tsv = v->stri.v;
 		u32 stl = strlen(tsv);
-		t->str = makeCopy(tsv, (stl+1)*sizeof(char));
+		t->str = (char*)makeCopy(tsv, (stl+1)*sizeof(char));
 		t->len = stl;
 		t->line = v->stri.line;
 		t->column = v->stri.column;
 	}else{
 		t->tag = 0;
 		u32 slen = v->seqs.s.len;
-		Term* innerTerms = malloc(slen*sizeof(Term));
+		Term* innerTerms = (Term*)malloc(slen*sizeof(Term));
 		t->con = innerTerms;
 		t->len = slen;
 		t->line = v->seqs.line;
@@ -598,7 +598,7 @@ void drainParser(Parser* p){
 	PtrBuffer* rab = &p->rootArBuf;
 	u32 rlen = rab->len;
 	for(int i=0; i<rlen; ++i){
-		InterTerm* it = rab->v[i];
+		InterTerm* it = (InterTerm*)rab->v[i];
 		drainInterTerm(it);
 		free(it);
 	}
@@ -636,13 +636,13 @@ void updateStateAboutInterTermMove(Parser* p, InterTerm* to, InterTerm* from){ /
 }
 void transition(Parser* p, PF nm){ p->currentMode = nm; }
 void pushMode(Parser* p, PF nm){
-	addPtr(&p->modes, p->currentMode);
+	addPtr(&p->modes, (void*)p->currentMode);
 	transition(p, nm);
 }
 InterSeqs* interSq(Parser* p){ return newInterSeqs(p->line, p->column); }
 InterStri* interSt(Parser* p, char* c){ return newInterStri(p->line, p->column, c); }
 void popMode(Parser* p){
-	p->currentMode = popPtr(&p->modes);
+	p->currentMode = (PF)popPtr(&p->modes);
 }
 void lodgeErrorAt(Parser* p, u32 l, u32 c, char const* message){
 	CharBuffer cb;
@@ -1011,7 +1011,7 @@ void multiLineTakingText(Parser* p, bool fileEnd, Rune c){
 	}
 }
 
-void parseLengthedToSeqsTakingParserRef(Parser* p, char const* unicodeString, unsigned length, Term* termOut, char** errorOut){ //contents will be contained in a root seqs even if there is only a single line at root. Parser aught to be reset, but wont be for now. termOut will not be initialized if there was an error. If there was an error, it will be written of in errorOut, and if there wasn't, errorOut will be set to null.
+void parseLengthedToSeqsTakingParserRef(Parser* p, char const* unicodeString, unsigned length, char** errorOut){ //contents will be contained in a root seqs even if there is only a single line at root. Parser aught to be reset, but wont be for now. If there was an error, it will be written of in errorOut, and if there wasn't, errorOut will be set to null. If there was no error, the parsed struct will reside in p, as interterms in the rootArBuf.
 	//pump characters into the mode of the parser until the read head has been graduated to the end
 	transition(p, eatingIndentation);
 	size_t i=0;
@@ -1046,34 +1046,27 @@ void parseLengthedToSeqsTakingParserRef(Parser* p, char const* unicodeString, un
 			*errorOut = strCopy(p->error);
 		}
 		return;
+	}
+}
+
+Term* parseLengthedToSeqs(char const * unicodeString, uint32_t length, char** errorOut){
+	Parser p;
+	initParser(&p);
+	parseLengthedToSeqsTakingParserRef(&p, unicodeString, length, errorOut);
+	if(*errorOut){
+		drainParser(&p);
+		return NULL;
 	}else{
-		//build term from interterm
-		u32 rarl = p->rootArBuf.len;
-		Term* outArr = malloc(rarl*sizeof(Term));
-		InterTerm** rarv = (InterTerm**)p->rootArBuf.v;
+		Term* t = (Term*)malloc(sizeof(Term));
+		u32 rarl = p.rootArBuf.len;
+		Term* outArr = (Term*)malloc(rarl*sizeof(Term));
+		InterTerm** rarv = (InterTerm**)p.rootArBuf.v;
 		for(int i=0; i<rarl; ++i){
 			termMimicInterterm(outArr+i, rarv[i]);
 		}
 		*errorOut = NULL;
-		initSeqs(termOut, outArr, rarl, 0,0);
-	}
-}
-
-
-void parseLengthedToPrealocatedSeqs(char const * unicodeString, unsigned length, Term* termOut, char** errorOut){
-	Parser p;
-	initParser(&p);
-	parseLengthedToSeqsTakingParserRef(&p, unicodeString, length, termOut, errorOut);
-	drainParser(&p);
-}
-
-Term* parseLengthedToSeqs(char const * unicodeString, unsigned length, char** errorOut){
-	Term* t = malloc(sizeof(Term));
-	parseLengthedToPrealocatedSeqs(unicodeString, length, t, errorOut);
-	if(*errorOut){
-		free(t);
-		return NULL;
-	}else{
+		initSeqs(t, outArr, rarl, 0,0);
+		drainParser(&p);
 		return t;
 	}
 }

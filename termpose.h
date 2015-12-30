@@ -16,14 +16,15 @@ uint8_t isStri(Term* v); //tells you whether this is a string term(as opposed to
 Term* newSeqs(Term* s, uint32_t nTerms, uint32_t line, uint32_t column);
 Term* newStri(char* v, uint32_t length, uint32_t line, uint32_t column);
 void drainTerm(Term* v);
-void destroyTerm(Term* v);
+void destroyTerm(Term* v); //destroy is just drain + free
 
 Term* parseAsList(char const* unicodeString, char** errorOut); //contents will be contained in a root list even if there is only a single line at root (if you don't want that, see parse()). If there is an error, return value will be null and errorOut will be set to contain the text. If there was no error, errorOut will be set to null. errorOut can be null, if a report is not desired.
+Term* parseLengthedToSeqs(char const * unicodeString, uint32_t length, char** errorOut);
 
 Term* parse(char const* unicodeString, char** errorOut); //same as above but root line will not be wrapped in a root seqs iff there is only one root element. This is what you want if you know there's only one line in the string you're parsing, but use parseAsList if there could be more(or less) than one, as it is more consistent.
-
 char* stringifyTerm(Term* t);
 
+void destroyStr(char* str); //this needs to be defined in case linking libraries use a different allocator - their free() would not work properly. C users may usually ignore this.
 
 /*TERMPOSE*/
 #endif
