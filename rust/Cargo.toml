@@ -1,0 +1,6 @@
+[package]
+name = "termpose"
+version = "0.1.0"
+authors = ["@makoConstruct"]
+build = "build.rs"
+links = "termpose"
