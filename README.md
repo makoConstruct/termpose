@@ -81,13 +81,13 @@ Further introduction: https://github.com/makoConstruct/termpose/wiki/Introducing
 | language | status | the closest thing we have to documentation |
 | ---------|--------|------ |
 | Scala | Very nice | [This brief intro](https://github.com/makoConstruct/termpose/wiki/Introducing-Termpose!-(To-Scala)) and the [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
-| Javascript | Proper API coming soon | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| Javascript | There is a basic API that converts termpose to arrays of strings. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Haxe | Pretty good. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | C# | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | C | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
-| Rust | Now that we have the C implementation this should be straightforward and I'll get to it at some point | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
+| Rust | Basic support + custom Codings. | [Rust Source](https://github.com/makoConstruct/termpose/blob/master/rust/src/lib.rs) |
 | C++ | Term API is complete. In the process of replicating scala's combinator stuff. | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
 
 
