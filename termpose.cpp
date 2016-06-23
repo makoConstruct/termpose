@@ -3,6 +3,7 @@
 #include <sstream>
 #include <string>
 #include <stdexcept>
+#include <algorithm>
 #include <vector>
 #include <cstring>
 #include <sstream>
@@ -34,10 +35,22 @@ std::vector<T> &operator+=(std::vector<T> &A, const std::vector<T> &B)
 	return A;
 }
 
+// hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh  
+template<typename T, typename B> std::vector<B> map(std::vector<T>& v, std::function<B (T)> f){
+	unsigned ei = v.size();
+	std::vector<B> ret(ei);
+	for(int i=0; i<ei; ++i){
+		ret[i] = f(v[i]);
+	}
+	return ret;
+}
+
 
 struct Error{
-	unsigned line, column;
+	unsigned line;
+	unsigned column;
 	std::string msg;
+	Error(unsigned line, unsigned column, std::string msg): line(line), column(column), msg(msg) {}
 };
 struct TermposeError:public std::runtime_error{
 	TermposeError(std::string msg):std::runtime_error(msg){}
@@ -64,21 +77,6 @@ public:
 	}
 };
 union Term;
-struct TyperError:public TermposeError{
-	std::vector<termpose::Error> errors;
-	TyperError(Term& t, std::string msg):TermposeError("TyperError"){}
-	TyperError(unsigned line, unsigned column, std::string msg):errors({Error{line, column, msg}}), TermposeError("TyperError"){}
-	void suck(TyperError& other){
-		errors += other.errors;
-	}
-	virtual char const* what(){
-		std::stringstream ss;
-		ss<<"TyperError"<<'\n';
-		for(Error& e : errors) putErr(ss, e);
-		return ss.str().c_str();
-	}
-	TyperError():TermposeError("TyperError"){}
-};
 
 bool escapeIsNeeded(std::string const& str){
 	for(int i=0; i<str.size(); ++i){
@@ -176,6 +174,23 @@ private:
 	static void parseLengthedToSeqs(Term* termOut, std::string& unicodeString, char** errorOut);
 	friend Stri;
 	friend List;
+};
+
+struct TyperError:public TermposeError{
+	std::vector<termpose::Error> errors;
+	TyperError(Term& t, std::string msg): TyperError(t.l.line,t.l.column,msg){}
+	TyperError(std::vector<Error> errors): errors(errors), TermposeError("TyperError"){}
+	TyperError(unsigned line, unsigned column, std::string msg):errors({Error{line, column, msg}}), TermposeError("TyperError"){}
+	void suck(TyperError& other){
+		errors += other.errors;
+	}
+	virtual char const* what(){
+		std::stringstream ss;
+		ss<<"TyperError"<<'\n';
+		for(Error& e : errors) putErr(ss, e);
+		return ss.str().c_str();
+	}
+	TyperError():TermposeError("TyperError"){}
 };
 
 Error error(Term& t, std::string msg){ return Error{t.l.line, t.l.column, msg}; }
@@ -305,11 +320,11 @@ std::string Term::prettyPrint() const{
 
 inline Term Term::parseMultiline(std::string& unicodeString){ //note, throws ParserError if there was a syntax error
 	//redefining stuff so that we can avoid the middle part of the translation from interterm to ctermpose::term to termpose::term. Musing: If I were REALLY serious I'd cut out the interterms alltogether and do a proper C++ port. Hm. I suppose there might be a way of abstracting over the differences between C and C++ and using the same parsing code for both.
-	char* errorOut = nullptr;
+	ctermpose::TermposeParsingError errorOut;
 	ctermpose::Parser p;
 	ctermpose::initParser(&p);
 	ctermpose::parseLengthedToSeqsTakingParserRef(&p, unicodeString.c_str(), unicodeString.size(), &errorOut);
-	if(!errorOut){
+	if(!errorOut.msg){
 		Term ret;
 		List* lv = (List*)&ret;
 		lv->tag = 0;
@@ -326,9 +341,8 @@ inline Term Term::parseMultiline(std::string& unicodeString){ //note, throws Par
 		}
 		return ret;
 	}else{
-		std::string msg(errorOut);
-		ctermpose::destroyStr(errorOut);
-		throw ParserError(0,0,msg);
+		std::string msg(errorOut.msg);
+		throw ParserError(errorOut.line,errorOut.column,msg);
 	}
 }
 
@@ -425,25 +439,27 @@ Term List::create(std::vector<Term>&& ov){
 
 
 namespace parsingDSL{
-	struct Error{
-		unsigned line;
-		unsigned column;
-		std::string msg;
-		Error(unsigned line, unsigned column, std::string msg): line(line), column(column), msg(msg) {}
-	};
+	
+	template<typename T> struct dependent_false: std::false_type {};
 	template<typename T> struct Checker{
-		T check(Term& v); //throws TyperError
+		virtual T check(Term& v){throw "not implemented";} //throws TyperError
 	};
 	template<typename T> struct Termer{
-		virtual Term termify(T& v);
+		virtual Term termify(T& v){throw "not implemented";}
 	};
 	template<typename T> struct Translator : Checker<T>, Termer<T>{
 	};
+	template<typename T> struct BasicTranslator : Translator<T> {
+		Checker<T> ck;
+		Termer<T> tk;
+		virtual T check(Term& v){ return ck.check(v); }
+		virtual Term termify(T& v){ return tk.termify(v); }
+	};
 	
-	template<> struct Termer<bool>{ virtual Term termify(bool& b){
-			return Stri::create(b?"true":"false");
-	}};
-	template<> struct Checker<bool>{ virtual bool check(Term& v){
+	Term termifyBool(bool& v){
+		return Stri::create(v?"true":"false");
+	}
+	bool checkBool(Term& v){
 		if(v.isStr()){
 			std::string& st = v.s.s;
 			if(st == "true" || st == "⊤") return true;
@@ -452,14 +468,58 @@ namespace parsingDSL{
 		}else{
 			throw TyperError(v, "expected a bool here");
 		}
+	}
+	struct BoolTermer : Termer<bool>{ virtual Term termify(bool& b){
+		return termifyBool(b);
 	}};
+	struct BoolChecker : Checker<bool>{ virtual bool check(Term& v){
+		return checkBool(v);
+	}};
+	struct BoolTranslator : Translator<bool> {
+		virtual Term termify(bool& b){
+			return termifyBool(b);
+		}
+		virtual bool check(Term& v){
+			return checkBool(v);
+		}
+	};
 	
-	template<> struct Termer<int>{ virtual Term termify(int& b){
-			std::stringstream ss;
-			ss << b;
-			return Stri::create(ss.str());
+	Term termString(std::string& b){
+		std::stringstream ss;
+		ss << b;
+		return Stri::create(ss.str());
+	}
+	std::string checkString(Term& v){
+		if(v.isStr()){
+			return v.s.s;
+		}else{
+			throw TyperError(v, "expected a string here");
+		}
+	}
+	struct StringTermer : Termer<std::string>{ virtual Term termify(std::string& b){
+		return termString(b);
 	}};
-	template<> struct Checker<int>{ virtual int check(Term& v){
+	struct StringChecker : Checker<std::string>{ virtual std::string check(Term& v){
+		return checkString(v);
+	}};
+	struct StringTranslator : Translator<std::string> {
+		std::string check(Term& v){ return checkString(v); }
+		Term termify(std::string& v){ return termString(v); }
+	};
+	
+	struct BlandTermer : Termer<Term>{ virtual Term termify(Term& b){ return b; }};
+	struct BlandChecker : Checker<Term>{ virtual Term check(Term& v){ return v; }};
+	struct BlandTranslator : Translator<Term> {
+		Term termify(Term& b){ return b; }
+		Term check(Term& v){ return v; }
+	};
+	
+	Term termInt(int& b){
+		std::stringstream ss;
+		ss << b;
+		return Stri::create(ss.str());
+	}
+	int checkInt(Term& v){
 		if(v.isStr()){
 			std::string& st = v.s.s;
 			try{
@@ -472,64 +532,186 @@ namespace parsingDSL{
 		}else{
 			throw TyperError(v, "expected a int here (is a list)");
 		}
-	}};
-	
-	template<typename T> struct Termer<std::vector<T>> {
-		Termer<T> innerTermer;
-		Termer(Termer<T> it):innerTermer(it) {}
-		Termer(){}
-		virtual Term termify(std::vector<T>& v){
-			std::vector<Term> ov;
-			for(T& iv : v){
-				ov.push_back(innerTermer.termify(iv));
-			}
-			return List::create(std::move(ov));
-		}
+	}
+	struct IntTermer : Termer<int>{ virtual Term termify(int& b){ return termInt(b); } };
+	struct IntChecker : Checker<int>{ virtual int check(Term& v){ return checkInt(v); } };
+	struct IntTranslator : Translator<int> {
+		virtual Term termify(int& b){ return termInt(b); }
+		virtual int check(Term& v){ return checkInt(v); }
 	};
-	template<typename T> struct Checker<std::vector<T>> {
-		Checker<T> innerChecker;
-		bool ignoreErroneousContent;
-		Checker(Checker<T> ic, bool ignoreErroneousContent = false):innerChecker(ic), ignoreErroneousContent(ignoreErroneousContent) {}
-		Checker(bool ignoreErroneousContent = false): ignoreErroneousContent(ignoreErroneousContent) {}
-		virtual T check(Term& t){
-			if(t.isStr()){
-				return throw TyperError(t, "expected a sequence here");
-			}else{
-				List& tl = (List&)t;
-				std::vector<T> results;
-				std::vector<Error> errors;
-				for(Term& it : tl.l){
-					try{
-						T res = innerChecker.check(it);
-						if(errors.size() == 0){
-							results.push_back(std::move(res));
-						}
-					}catch(TyperError e){
-						if(!ignoreErroneousContent){
-							errors += e.errors;
-						}
+	
+	
+	Term termifyFloat(float& b){
+		std::stringstream ss;
+		ss << b;
+		return Stri::create(ss.str());
+	}
+	float checkFloat(Term& v){
+		if(v.isStr()){
+			std::string& st = v.s.s;
+			try{
+				return stof(st);
+			}catch(std::invalid_argument e){
+				throw TyperError(v, "expected a float here (can't be parsed to an float)");
+			}catch(std::out_of_range e){
+				throw TyperError(v, "expected a float here (is not in the allowable range)");
+			}
+		}else{
+			throw TyperError(v, "expected a float here (is a list)");
+		}
+	}
+	struct FloatTermer : Termer<float>{ virtual Term termify(float& b){ return termifyFloat(b); } };
+	struct FloatChecker : Checker<float>{ virtual float check(Term& v){ return checkFloat(v); } };
+	struct FloatTranslator : Translator<float> {
+		virtual Term termify(float& b){ return termifyFloat(b); }
+		virtual float check(Term& v){ return checkFloat(v); }
+	};
+	
+	template<typename T>
+	Term sequenceTermify(
+		Termer<T>* innerTermer,
+		std::vector<T>& v
+	){
+		std::vector<Term> ov;
+		for(T&& iv : v){
+			ov.push_back(innerTermer->termify(iv));
+		}
+		return List::create(std::move(ov));
+	}
+	template<typename T>
+	std::vector<T> sequenceCheck(
+		Checker<T>* innerChecker,
+		bool ignoreErroneousContent,
+		Term& t
+	){
+		if(t.isStr()){
+			throw TyperError(t, "expected a sequence here");
+		}else{
+			List& tl = (List&)t;
+			std::vector<T> results;
+			std::vector<Error> errors;
+			for(Term& it : tl.l){
+				try{
+					T res = innerChecker->check(it);
+					if(errors.size() == 0){
+						results.push_back(std::move(res));
+					}
+				}catch(TyperError e){
+					if(!ignoreErroneousContent){
+						errors += e.errors;
 					}
 				}
-				if(errors.size()){
-					throw TyperError(move(errors));
-				}else{
-					return results;
-				}
 			}
+			if(errors.size()){
+				throw TyperError(std::move(errors));
+			}else{
+				return results;
+			}
+		}
+	}
+	template<typename T> struct SequenceTermer : Termer<std::vector<T>> {
+		std::shared_ptr<Termer<T>> innerTermer;
+		SequenceTermer(std::shared_ptr<Termer<T>> it):innerTermer(it) {}
+		virtual Term termify(std::vector<T>& v){
+			return sequenceTermify(&*innerTermer, v);
+		}
+	};
+	template<typename T> struct SequenceChecker : Checker<std::vector<T>> {
+		std::shared_ptr<Checker<T>> innerChecker;
+		bool ignoreErroneousContent;
+		SequenceChecker(std::shared_ptr<Checker<T>> ic, bool ignoreErroneousContent = false):innerChecker(ic), ignoreErroneousContent(ignoreErroneousContent) {}
+		virtual std::vector<T> check(Term& t){
+			return sequenceCheck(&*innerChecker, ignoreErroneousContent, t);
+		}
+	};
+	template<typename T> struct SequenceTranslator : Translator<std::vector<T>> {
+		std::shared_ptr<Translator<T>> innerTranslator;
+		bool ignoreErroneousContent = false;
+		SequenceTranslator(
+			std::shared_ptr<Translator<T>> ic,
+			bool ignoreErroneousContent = false
+		):innerTranslator(ic), ignoreErroneousContent(ignoreErroneousContent) {}
+		virtual Term termify(std::vector<T>& v){
+			return sequenceTermify(&*innerTranslator, v);
+		}
+		virtual std::vector<T> check(Term& t){
+			return sequenceCheck(&*innerTranslator, ignoreErroneousContent, t);
 		}
 	};
 	
 	
-	//the following could have been a magical function that takes a type and automatically composes a method for doing the translation, but apparently BoolTermer:Termer<bool> does not count as a bool specialization of Termer, so it wont work unless I'm willing to define things differently.
-	// template<typename T> Term termify(T& v){
-	// 	static_assert(!is_abstract<Termer<T>>::value, "no Termer specialization has been defined for the given type");
-	// 	Termer<T> vt;
-	// 	return vt.termify
-	// }
+	template<typename T>
+	struct TaggedSequenceTranslator : Translator<std::vector<T>> {
+		std::string tag;
+		std::shared_ptr<Translator<T>> tt;
+		TaggedSequenceTranslator(
+			std::string tag,
+			std::shared_ptr<Translator<T>> tt
+		):tag(tag),tt(tt){}
+		virtual std::vector<T> check(Term& v){
+			if(v.isStr()){
+				throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\"");
+			}else{
+				if(v.l.l.size() >= 1){
+					std::vector<T> outv;
+					for(int i=1; i<v.l.l.size(); ++i){
+						outv.push_back(tt->check(outv[i]));
+					}
+					return outv;
+				}else{
+					throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\". Sequence was empty");
+				}
+			}
+		}
+		virtual Term termify(std::vector<T>& v){
+			std::vector<T> cv;
+			cv.reserve(v.size()+1);
+			cv.push_back(Stri::create(std::string(tag)));
+			for(T& vt: vt){
+				cv.push_back(tt.termify(vt));
+			}
+			return List::create(cv);
+		}
+	};
 	
-	static std::unique_ptr<Translator<bool>> boolTranslater(){ return std::unique_ptr<Translator<bool>>(new Translator<bool>()); }
-	static std::unique_ptr<Checker<bool>> boolChecker(){ return boolTranslater(); }
-	static std::unique_ptr<Termer<bool>> boolTermer(){ return boolTranslater(); }
+	// template<typename... T, Out>
+	// struct ReductionChecker : Checker<Out>{
+	// 	std::function<Out (...T)> f;
+	// 	ReductionChecker(std::function<Out (...T)> f):f(f){}
+	// 	Out check(Term& v){
+	// 		unsigned len = sizeof...(T);
+	// 		if(v.isStri()){
+	// 			stringstream ss;
+	// 			ss << "expected a tuple of length " << len << ". It was a string term.";
+	// 			throw new TyperError(t, ss.str());
+	// 		}
+			
+	// 	}
+	// };
+	
+	template<typename T>
+	static std::shared_ptr<Translator<std::vector<T>>> sequence(
+		std::shared_ptr<Translator<T>> tt
+	){
+		return std::shared_ptr<Translator<std::vector<T>>>(new SequenceTranslator<T>(std::move(tt)));
+	}
+	template<typename T>
+	static std::shared_ptr<Translator<std::vector<T>>> taggedSequence(
+		std::string tag,
+		std::shared_ptr<Translator<T>> tt
+	){
+		return std::shared_ptr<Translator<std::vector<T>>>(new TaggedSequenceTranslator<T>(tag, tt));
+	}
+	static std::shared_ptr<Translator<bool>> boolTranslator(){
+		return std::shared_ptr<Translator<bool>>(new BoolTranslator()); }
+	static std::shared_ptr<Checker<bool>> boolChecker(){ return boolTranslator(); }
+	static std::shared_ptr<Termer<bool>> boolTermer(){ return boolTranslator(); }
+	static std::shared_ptr<Translator<std::string>> stringTranslator(){
+		return std::shared_ptr<Translator<std::string>>(new StringTranslator()); }
+	static std::shared_ptr<Translator<int>> intTranslater(){
+		return std::shared_ptr<Translator<int>>(new IntTranslator()); }
+	static std::shared_ptr<Translator<float>> floatTranslator(){
+		return std::shared_ptr<Translator<float>>(new FloatTranslator()); }
 	
 }
 
