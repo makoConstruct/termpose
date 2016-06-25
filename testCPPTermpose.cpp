@@ -11,11 +11,17 @@ int main(){
 	cout<<t.toString()<<endl;
 	cout<<t.prettyPrint()<<endl;
 	
-	string bts("true false true false");
-	Term boolTerm = Term::parse(bts);
-	auto bools = sequence(boolTranslator())->check(boolTerm);
-	unsigned counter = 0;
-	for(bool b:bools){if(b) counter += 1;}
-	cout<<"counter at "<<counter<<endl;
+	string bts("\n\
+memories\n\
+	\"anthropolage\"\"\n\
+		when everyone gets scattered\n\
+	occulse\"\n\
+		gleaming hero, shining light, greatest matron");
+	Term btt = Term::parse(bts);
+	cout << bts <<endl;
+	cout << btt.prettyPrint() <<endl;
+	
+	auto memoryTrans = mapConversion(taggedListTrans("memories", pairTrans(stringTrans(),stringTrans())));
+	unordered_map<string,string> mems = memoryTrans->check(btt);
 	return 0;
 }

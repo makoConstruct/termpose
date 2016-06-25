@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <vector>
+#include <unordered_map>
 #include <cstring>
 #include <sstream>
 #include <type_traits>
@@ -54,7 +55,7 @@ struct Error{
 };
 struct TermposeError:public std::runtime_error{
 	TermposeError(std::string msg):std::runtime_error(msg){}
-	static void putErr(std::stringstream& ss, Error& e){
+	static void putErr(std::stringstream& ss, Error const& e){
 		ss<<"  error line:";
 		ss<<e.line;
 		ss<<" column:";
@@ -130,7 +131,7 @@ struct Stri{
 	uint32_t line;
 	uint32_t column;
 	std::string s;
-	static Term create(std::string&& str);
+	static Term create(std::string str);
 private:
 	void baseLineStringify(std::stringstream& ss) const;
 	void stringify(std::stringstream& ss) const;
@@ -144,7 +145,7 @@ struct List{
 	uint32_t line;
 	uint32_t column;
 	std::vector<Term> l;
-	static Term create(std::vector<Term>&& ov);
+	static Term create(std::vector<Term> ov);
 private:
 	void stringify(std::stringstream& ss) const;
 	unsigned estimateLength() const;
@@ -163,11 +164,11 @@ public:
 	std::string prettyPrint() const;
 	static inline Term parseMultiline(std::string& s);
 	static inline Term parse(std::string& s);
+	Term();
 	Term(Term&& other);
 	Term(Term const& other);
 	~Term();
 private:
-	Term(){}
 	void baseLineStringify(std::stringstream& ss) const;
 	void stringify(std::stringstream& ss) const;
 	void prettyPrinting(std::stringstream& sb, unsigned depth, std::string indent, std::string lineEndings, unsigned lineWidth) const;
@@ -178,16 +179,16 @@ private:
 
 struct TyperError:public TermposeError{
 	std::vector<termpose::Error> errors;
-	TyperError(Term& t, std::string msg): TyperError(t.l.line,t.l.column,msg){}
+	TyperError(Term const& t, std::string msg): TyperError(t.l.line,t.l.column,msg){}
 	TyperError(std::vector<Error> errors): errors(errors), TermposeError("TyperError"){}
 	TyperError(unsigned line, unsigned column, std::string msg):errors({Error{line, column, msg}}), TermposeError("TyperError"){}
 	void suck(TyperError& other){
 		errors += other.errors;
 	}
-	virtual char const* what(){
+	virtual char const* what() const noexcept {
 		std::stringstream ss;
 		ss<<"TyperError"<<'\n';
-		for(Error& e : errors) putErr(ss, e);
+		for(Error const& e : errors) putErr(ss, e);
 		return ss.str().c_str();
 	}
 	TyperError():TermposeError("TyperError"){}
@@ -241,6 +242,13 @@ void Term::mimicInterTerm(Term* r, ctermpose::InterTerm* v){
 	}
 }
 bool Term::isStr() const{ return (*(uint8_t*)this) != 0; }
+Term::Term(){
+	List* os = (List*)this;
+	os->tag = 0;
+	os->line = 0;
+	os->column = 0;
+	new (&os->l) std::vector<Term>();
+}
 Term::Term(Term&& other){
 	if(other.isStr()){
 		Stri* fs = &other.s;
@@ -275,6 +283,15 @@ Term::Term(Term const& other){
 		new (&ol->l) std::vector<Term>(fl->l);
 	}
 }
+Term::~Term(){
+	if(isStr()){
+		Stri* ts = (Stri*)this;
+		ts->s.std::string::~string();
+	}else{
+		List* tl = (List*)this;
+		tl->l.std::vector<Term>::~vector();
+	}
+}
 unsigned Term::estimateLength() const{
 	if(isStr()){
 		s.estimateLength();
@@ -295,10 +312,6 @@ void Term::prettyPrinting(std::stringstream& sb, unsigned depth, std::string ind
 	}else{
 		l.prettyPrinting(sb, depth, indent, lineEndings, lineWidth);
 	}
-}
-Term::~Term(){
-	if(isStr()) ((Stri*)this)->~Stri();
-	else ((List*)this)->~List();
 }
 void Term::stringify(std::stringstream& ss) const{
 	if(isStr()){
@@ -423,13 +436,13 @@ void List::prettyPrinting(std::stringstream& sb, unsigned depth, std::string ind
 		}
 	}
 }
-Term Stri::create(std::string&& str){
+Term Stri::create(std::string str){
 	Term ret;
 	Stri* rv = (Stri*)&ret;
 	*rv = Stri{1,0,0,str};
 	return ret;
 }
-Term List::create(std::vector<Term>&& ov){
+Term List::create(std::vector<Term> ov){
 	Term ret;
 	List* rv = (List*)&ret;
 	*rv = List{0,0,0,ov};
@@ -439,13 +452,15 @@ Term List::create(std::vector<Term>&& ov){
 
 
 namespace parsingDSL{
+	template<typename T>
+	using shp = std::shared_ptr<T>;
 	
 	template<typename T> struct dependent_false: std::false_type {};
 	template<typename T> struct Checker{
-		virtual T check(Term& v){throw "not implemented";} //throws TyperError
+		virtual T check(Term const& v) = 0; //throws TyperError
 	};
 	template<typename T> struct Termer{
-		virtual Term termify(T& v){throw "not implemented";}
+		virtual Term termify(T const& v) = 0;
 	};
 	template<typename T> struct Translator : Checker<T>, Termer<T>{
 	};
@@ -456,12 +471,12 @@ namespace parsingDSL{
 		virtual Term termify(T& v){ return tk.termify(v); }
 	};
 	
-	Term termifyBool(bool& v){
+	Term termifyBool(bool const& v){
 		return Stri::create(v?"true":"false");
 	}
-	bool checkBool(Term& v){
+	bool checkBool(Term const& v){
 		if(v.isStr()){
-			std::string& st = v.s.s;
+			std::string const& st = v.s.s;
 			if(st == "true" || st == "⊤") return true;
 			else if(st == "false" || st == "⊥") return false;
 			else throw TyperError(v, "expected a bool here");
@@ -476,52 +491,52 @@ namespace parsingDSL{
 		return checkBool(v);
 	}};
 	struct BoolTranslator : Translator<bool> {
-		virtual Term termify(bool& b){
+		virtual Term termify(bool const& b){
 			return termifyBool(b);
 		}
-		virtual bool check(Term& v){
+		virtual bool check(Term const& v){
 			return checkBool(v);
 		}
 	};
 	
-	Term termString(std::string& b){
+	Term termString(std::string const& b){
 		std::stringstream ss;
 		ss << b;
 		return Stri::create(ss.str());
 	}
-	std::string checkString(Term& v){
+	std::string checkString(Term const& v){
 		if(v.isStr()){
 			return v.s.s;
 		}else{
 			throw TyperError(v, "expected a string here");
 		}
 	}
-	struct StringTermer : Termer<std::string>{ virtual Term termify(std::string& b){
+	struct StringTermer : Termer<std::string>{ virtual Term termify(std::string const& b){
 		return termString(b);
 	}};
-	struct StringChecker : Checker<std::string>{ virtual std::string check(Term& v){
+	struct StringChecker : Checker<std::string>{ virtual std::string check(Term const& v){
 		return checkString(v);
 	}};
 	struct StringTranslator : Translator<std::string> {
-		std::string check(Term& v){ return checkString(v); }
-		Term termify(std::string& v){ return termString(v); }
+		std::string check(Term const& v){ return checkString(v); }
+		Term termify(std::string const& v){ return termString(v); }
 	};
 	
-	struct BlandTermer : Termer<Term>{ virtual Term termify(Term& b){ return b; }};
-	struct BlandChecker : Checker<Term>{ virtual Term check(Term& v){ return v; }};
+	struct BlandTermer : Termer<Term>{ virtual Term termify(Term const& b){ return b; }};
+	struct BlandChecker : Checker<Term>{ virtual Term check(Term const& v){ return v; }};
 	struct BlandTranslator : Translator<Term> {
-		Term termify(Term& b){ return b; }
-		Term check(Term& v){ return v; }
+		Term termify(Term const& b){ return b; }
+		Term check(Term const& v){ return v; }
 	};
 	
-	Term termInt(int& b){
+	Term termInt(int const& b){
 		std::stringstream ss;
 		ss << b;
 		return Stri::create(ss.str());
 	}
-	int checkInt(Term& v){
+	int checkInt(Term const& v){
 		if(v.isStr()){
-			std::string& st = v.s.s;
+			std::string const& st = v.s.s;
 			try{
 				return stoi(st);
 			}catch(std::invalid_argument e){
@@ -533,22 +548,22 @@ namespace parsingDSL{
 			throw TyperError(v, "expected a int here (is a list)");
 		}
 	}
-	struct IntTermer : Termer<int>{ virtual Term termify(int& b){ return termInt(b); } };
-	struct IntChecker : Checker<int>{ virtual int check(Term& v){ return checkInt(v); } };
+	struct IntTermer : Termer<int>{ virtual Term termify(int const& b){ return termInt(b); } };
+	struct IntChecker : Checker<int>{ virtual int check(Term const& v){ return checkInt(v); } };
 	struct IntTranslator : Translator<int> {
-		virtual Term termify(int& b){ return termInt(b); }
-		virtual int check(Term& v){ return checkInt(v); }
+		virtual Term termify(int const& b){ return termInt(b); }
+		virtual int check(Term const& v){ return checkInt(v); }
 	};
 	
 	
-	Term termifyFloat(float& b){
+	Term termifyFloat(float const& b){
 		std::stringstream ss;
 		ss << b;
 		return Stri::create(ss.str());
 	}
-	float checkFloat(Term& v){
+	float checkFloat(Term const& v){
 		if(v.isStr()){
-			std::string& st = v.s.s;
+			std::string const& st = v.s.s;
 			try{
 				return stof(st);
 			}catch(std::invalid_argument e){
@@ -560,17 +575,133 @@ namespace parsingDSL{
 			throw TyperError(v, "expected a float here (is a list)");
 		}
 	}
-	struct FloatTermer : Termer<float>{ virtual Term termify(float& b){ return termifyFloat(b); } };
-	struct FloatChecker : Checker<float>{ virtual float check(Term& v){ return checkFloat(v); } };
+	struct FloatTermer : Termer<float>{ virtual Term termify(float const& b){ return termifyFloat(b); } };
+	struct FloatChecker : Checker<float>{ virtual float check(Term const& v){ return checkFloat(v); } };
 	struct FloatTranslator : Translator<float> {
-		virtual Term termify(float& b){ return termifyFloat(b); }
-		virtual float check(Term& v){ return checkFloat(v); }
+		virtual Term termify(float const& b){ return termifyFloat(b); }
+		virtual float check(Term const& v){ return checkFloat(v); }
+	};
+	
+	template<typename A, typename B>
+	struct PairTranslator : Translator<std::pair<A,B>> {
+		shp<Translator<A>> at;
+		shp<Translator<B>> bt;
+		PairTranslator(shp<Translator<A>> at, shp<Translator<B>> bt):at(at),bt(bt) {}
+		virtual Term termify(std::pair<A,B> const& p){
+			return List::create(std::vector<Term>({at->termify(p.first), bt->termify(p.second)}));
+		}
+		virtual std::pair<A,B> check(Term const& v){
+			//todo, if both terms are erronious, the TyperError should pass along both errors
+			if(v.isStr()){
+				throw TyperError(v, "expected a pair here, but it's a string term");
+			}else if(v.l.l.size() < 2){
+				throw TyperError(v, "expected a pair here, but this term has less than 2 items");
+			}else if(v.l.l.size() > 2){
+				throw TyperError(v, "expected a pair here, but this term has more than 2 items");
+			}else{
+				A a = at->check(v.l.l[0]);
+				B b = bt->check(v.l.l[1]);
+				return std::make_pair(move(a), move(b));
+			}
+		}
+	};
+	
+	template<typename A, typename B>
+	struct StartAndSequence : Translator<std::pair<A,std::vector<B>>> {
+		shp<Translator<A>> at;
+		shp<Translator<B>> bt;
+		bool ignoreErroneousContent;
+		StartAndSequence(shp<Translator<A>> at, shp<Translator<B>> bt, bool ignoreErroneousContent = false):at(at),bt(bt),ignoreErroneousContent(ignoreErroneousContent) {}
+		virtual Term termify(std::pair<A,std::vector<B>> const& p){
+			std::vector<Term> ov;
+			ov.push_back(at.termify(p.first));
+			for(B const& as : p.second){
+				ov.push_back(bt.termify(as));
+			}
+			return List::create(move(ov));
+		}
+		virtual std::pair<A,std::vector<B>> check(Term const& v){
+			//todo, propagate all errors
+			if(v.isStr()){
+				throw TyperError(v, "expected a sequence here, but it's a string term");
+			}else{
+				std::vector<Term> const& vl = v.l.l;
+				if(vl.size() < 1){
+					throw TyperError(v, "expected at least one element here, but this sequence is empty");
+				}else{
+					std::vector<B> results;
+					std::vector<Error> errors;
+					A a = at.check(vl[0]);
+					for(int i=1; i<vl.size(); ++i){
+						try{
+							B res = bt->check(vl[i]);
+							if(errors.size() == 0){
+								results.push_back(std::move(res));
+							}
+						}catch(TyperError e){
+							if(!ignoreErroneousContent){
+								errors += e.errors;
+							}
+						}
+					}
+					if(errors.size()){
+						throw TyperError(std::move(errors));
+					}else{
+						return std::make_pair(move(a),move(results));
+					}
+				}
+			}
+		}
+	};
+	
+	template<typename B>
+	struct LiteralEnsurer : Translator<B> {
+		std::string aLiteral;
+		shp<Translator<std::pair<std::string,B>>> bt;
+		LiteralEnsurer(std::string aLiteral, shp<Translator<std::pair<std::string,B>>> bt):aLiteral(aLiteral), bt(bt) {}
+		virtual Term termify(B const& b){
+			return bt.termify(std::make_pair(aLiteral, b));
+		}
+		virtual B check(Term const& v){
+			//todo, detect and propagate all errors
+			if(v.isStr()){
+				throw TyperError(v, "expected a pair here, but it's a string term");
+			}else if(v.l.l.size() < 2){
+				throw TyperError(v, "expected a pair here, but this term has less than 2 items");
+			}else if(v.l.l.size() > 2){
+				throw TyperError(v, "expected a pair here, but this term has more than 2 items");
+			}else{
+				Term const& aterm = v.l.l[0];
+				if(aterm.isStr()){
+					if(aterm.s.s != aLiteral){
+						throw TyperError(v.l.l[0], std::string("expected \"")+aLiteral+"\" here");
+					}
+					B b = bt->check(v.l.l[1]);
+					return b;
+				}else{
+					throw TyperError(aterm, "expected a string literal, \""+aLiteral+"\", but it's a list term");
+				}
+			}
+		}
+	};
+	
+	template<typename A, typename B>
+	struct MapConverter : Translator<std::unordered_map<A,B>> {
+		shp<Translator<std::vector<std::pair<A,B>>>> st;
+		MapConverter(shp<Translator<std::vector<std::pair<A,B>>>> st):st(st) {}
+		Term termify(std::unordered_map<A,B> const& m){
+			return st->termify(std::vector<std::pair<A,B>>(m.begin(), m.end()));
+		}
+		std::unordered_map<A,B> check(Term const& v){
+			auto vec = st->check(v);
+			return std::unordered_map<A,B>(vec.begin(), vec.end());
+		}
 	};
 	
 	template<typename T>
 	Term sequenceTermify(
 		Termer<T>* innerTermer,
-		std::vector<T>& v
+		std::vector<T> const& v
 	){
 		std::vector<Term> ov;
 		for(T&& iv : v){
@@ -582,7 +713,7 @@ namespace parsingDSL{
 	std::vector<T> sequenceCheck(
 		Checker<T>* innerChecker,
 		bool ignoreErroneousContent,
-		Term& t
+		Term const& t
 	){
 		if(t.isStr()){
 			throw TyperError(t, "expected a sequence here");
@@ -610,32 +741,95 @@ namespace parsingDSL{
 		}
 	}
 	template<typename T> struct SequenceTermer : Termer<std::vector<T>> {
-		std::shared_ptr<Termer<T>> innerTermer;
-		SequenceTermer(std::shared_ptr<Termer<T>> it):innerTermer(it) {}
-		virtual Term termify(std::vector<T>& v){
+		shp<Termer<T>> innerTermer;
+		SequenceTermer(shp<Termer<T>> it):innerTermer(it) {}
+		virtual Term termify(std::vector<T> const& v){
 			return sequenceTermify(&*innerTermer, v);
 		}
 	};
 	template<typename T> struct SequenceChecker : Checker<std::vector<T>> {
-		std::shared_ptr<Checker<T>> innerChecker;
+		shp<Checker<T>> innerChecker;
 		bool ignoreErroneousContent;
-		SequenceChecker(std::shared_ptr<Checker<T>> ic, bool ignoreErroneousContent = false):innerChecker(ic), ignoreErroneousContent(ignoreErroneousContent) {}
-		virtual std::vector<T> check(Term& t){
+		SequenceChecker(shp<Checker<T>> ic, bool ignoreErroneousContent = false):innerChecker(ic), ignoreErroneousContent(ignoreErroneousContent) {}
+		virtual std::vector<T> check(Term const& t){
 			return sequenceCheck(&*innerChecker, ignoreErroneousContent, t);
 		}
 	};
 	template<typename T> struct SequenceTranslator : Translator<std::vector<T>> {
-		std::shared_ptr<Translator<T>> innerTranslator;
+		shp<Translator<T>> innerTranslator;
 		bool ignoreErroneousContent = false;
 		SequenceTranslator(
-			std::shared_ptr<Translator<T>> ic,
+			shp<Translator<T>> ic,
 			bool ignoreErroneousContent = false
 		):innerTranslator(ic), ignoreErroneousContent(ignoreErroneousContent) {}
-		virtual Term termify(std::vector<T>& v){
+		virtual Term termify(std::vector<T> const& v){
 			return sequenceTermify(&*innerTranslator, v);
 		}
-		virtual std::vector<T> check(Term& t){
+		virtual std::vector<T> check(Term const& t){
 			return sequenceCheck(&*innerTranslator, ignoreErroneousContent, t);
+		}
+	};
+	
+	
+	
+	template<typename A, typename B>
+	struct MapTranslator : Translator<std::unordered_map<A,B>> {
+		shp<Translator<A>> at;
+		shp<Translator<B>> bt;
+		bool ignoreErroneousContent = false;
+		MapTranslator(shp<Translator<A>> at, shp<Translator<B>> bt, bool ignoreErroneousContent=false):
+			at(at),
+			bt(bt),
+			ignoreErroneousContent(ignoreErroneousContent)
+		{}
+		Term termify(std::unordered_map<A,B> const& m){
+			std::vector<Term> ov;
+			for(auto& pair : m){
+				ov.push_back(List::create(std::vector<Term>({at->termify(pair.first), bt->termify(pair.second)})));
+			}
+			return List::create(std::move(ov));
+		}
+		std::unordered_map<A,B> check(Term const& v){
+			if(v.isStr()){
+				throw TyperError(v, "expected a map here, but it's a string term");
+			}else{
+				List& tl = (List&)v;
+				std::unordered_map<A,B> results;
+				std::vector<Error> errors;
+				for(Term& it : tl.l){
+					std::cout<<"tlis "<<it.isStr()<<std::endl;
+					if(it.isStr()){
+						errors.push_back(error(it, "expected a pair(in a map) here, but it's a string term")); continue;
+					}else if(it.l.l.size() < 2){
+						errors.push_back(error(it, "expected a pair(in a map) here, but this term has less than 2 items")); continue;
+					}else if(it.l.l.size() > 2){
+						errors.push_back(error(it, "expected a pair(in a map) here, but this term has more than 2 items")); continue;
+					}else{
+						try{
+							A a = at->check(it.l.l[0]);
+							try{
+								B b = bt->check(it.l.l[1]);
+								if(errors.size() == 0){
+									results.insert({std::move(a), std::move(b)});
+								}
+							}catch(TyperError e){
+								if(!ignoreErroneousContent){
+									errors += e.errors;
+								}
+							}
+						}catch(TyperError e){
+							if(!ignoreErroneousContent){
+								errors += e.errors;
+							}
+						}
+					}
+				}
+				if(errors.size()){
+					throw TyperError(std::move(errors));
+				}else{
+					return results;
+				}
+			}
 		}
 	};
 	
@@ -643,32 +837,41 @@ namespace parsingDSL{
 	template<typename T>
 	struct TaggedSequenceTranslator : Translator<std::vector<T>> {
 		std::string tag;
-		std::shared_ptr<Translator<T>> tt;
+		shp<Translator<T>> tt;
 		TaggedSequenceTranslator(
 			std::string tag,
-			std::shared_ptr<Translator<T>> tt
+			shp<Translator<T>> tt
 		):tag(tag),tt(tt){}
-		virtual std::vector<T> check(Term& v){
+		virtual std::vector<T> check(Term const& v){
 			if(v.isStr()){
 				throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\"");
 			}else{
-				if(v.l.l.size() >= 1){
+				std::vector<Term> const& fv = v.l.l;
+				if(fv.size() >= 1){
+					Term const& tagTerm = fv[0];
+					if(tagTerm.isStr()){
+						if(tagTerm.s.s != tag){
+							throw TyperError(tagTerm, std::string("expected tag to be \"")+tag+"\", but it's "+tagTerm.s.s);
+						}
+					}else{
+						throw TyperError(tagTerm, std::string("expected a tag term \"")+tag+"\" here, but it's a list");
+					}
 					std::vector<T> outv;
-					for(int i=1; i<v.l.l.size(); ++i){
-						outv.push_back(tt->check(outv[i]));
+					for(int i=1; i<fv.size(); ++i){
+						outv.push_back(tt->check(fv[i]));
 					}
 					return outv;
 				}else{
-					throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\". Sequence was empty");
+					throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\", but the sequence is empty");
 				}
 			}
 		}
-		virtual Term termify(std::vector<T>& v){
-			std::vector<T> cv;
+		virtual Term termify(std::vector<T> const& v){
+			std::vector<Term> cv;
 			cv.reserve(v.size()+1);
 			cv.push_back(Stri::create(std::string(tag)));
-			for(T& vt: vt){
-				cv.push_back(tt.termify(vt));
+			for(T const& vt: v){
+				cv.push_back(tt->termify(vt));
 			}
 			return List::create(cv);
 		}
@@ -690,28 +893,45 @@ namespace parsingDSL{
 	// };
 	
 	template<typename T>
-	static std::shared_ptr<Translator<std::vector<T>>> sequence(
-		std::shared_ptr<Translator<T>> tt
+	static shp<Translator<std::vector<T>>> listTrans(
+		shp<Translator<T>> tt
 	){
-		return std::shared_ptr<Translator<std::vector<T>>>(new SequenceTranslator<T>(std::move(tt)));
+		return shp<Translator<std::vector<T>>>(new SequenceTranslator<T>(std::move(tt)));
 	}
 	template<typename T>
-	static std::shared_ptr<Translator<std::vector<T>>> taggedSequence(
+	static shp<Translator<std::vector<T>>> taggedListTrans(
 		std::string tag,
-		std::shared_ptr<Translator<T>> tt
+		shp<Translator<T>> tt
 	){
-		return std::shared_ptr<Translator<std::vector<T>>>(new TaggedSequenceTranslator<T>(tag, tt));
+		return shp<Translator<std::vector<T>>>(new TaggedSequenceTranslator<T>(tag, tt));
 	}
-	static std::shared_ptr<Translator<bool>> boolTranslator(){
-		return std::shared_ptr<Translator<bool>>(new BoolTranslator()); }
-	static std::shared_ptr<Checker<bool>> boolChecker(){ return boolTranslator(); }
-	static std::shared_ptr<Termer<bool>> boolTermer(){ return boolTranslator(); }
-	static std::shared_ptr<Translator<std::string>> stringTranslator(){
-		return std::shared_ptr<Translator<std::string>>(new StringTranslator()); }
-	static std::shared_ptr<Translator<int>> intTranslater(){
-		return std::shared_ptr<Translator<int>>(new IntTranslator()); }
-	static std::shared_ptr<Translator<float>> floatTranslator(){
-		return std::shared_ptr<Translator<float>>(new FloatTranslator()); }
+	template<typename B>
+	static shp<Translator<B>> ensureTag(std::string const& literal, shp<Translator<std::pair<std::string,B>>> bt){
+		return new shp<Translator<B>>(LiteralEnsurer<B>(literal, bt)); }
+	template<typename A, typename B>
+	static shp<Translator<std::pair<A,std::vector<B>>>> separateStartAndList(shp<Translator<A>> at, shp<Translator<B>> bt){
+		return shp<Translator<std::pair<A,std::vector<B>>>>(new StartAndSequence<A,B>(at,bt)); }
+	template<typename A, typename B>
+	static shp<Translator<std::pair<A,B>>> pairTrans(shp<Translator<A>> at, shp<Translator<B>> bt){
+		return shp<Translator<std::pair<A,B>>>(new PairTranslator<A,B>(at,bt)); }
+	template<typename A, typename B>
+	static shp<Translator<std::unordered_map<A,B>>> mapConversion(shp<Translator<std::vector<std::pair<A,B>>>> v){
+		return shp<Translator<std::unordered_map<A,B>>>(new MapConverter<A,B>(std::move(v))); }
+	template<typename A, typename B>
+	static shp<Translator<std::unordered_map<A,B>>> mapTrans(shp<Translator<A>> at, shp<Translator<B>> bt){
+		return shp<Translator<std::unordered_map<A,B>>>(new MapTranslator<A,B>(at,bt)); }
+	static shp<Translator<Term>> identity(){
+		return shp<Translator<Term>>(new BlandTranslator()); }
+	static shp<Translator<bool>> boolTrans(){
+		return shp<Translator<bool>>(new BoolTranslator()); }
+	static shp<Checker<bool>> boolCheck(){ return boolTrans(); }
+	static shp<Termer<bool>> boolTerm(){ return boolTrans(); }
+	static shp<Translator<std::string>> stringTrans(){
+		return shp<Translator<std::string>>(new StringTranslator()); }
+	static shp<Translator<int>> intTrans(){
+		return shp<Translator<int>>(new IntTranslator()); }
+	static shp<Translator<float>> floatTrans(){
+		return shp<Translator<float>>(new FloatTranslator()); }
 	
 }
 
