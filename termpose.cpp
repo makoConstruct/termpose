@@ -131,7 +131,8 @@ struct Stri{
 	uint32_t line;
 	uint32_t column;
 	std::string s;
-	static Term create(std::string str);
+	static Stri create(std::string str);
+	static Stri create(std::string str, uint32_t line, uint32_t column);
 private:
 	void baseLineStringify(std::stringstream& ss) const;
 	void stringify(std::stringstream& ss) const;
@@ -145,7 +146,8 @@ struct List{
 	uint32_t line;
 	uint32_t column;
 	std::vector<Term> l;
-	static Term create(std::vector<Term> ov);
+	static List create(std::vector<Term> ov);
+	static List create(std::vector<Term> ov, uint32_t line, uint32_t column);
 private:
 	void stringify(std::stringstream& ss) const;
 	unsigned estimateLength() const;
@@ -167,6 +169,9 @@ public:
 	Term();
 	Term(Term&& other);
 	Term(Term const& other);
+	Term(List other);
+	Term(Stri other);
+	Term& operator=(Term const& other);
 	~Term();
 private:
 	void baseLineStringify(std::stringstream& ss) const;
@@ -283,13 +288,29 @@ Term::Term(Term const& other){
 		new (&ol->l) std::vector<Term>(fl->l);
 	}
 }
+Term::Term(List other){
+	List* ol = (List*)this;
+	ol->tag = other.tag;
+	ol->line = other.line;
+	ol->column = other.column;
+	new (&ol->l) std::vector<Term>(std::move(other.l));
+}
+Term::Term(Stri other){
+	Stri* os = (Stri*)this;
+	os->tag = other.tag;
+	os->line = other.line;
+	os->column = other.column;
+	new (&os->s) std::string(std::move(other.s));
+}
+Term& Term::operator=(Term const& other){
+	this->~Term();
+	new (this) Term(other);
+}
 Term::~Term(){
 	if(isStr()){
-		Stri* ts = (Stri*)this;
-		ts->s.std::string::~string();
+		((Stri*)this)->~Stri();
 	}else{
-		List* tl = (List*)this;
-		tl->l.std::vector<Term>::~vector();
+		((List*)this)->~List();
 	}
 }
 unsigned Term::estimateLength() const{
@@ -436,24 +457,20 @@ void List::prettyPrinting(std::stringstream& sb, unsigned depth, std::string ind
 		}
 	}
 }
-Term Stri::create(std::string str){
-	Term ret;
-	Stri* rv = (Stri*)&ret;
-	*rv = Stri{1,0,0,str};
-	return ret;
+Stri Stri::create(std::string str){ return Stri::create(str, 0,0); }
+Stri Stri::create(std::string str, uint32_t line, uint32_t column){
+	return Stri{1,line,column,str};
 }
-Term List::create(std::vector<Term> ov){
-	Term ret;
-	List* rv = (List*)&ret;
-	*rv = List{0,0,0,ov};
-	return ret;
+List List::create(std::vector<Term> iv){ return List::create(iv, 0,0); }
+List List::create(std::vector<Term> ov, uint32_t line, uint32_t column){
+	return List{0,line,column,ov};
 }
 
 
 
 namespace parsingDSL{
 	template<typename T>
-	using shp = std::shared_ptr<T>;
+	using rc = std::shared_ptr<T>;
 	
 	template<typename T> struct dependent_false: std::false_type {};
 	template<typename T> struct Checker{
@@ -549,7 +566,7 @@ namespace parsingDSL{
 		}
 	}
 	struct IntTermer : Termer<int>{ virtual Term termify(int const& b){ return termInt(b); } };
-	struct IntChecker : Checker<int>{ virtual int check(Term const& v){ return checkInt(v); } };
+	struct IntChecker : Checker<int>{ int check(Term const& v){ return checkInt(v); } };
 	struct IntTranslator : Translator<int> {
 		virtual Term termify(int const& b){ return termInt(b); }
 		virtual int check(Term const& v){ return checkInt(v); }
@@ -584,9 +601,9 @@ namespace parsingDSL{
 	
 	template<typename A, typename B>
 	struct PairTranslator : Translator<std::pair<A,B>> {
-		shp<Translator<A>> at;
-		shp<Translator<B>> bt;
-		PairTranslator(shp<Translator<A>> at, shp<Translator<B>> bt):at(at),bt(bt) {}
+		rc<Translator<A>> at;
+		rc<Translator<B>> bt;
+		PairTranslator(rc<Translator<A>> at, rc<Translator<B>> bt):at(at),bt(bt) {}
 		virtual Term termify(std::pair<A,B> const& p){
 			return List::create(std::vector<Term>({at->termify(p.first), bt->termify(p.second)}));
 		}
@@ -608,10 +625,10 @@ namespace parsingDSL{
 	
 	template<typename A, typename B>
 	struct StartAndSequence : Translator<std::pair<A,std::vector<B>>> {
-		shp<Translator<A>> at;
-		shp<Translator<B>> bt;
+		rc<Translator<A>> at;
+		rc<Translator<B>> bt;
 		bool ignoreErroneousContent;
-		StartAndSequence(shp<Translator<A>> at, shp<Translator<B>> bt, bool ignoreErroneousContent = false):at(at),bt(bt),ignoreErroneousContent(ignoreErroneousContent) {}
+		StartAndSequence(rc<Translator<A>> at, rc<Translator<B>> bt, bool ignoreErroneousContent = false):at(at),bt(bt),ignoreErroneousContent(ignoreErroneousContent) {}
 		virtual Term termify(std::pair<A,std::vector<B>> const& p){
 			std::vector<Term> ov;
 			ov.push_back(at.termify(p.first));
@@ -657,8 +674,8 @@ namespace parsingDSL{
 	template<typename B>
 	struct LiteralEnsurer : Translator<B> {
 		std::string aLiteral;
-		shp<Translator<std::pair<std::string,B>>> bt;
-		LiteralEnsurer(std::string aLiteral, shp<Translator<std::pair<std::string,B>>> bt):aLiteral(aLiteral), bt(bt) {}
+		rc<Translator<std::pair<std::string,B>>> bt;
+		LiteralEnsurer(std::string aLiteral, rc<Translator<std::pair<std::string,B>>> bt):aLiteral(aLiteral), bt(bt) {}
 		virtual Term termify(B const& b){
 			return bt.termify(std::make_pair(aLiteral, b));
 		}
@@ -687,8 +704,8 @@ namespace parsingDSL{
 	
 	template<typename A, typename B>
 	struct MapConverter : Translator<std::unordered_map<A,B>> {
-		shp<Translator<std::vector<std::pair<A,B>>>> st;
-		MapConverter(shp<Translator<std::vector<std::pair<A,B>>>> st):st(st) {}
+		rc<Translator<std::vector<std::pair<A,B>>>> st;
+		MapConverter(rc<Translator<std::vector<std::pair<A,B>>>> st):st(st) {}
 		Term termify(std::unordered_map<A,B> const& m){
 			return st->termify(std::vector<std::pair<A,B>>(m.begin(), m.end()));
 		}
@@ -741,25 +758,25 @@ namespace parsingDSL{
 		}
 	}
 	template<typename T> struct SequenceTermer : Termer<std::vector<T>> {
-		shp<Termer<T>> innerTermer;
-		SequenceTermer(shp<Termer<T>> it):innerTermer(it) {}
+		rc<Termer<T>> innerTermer;
+		SequenceTermer(rc<Termer<T>> it):innerTermer(it) {}
 		virtual Term termify(std::vector<T> const& v){
 			return sequenceTermify(&*innerTermer, v);
 		}
 	};
 	template<typename T> struct SequenceChecker : Checker<std::vector<T>> {
-		shp<Checker<T>> innerChecker;
+		rc<Checker<T>> innerChecker;
 		bool ignoreErroneousContent;
-		SequenceChecker(shp<Checker<T>> ic, bool ignoreErroneousContent = false):innerChecker(ic), ignoreErroneousContent(ignoreErroneousContent) {}
+		SequenceChecker(rc<Checker<T>> ic, bool ignoreErroneousContent = false):innerChecker(ic), ignoreErroneousContent(ignoreErroneousContent) {}
 		virtual std::vector<T> check(Term const& t){
 			return sequenceCheck(&*innerChecker, ignoreErroneousContent, t);
 		}
 	};
 	template<typename T> struct SequenceTranslator : Translator<std::vector<T>> {
-		shp<Translator<T>> innerTranslator;
+		rc<Translator<T>> innerTranslator;
 		bool ignoreErroneousContent = false;
 		SequenceTranslator(
-			shp<Translator<T>> ic,
+			rc<Translator<T>> ic,
 			bool ignoreErroneousContent = false
 		):innerTranslator(ic), ignoreErroneousContent(ignoreErroneousContent) {}
 		virtual Term termify(std::vector<T> const& v){
@@ -774,10 +791,10 @@ namespace parsingDSL{
 	
 	template<typename A, typename B>
 	struct MapTranslator : Translator<std::unordered_map<A,B>> {
-		shp<Translator<A>> at;
-		shp<Translator<B>> bt;
+		rc<Translator<A>> at;
+		rc<Translator<B>> bt;
 		bool ignoreErroneousContent = false;
-		MapTranslator(shp<Translator<A>> at, shp<Translator<B>> bt, bool ignoreErroneousContent=false):
+		MapTranslator(rc<Translator<A>> at, rc<Translator<B>> bt, bool ignoreErroneousContent=false):
 			at(at),
 			bt(bt),
 			ignoreErroneousContent(ignoreErroneousContent)
@@ -833,105 +850,310 @@ namespace parsingDSL{
 		}
 	};
 	
-	
+	template<class T>
+	std::vector<T> checkTaggedSequence(Term const& v, std::string& tag, Checker<T>* tt){
+		if(v.isStr()){
+			throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\"");
+		}else{
+			std::vector<Term> const& fv = v.l.l;
+			if(fv.size() >= 1){
+				Term const& tagTerm = fv[0];
+				if(tagTerm.isStr()){
+					if(tagTerm.s.s != tag){
+						throw TyperError(tagTerm, std::string("expected tag to be \"")+tag+"\", but it's \""+tagTerm.s.s+"\"");
+					}
+				}else{
+					throw TyperError(tagTerm, std::string("expected a tag term \"")+tag+"\" here, but it's a list");
+				}
+				std::vector<T> outv;
+				for(int i=1; i<fv.size(); ++i){
+					outv.push_back(tt->check(fv[i]));
+				}
+				return outv;
+			}else{
+				throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\", but the sequence is empty");
+			}
+		}
+	}
+	template<class T>
+	Term termifyTaggedSequence(std::vector<T> const& v, std::string& tag, Termer<T>* tt){
+		std::vector<Term> cv;
+		cv.reserve(v.size()+1);
+		cv.push_back(Stri::create(std::string(tag)));
+		for(T const& vt: v){
+			cv.push_back(tt->termify(vt));
+		}
+		return List::create(cv);
+	}
 	template<typename T>
 	struct TaggedSequenceTranslator : Translator<std::vector<T>> {
 		std::string tag;
-		shp<Translator<T>> tt;
+		rc<Translator<T>> tt;
 		TaggedSequenceTranslator(
 			std::string tag,
-			shp<Translator<T>> tt
+			rc<Translator<T>> tt
 		):tag(tag),tt(tt){}
 		virtual std::vector<T> check(Term const& v){
-			if(v.isStr()){
-				throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\"");
-			}else{
-				std::vector<Term> const& fv = v.l.l;
-				if(fv.size() >= 1){
-					Term const& tagTerm = fv[0];
-					if(tagTerm.isStr()){
-						if(tagTerm.s.s != tag){
-							throw TyperError(tagTerm, std::string("expected tag to be \"")+tag+"\", but it's "+tagTerm.s.s);
-						}
-					}else{
-						throw TyperError(tagTerm, std::string("expected a tag term \"")+tag+"\" here, but it's a list");
-					}
-					std::vector<T> outv;
-					for(int i=1; i<fv.size(); ++i){
-						outv.push_back(tt->check(fv[i]));
-					}
-					return outv;
-				}else{
-					throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\", but the sequence is empty");
-				}
-			}
+			return checkTaggedSequence(v,tag,&*tt);
 		}
 		virtual Term termify(std::vector<T> const& v){
-			std::vector<Term> cv;
-			cv.reserve(v.size()+1);
-			cv.push_back(Stri::create(std::string(tag)));
-			for(T const& vt: v){
-				cv.push_back(tt->termify(vt));
-			}
-			return List::create(cv);
+			return termifyTaggedSequence(v,tag,&*tt);
+		}
+	};
+	template<typename T>
+	struct TaggedSequenceChecker : Checker<std::vector<T>> {
+		std::string tag;
+		rc<Checker<T>> tt;
+		TaggedSequenceChecker(
+			std::string tag,
+			rc<Checker<T>> tt
+		):tag(tag),tt(tt){}
+		virtual std::vector<T> check(Term const& v){
+			return checkTaggedSequence(v,tag,&*tt);
+		}
+	};
+	template<typename T>
+	struct TaggedSequenceTermer : Termer<std::vector<T>> {
+		std::string tag;
+		rc<Termer<T>> tt;
+		TaggedSequenceTermer(
+			std::string tag,
+			rc<Termer<T>> tt
+		):tag(tag),tt(tt){}
+		virtual Term termify(std::vector<T> const& v){
+			return termifyTaggedSequence(v,tag,tt);
 		}
 	};
 	
-	// template<typename... T, Out>
-	// struct ReductionChecker : Checker<Out>{
-	// 	std::function<Out (...T)> f;
-	// 	ReductionChecker(std::function<Out (...T)> f):f(f){}
-	// 	Out check(Term& v){
-	// 		unsigned len = sizeof...(T);
-	// 		if(v.isStri()){
-	// 			stringstream ss;
-	// 			ss << "expected a tuple of length " << len << ". It was a string term.";
-	// 			throw new TyperError(t, ss.str());
+	// struct TagSlicing : Translator<List> {
+	// 	std::string tag;
+	// 	TagSlicing(
+	// 		std::string tag
+	// 	):tag(tag){}
+	// 	virtual List check(Term const& v){
+	// 		if(v.isStr()){
+	// 			throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\"");
+	// 		}else{
+	// 			std::vector<Term> const& fv = v.l.l;
+	// 			if(fv.size() >= 1){
+	// 				Term const& tagTerm = fv[0];
+	// 				if(tagTerm.isStr()){
+	// 					if(tagTerm.s.s != tag){
+	// 						throw TyperError(tagTerm, std::string("expected tag to be \"")+tag+"\", but it's "+tagTerm.s.s);
+	// 					}else{
+	// 						std::vector<Term> outv;
+	// 						for(int i=1; i<fv.size(); ++i){
+	// 							outv.push_back(fv[i]);
+	// 						}
+	// 						return List::create(outv, v.s.line + tagTerm.s.s.size(), v.s.column); //caveat, this will give slightly incorrect line numbers for many unicode strings, but I don't know who cares.
+	// 					}
+	// 				}else{
+	// 					throw TyperError(tagTerm, std::string("expected a tag term \"")+tag+"\" here, but it's a list");
+	// 				}
+	// 			}else{
+	// 				throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\", but the sequence is empty");
+	// 			}
 	// 		}
-			
+	// 	}
+	// 	virtual Term termify(List const& v){
+	// 		std::vector<Term> cv;
+	// 		cv.reserve(v.l.size()+1);
+	// 		cv.push_back(Stri::create(std::string(tag)));
+	// 		cv += v.l;
+	// 		return List::create(cv, v.line, v.column);
 	// 	}
 	// };
 	
-	template<typename T>
-	static shp<Translator<std::vector<T>>> listTrans(
-		shp<Translator<T>> tt
-	){
-		return shp<Translator<std::vector<T>>>(new SequenceTranslator<T>(std::move(tt)));
+	
+	template <class T>
+	T checkTagSlicing(Term const& v, std::string& tag, Checker<T>* inner){
+		if(v.isStr()){
+			throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\"");
+		}else{
+			std::vector<Term> const& fv = v.l.l;
+			if(fv.size() >= 1){
+				Term const& tagTerm = fv[0];
+				if(tagTerm.isStr()){
+					if(tagTerm.s.s != tag){
+						throw TyperError(tagTerm, std::string("expected tag to be \"")+tag+"\", but it's "+tagTerm.s.s);
+					}else{
+						std::vector<Term> outv;
+						for(int i=1; i<fv.size(); ++i){
+							outv.push_back(fv[i]);
+						}
+						return inner->check(List::create(outv, v.s.line + tagTerm.s.s.size(), v.s.column)); //caveat, this will give slightly incorrect line numbers for many unicode strings, but I don't know who cares.
+					}
+				}else{
+					throw TyperError(tagTerm, std::string("expected a tag term \"")+tag+"\" here, but it's a list");
+				}
+			}else{
+				throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\", but the sequence is empty");
+			}
+		}
+	}
+	
+	template<class T>
+	struct TagSlicingChecker : Checker<T> {
+		std::string tag;
+		rc<Checker<T>> inner;
+		TagSlicingChecker(
+			std::string tag,
+			rc<Checker<T>> inner
+		):tag(tag),inner(inner){}
+		virtual T check(Term const& v){
+			return checkTagSlicing(v,tag,&*inner);
+		}
+	};
+	
+	template<class T>
+	struct TagSlicing : Translator<T> {
+		std::string tag;
+		rc<Translator<T>> inner;
+		TagSlicing(
+			std::string tag,
+			rc<Translator<T>> inner
+		):tag(tag),inner(inner){}
+		virtual List check(Term const& v){
+			return checkTagSlicing(v,tag,&*inner);
+		}
+		virtual Term termify(T const& v){
+			Term rt = inner->termify(v);
+			std::vector<Term> cv;
+			Term tagTerm = Stri::create(std::string(tag));
+			if(rt.isStr()){
+				throw TyperError(0,0, "couldn't termify, tagSlice expects the content to be a list, but it termed to a string");
+				cv.reserve(2);
+				cv.push_back(std::move(tagTerm));
+				cv.push_back(std::move(rt));
+			}else{
+				cv.reserve(rt.l.l.size()+1);
+				cv.push_back(std::move(tagTerm));
+				cv += rt.l.l;
+			}
+			return List::create(std::move(cv));
+		}
+	};
+	
+	// I'm not sure I'll ever finish the following functionality. It seems completely impossible to get the return type of a lambda. Anything that would like to will utterly confound gcc. Clean simple functional APIs are impossible.
+	template<int... T>
+	struct seq {};
+
+	template<int... N>
+	struct count_to{};
+	template<int N, int... S>
+	struct count_to<N, S...> : count_to<N-1, N-1, S...> {};
+	template<int... S>
+	struct count_to<0, S...>{
+		typedef seq<S...> type;
+	};
+	template<typename F, typename... TArg>
+	auto of_result()-> decltype(std::declval<F>()(std::declval<TArg>()...));
+
+	template<class F, class... Args>
+	struct ReductionChecker : Checker<decltype(of_result<F,Args...>())>{
+	private:
+		template<int... Indices>
+		static inline auto map_args_into(
+			seq<Indices...>,
+			std::tuple<rc<Checker<Args>>...>& args,
+			List const& s,
+			F& f
+		)-> decltype(f(std::declval<Args>()...)){
+			return f(std::get<Indices>(args)->check(s.l[Indices])...);
+		}
+		static auto apply(std::tuple<rc<Checker<Args>>...>& args, List const& s, F& f)-> decltype(f(std::declval<Args>()...)) {
+			return map_args_into(typename count_to<sizeof...(Args)>::type(), args, s, f);
+		}
+		
+		std::tuple<rc<Checker<Args>>...> checkers;
+		F f;
+	public:
+		ReductionChecker(std::tuple<rc<Checker<Args>>...> checkers, F f):checkers(checkers),f(f){}
+		decltype(of_result<F,Args...>()) check(Term const& v){
+			unsigned len = sizeof...(Args);
+			if(v.isStr()){
+				std::stringstream ss;
+				ss << "expected a tuple of length " << len << ", but it's a string term";
+				throw TyperError(v, ss.str());
+			}else{
+				List const& s = v.l;
+				if(s.l.size() != len){
+					std::stringstream ss;
+					ss<<"expected a series of length "<<len<<", but the series was of length "<<s.l.size();
+					throw TyperError(s.line, s.column, ss.str());
+				}
+				return apply(checkers, s, f);
+			}
+		}
+	};
+	
+	template<typename F, typename... Ts>
+	static rc<Checker<decltype(of_result<F,Ts...>())>> combine(F fun, rc<Checker<Ts>>... mappers){
+		return rc<Checker<decltype(of_result<F,Ts...>())>>(new ReductionChecker<F,Ts...>(make_tuple(mappers...), fun));
 	}
 	template<typename T>
-	static shp<Translator<std::vector<T>>> taggedListTrans(
+	static rc<Translator<std::vector<T>>> sequenceTrans(
+		rc<Translator<T>> tt
+	){
+		return rc<Translator<std::vector<T>>>(new SequenceTranslator<T>(std::move(tt)));
+	}
+	template<typename T>
+	static rc<Checker<std::vector<T>>> sequenceTrans(
+		rc<Checker<T>> tt
+	){
+		return rc<Checker<std::vector<T>>>(new SequenceChecker<T>(std::move(tt)));
+	}
+	template<typename T>
+	static rc<Translator<std::vector<T>>> taggedSequence(
 		std::string tag,
-		shp<Translator<T>> tt
+		rc<Translator<T>> tt
 	){
-		return shp<Translator<std::vector<T>>>(new TaggedSequenceTranslator<T>(tag, tt));
+		return rc<Translator<std::vector<T>>>(new TaggedSequenceTranslator<T>(tag, tt));
 	}
+	template<typename T>
+	static rc<Checker<std::vector<T>>> taggedSequence(
+		std::string tag,
+		rc<Checker<T>> tt
+	){
+		return rc<Checker<std::vector<T>>>(new TaggedSequenceChecker<T>(tag, tt));
+	}
+	template<typename T>
+	static rc<Translator<T>> sliceOffTag(std::string tag, rc<Translator<T>> inner){
+		return rc<Translator<T>>(new TagSlicing<T>(tag, inner)); }
+	template<typename T>
+	static rc<Checker<T>> sliceOffTag(std::string tag, rc<Checker<T>> inner){
+		return rc<Checker<T>>(new TagSlicingChecker<T>(tag, inner)); }
 	template<typename B>
-	static shp<Translator<B>> ensureTag(std::string const& literal, shp<Translator<std::pair<std::string,B>>> bt){
-		return new shp<Translator<B>>(LiteralEnsurer<B>(literal, bt)); }
+	static rc<Translator<B>> ensureTag(std::string const& literal, rc<Translator<std::pair<std::string,B>>> bt){
+		return new rc<Translator<B>>(LiteralEnsurer<B>(literal, bt)); }
 	template<typename A, typename B>
-	static shp<Translator<std::pair<A,std::vector<B>>>> separateStartAndList(shp<Translator<A>> at, shp<Translator<B>> bt){
-		return shp<Translator<std::pair<A,std::vector<B>>>>(new StartAndSequence<A,B>(at,bt)); }
+	static rc<Translator<std::pair<A,std::vector<B>>>> separateStartAndList(rc<Translator<A>> at, rc<Translator<B>> bt){
+		return rc<Translator<std::pair<A,std::vector<B>>>>(new StartAndSequence<A,B>(at,bt)); }
 	template<typename A, typename B>
-	static shp<Translator<std::pair<A,B>>> pairTrans(shp<Translator<A>> at, shp<Translator<B>> bt){
-		return shp<Translator<std::pair<A,B>>>(new PairTranslator<A,B>(at,bt)); }
+	static rc<Translator<std::pair<A,B>>> pairTrans(rc<Translator<A>> at, rc<Translator<B>> bt){
+		return rc<Translator<std::pair<A,B>>>(new PairTranslator<A,B>(at,bt)); }
 	template<typename A, typename B>
-	static shp<Translator<std::unordered_map<A,B>>> mapConversion(shp<Translator<std::vector<std::pair<A,B>>>> v){
-		return shp<Translator<std::unordered_map<A,B>>>(new MapConverter<A,B>(std::move(v))); }
+	static rc<Translator<std::unordered_map<A,B>>> mapConversion(rc<Translator<std::vector<std::pair<A,B>>>> v){
+		return rc<Translator<std::unordered_map<A,B>>>(new MapConverter<A,B>(std::move(v))); }
 	template<typename A, typename B>
-	static shp<Translator<std::unordered_map<A,B>>> mapTrans(shp<Translator<A>> at, shp<Translator<B>> bt){
-		return shp<Translator<std::unordered_map<A,B>>>(new MapTranslator<A,B>(at,bt)); }
-	static shp<Translator<Term>> identity(){
-		return shp<Translator<Term>>(new BlandTranslator()); }
-	static shp<Translator<bool>> boolTrans(){
-		return shp<Translator<bool>>(new BoolTranslator()); }
-	static shp<Checker<bool>> boolCheck(){ return boolTrans(); }
-	static shp<Termer<bool>> boolTerm(){ return boolTrans(); }
-	static shp<Translator<std::string>> stringTrans(){
-		return shp<Translator<std::string>>(new StringTranslator()); }
-	static shp<Translator<int>> intTrans(){
-		return shp<Translator<int>>(new IntTranslator()); }
-	static shp<Translator<float>> floatTrans(){
-		return shp<Translator<float>>(new FloatTranslator()); }
+	static rc<Translator<std::unordered_map<A,B>>> mapTrans(rc<Translator<A>> at, rc<Translator<B>> bt){
+		return rc<Translator<std::unordered_map<A,B>>>(new MapTranslator<A,B>(at,bt)); }
+	static rc<Translator<Term>> identity(){
+		return rc<Translator<Term>>(new BlandTranslator()); }
+	static rc<Translator<bool>> boolTrans(){
+		return rc<Translator<bool>>(new BoolTranslator()); }
+	static rc<Checker<bool>> boolCheck(){ return boolTrans(); }
+	static rc<Termer<bool>> boolTerm(){ return boolTrans(); }
+	static rc<Translator<std::string>> stringTrans(){
+		return rc<Translator<std::string>>(new StringTranslator()); }
+	static rc<Translator<int>> intTrans(){
+		return rc<Translator<int>>(new IntTranslator()); }
+	static rc<Checker<std::string>> stringCheck(){
+		return rc<Checker<std::string>>(new StringChecker()); }
+	static rc<Checker<int>> intCheck(){
+		return rc<Checker<int>>(new IntChecker()); }
+	static rc<Translator<float>> floatTrans(){
+		return rc<Translator<float>>(new FloatTranslator()); }
 	
 }
 
