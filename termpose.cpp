@@ -1,4 +1,4 @@
-
+// 
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -171,6 +171,8 @@ public:
 	Term(Term const& other);
 	Term(List other);
 	Term(Stri other);
+	Term(char const* other);
+	Term(std::string other);
 	Term& operator=(Term const& other);
 	~Term();
 private:
@@ -287,6 +289,16 @@ Term::Term(Term const& other){
 		ol->column = fl->column;
 		new (&ol->l) std::vector<Term>(fl->l);
 	}
+}
+Term::Term(char const* other){
+	new (this) Term(std::string(other));
+}
+Term::Term(std::string other){
+	Stri* os = (Stri*)this;
+	os->tag = 1;
+	os->line = 0;
+	os->column = 0;
+	new (&os->s) std::string(std::move(other));
 }
 Term::Term(List other){
 	List* ol = (List*)this;
@@ -466,6 +478,20 @@ List List::create(std::vector<Term> ov, uint32_t line, uint32_t column){
 	return List{0,line,column,ov};
 }
 
+
+template<class... Rest>
+inline static void load_terms(std::vector<Term>& o, Term t, Rest... rest){
+	o.push_back(t);
+	load_terms(o,rest...);
+}
+inline static void load_terms(std::vector<Term>& o){}
+
+template<class... Rest>
+static Term terms(Rest... rest){
+	std::vector<Term> o;
+	load_terms(o, rest...);
+	return List::create(o);
+}
 
 
 namespace parsingDSL{
@@ -1013,7 +1039,7 @@ namespace parsingDSL{
 			std::string tag,
 			rc<Translator<T>> inner
 		):tag(tag),inner(inner){}
-		virtual List check(Term const& v){
+		virtual T check(Term const& v){
 			return checkTagSlicing(v,tag,&*inner);
 		}
 		virtual Term termify(T const& v){
@@ -1034,7 +1060,7 @@ namespace parsingDSL{
 		}
 	};
 	
-	// I'm not sure I'll ever finish the following functionality. It seems completely impossible to get the return type of a lambda. Anything that would like to will utterly confound gcc. Clean simple functional APIs are impossible.
+	// This insanity is the first and last thing I ever did with C++'s variadic templates. It was as if they provided the bare minimum functionality with no understanding of what primitives people would need in order to use it elegantly.
 	template<int... T>
 	struct seq {};
 
@@ -1048,48 +1074,165 @@ namespace parsingDSL{
 	};
 	template<typename F, typename... TArg>
 	auto of_result()-> decltype(std::declval<F>()(std::declval<TArg>()...));
-
+	
+	template<typename F, class... Args, int... Indices>
+	static inline auto check_terms_through_proper(
+		seq<Indices...>,
+		std::tuple<Checker<Args>*...>& args,
+		List const& s,
+		F& f
+	)-> decltype(f(std::declval<Args>()...)){
+		return f(std::get<Indices>(args)->check(s.l[Indices])...);
+	}
+	template<typename F, class... Args, int... Indices>
+	static auto check_terms_through(std::tuple<Checker<Args>*...>& args, List const& s, F& f)-> decltype(f(std::declval<Args>()...)) {
+		return check_terms_through_proper(typename count_to<sizeof...(Args)>::type(), args, s, f);
+	}
+	template<int... Indices, class... Types>
+	static inline auto as_checker_ptrs_proper(
+		seq<Indices...>,
+		std::tuple<rc<Checker<Types>>...> const& args
+	)-> std::tuple<Checker<Types>*...> {
+		return std::tuple<Checker<Types>*...>(&*std::get<Indices>(args)...);
+	}
+	template<class... Types>
+	static auto as_checker_ptrs(std::tuple<rc<Checker<Types>>...> const& args)-> std::tuple<Checker<Types>*...> {
+		return as_checker_ptrs_proper(typename count_to<sizeof...(Types)>::type(), args);
+	}
+	template<class F, class... Args>
+	static auto checkReduction(Term const& v, F& f, std::tuple<Checker<Args>*...>& checkers)-> decltype(of_result<F,Args...>()) {
+		unsigned len = sizeof...(Args);
+		if(v.isStr()){
+			std::stringstream ss;
+			ss << "expected a tuple of length " << len << ", but it's a string term";
+			throw TyperError(v, ss.str());
+		}else{
+			List const& s = v.l;
+			if(s.l.size() != len){
+				std::stringstream ss;
+				ss<<"expected a series of length "<<len<<", but the series was of length "<<s.l.size();
+				throw TyperError(s.line, s.column, ss.str());
+			}
+			return check_terms_through(checkers, s, f);
+		}
+	}
+	
 	template<class F, class... Args>
 	struct ReductionChecker : Checker<decltype(of_result<F,Args...>())>{
 	private:
-		template<int... Indices>
-		static inline auto map_args_into(
-			seq<Indices...>,
-			std::tuple<rc<Checker<Args>>...>& args,
-			List const& s,
-			F& f
-		)-> decltype(f(std::declval<Args>()...)){
-			return f(std::get<Indices>(args)->check(s.l[Indices])...);
-		}
-		static auto apply(std::tuple<rc<Checker<Args>>...>& args, List const& s, F& f)-> decltype(f(std::declval<Args>()...)) {
-			return map_args_into(typename count_to<sizeof...(Args)>::type(), args, s, f);
-		}
-		
 		std::tuple<rc<Checker<Args>>...> checkers;
 		F f;
 	public:
 		ReductionChecker(std::tuple<rc<Checker<Args>>...> checkers, F f):checkers(checkers),f(f){}
 		decltype(of_result<F,Args...>()) check(Term const& v){
-			unsigned len = sizeof...(Args);
-			if(v.isStr()){
-				std::stringstream ss;
-				ss << "expected a tuple of length " << len << ", but it's a string term";
-				throw TyperError(v, ss.str());
-			}else{
-				List const& s = v.l;
-				if(s.l.size() != len){
-					std::stringstream ss;
-					ss<<"expected a series of length "<<len<<", but the series was of length "<<s.l.size();
-					throw TyperError(s.line, s.column, ss.str());
-				}
-				return apply(checkers, s, f);
-			}
+			std::tuple<Checker<Args>*...> checkerPtrs = as_checker_ptrs(checkers);
+			return checkReduction(v, f, checkerPtrs);
+		}
+	};
+	
+	
+	
+	template<int N, class... Args>
+	struct ReductionTermingMapThrough{
+		inline static void map_through(
+			std::tuple<Args...>& res,
+			std::tuple<Termer<Args>*...>& termers,
+			std::vector<Term>& out
+		){
+			out.push_back(std::get<N-1>(termers)->termify(std::get<N-1>(res)));
+			ReductionTermingMapThrough<N-1,Args...>::map_through(res,termers,out);
+		}
+	};
+	template<class... Args>
+	struct ReductionTermingMapThrough<0,Args...>{
+		inline static void map_through(
+			std::tuple<Args...>& res,
+			std::tuple<Termer<Args>*...>& termers,
+			std::vector<Term>& out
+		){}
+	};
+	template<class F, class T, class... Args>
+	struct ReductionTermer : Termer<T>{
+	private:
+		auto resolve(std::tuple<Args...>& result)-> std::vector<Term> {
+			std::vector<Term> out;
+			ReductionTermingMapThrough<sizeof...(Args), Args...>::map_through(result, termers, out);
+			return out;
+		}
+		
+		std::tuple<rc<Termer<Args>>...> termers;
+		F f;
+	public:
+		ReductionTermer(std::tuple<rc<Checker<Args>>...> termers, F f):termers(termers),f(f){}
+		Term termify(T const& v){
+			return List::create(resolve(f(v)));
+		}
+	};
+	
+	
+	
+	template<class Reduction, class Expansion, class... Types>
+	struct ReductionTranslator : Translator<decltype(of_result<Reduction,Types...>())> {
+		Reduction rf;
+		Expansion ef;
+		std::tuple<rc<Translator<Types>>...> translators;
+		
+		template<int... Indices>
+		static inline auto get_as_checkers(
+			seq<Indices...>,
+			std::tuple<rc<Translator<Types>>...>& args
+		)-> std::tuple<Checker<Types>*...> {
+			return std::tuple<Checker<Types>*...>(&*std::get<Indices>(args)...);
+		}
+		static auto as_checkers(std::tuple<rc<Translator<Types>>...>& args)-> std::tuple<Checker<Types>*...> {
+			return get_as_checkers(typename count_to<sizeof...(Types)>::type(), args);
+		}
+		
+		template<int... Indices>
+		static inline auto get_as_termers(
+			seq<Indices...>,
+			std::tuple<rc<Translator<Types>>...>& args
+		)-> std::tuple<Termer<Types>*...> {
+			return std::tuple<Termer<Types>*...>(&*std::get<Indices>(args)...);
+		}
+		static auto as_termers(std::tuple<rc<Translator<Types>>...>& args)-> std::tuple<Termer<Types>*...> {
+			return get_as_termers(typename count_to<sizeof...(Types)>::type(), args);
+		}
+		
+		ReductionTranslator(Reduction rf, Expansion ef, std::tuple<rc<Translator<Types>>...> translators):
+			rf(rf), ef(ef), translators(translators)
+		{}
+		auto translate_and_vectorize(std::tuple<Types...>& result)-> std::vector<Term> {
+			std::vector<Term> out;
+			auto termers = as_termers(translators);
+			ReductionTermingMapThrough<sizeof...(Types), Types...>::map_through(result, termers, out);
+			return out;
+		}
+		
+		Term termify(decltype(of_result<Reduction,Types...>()) const& v){
+			std::tuple<Types...> res = ef(v);
+			return List::create(translate_and_vectorize(res));
+		}
+		decltype(of_result<Reduction,Types...>()) check(Term const& v){
+			std::tuple<Checker<Types>*...> ts = as_checkers(translators);
+			return checkReduction(v, rf, ts);
 		}
 	};
 	
 	template<typename F, typename... Ts>
-	static rc<Checker<decltype(of_result<F,Ts...>())>> combine(F fun, rc<Checker<Ts>>... mappers){
+	static rc<Checker<decltype(of_result<F,Ts...>())>> combineCheck(F fun, rc<Checker<Ts>>... mappers){
 		return rc<Checker<decltype(of_result<F,Ts...>())>>(new ReductionChecker<F,Ts...>(make_tuple(mappers...), fun));
+	}
+	
+	template<typename Reducer, typename Input, typename... Ts>
+	static rc<Termer<Input>> combineTerm(Reducer fr, rc<Termer<Ts>>... mappers){
+		return rc<Termer<Input>>(new ReductionTermer<Reducer,Input,Ts...>(make_tuple(mappers...), fr));
+	}
+	template<class Reduction, class Expansion, class... Ts>
+	static rc<Translator<decltype(of_result<Reduction,Ts...>())>> combineTrans(Reduction fr, Expansion fe, rc<Translator<Ts>>... mappers){
+		return rc<Translator<decltype(of_result<Reduction,Ts...>())>>(
+			new ReductionTranslator<Reduction,Expansion,Ts...>(fr,fe,make_tuple(mappers...))
+		);
 	}
 	template<typename T>
 	static rc<Translator<std::vector<T>>> sequenceTrans(
