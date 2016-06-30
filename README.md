@@ -88,7 +88,7 @@ Further introduction: https://github.com/makoConstruct/termpose/wiki/Introducing
 | Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | C | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
 | Rust | Basic support + custom Codings. | [Rust Source](https://github.com/makoConstruct/termpose/blob/master/rust/src/lib.rs) |
-| C++ | Term API is complete. Translation combinators partially implemented. Help wanted for variadic template parts. | [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) [testCPPTermpse.cpp](https://github.com/makoConstruct/termpose/blob/master/testCPPTermpose.cpp) |
+| C++ | Term API is complete. Translation combinators partially implemented. Help wanted for variadic template parts. | [Intro](https://github.com/makoConstruct/termpose/blob/master/cppintro.md), [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
 
 
 ##Tell us about the implementation?
