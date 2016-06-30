@@ -697,36 +697,60 @@ namespace parsingDSL{
 		}
 	};
 	
+	
 	template<typename B>
-	struct LiteralEnsurer : Translator<B> {
-		std::string aLiteral;
-		rc<Translator<std::pair<std::string,B>>> bt;
-		LiteralEnsurer(std::string aLiteral, rc<Translator<std::pair<std::string,B>>> bt):aLiteral(aLiteral), bt(bt) {}
-		virtual Term termify(B const& b){
-			return bt.termify(std::make_pair(aLiteral, b));
-		}
-		virtual B check(Term const& v){
-			//todo, detect and propagate all errors
-			if(v.isStr()){
-				throw TyperError(v, "expected a pair here, but it's a string term");
-			}else if(v.l.l.size() < 2){
-				throw TyperError(v, "expected a pair here, but this term has less than 2 items");
-			}else if(v.l.l.size() > 2){
-				throw TyperError(v, "expected a pair here, but this term has more than 2 items");
-			}else{
-				Term const& aterm = v.l.l[0];
-				if(aterm.isStr()){
-					if(aterm.s.s != aLiteral){
-						throw TyperError(v.l.l[0], std::string("expected \"")+aLiteral+"\" here");
-					}
-					B b = bt->check(v.l.l[1]);
-					return b;
-				}else{
-					throw TyperError(aterm, "expected a string literal, \""+aLiteral+"\", but it's a list term");
+	B checkEnsuredLiteral(Term const& v, std::string& aLiteral, Checker<B>* bt){
+		//todo, detect and propagate all errors
+		if(v.isStr()){
+			throw TyperError(v, "expected a pair here, but it's a string term");
+		}else if(v.l.l.size() < 2){
+			throw TyperError(v, "expected a pair here, but this term has less than 2 items");
+		}else if(v.l.l.size() > 2){
+			throw TyperError(v, "expected a pair here, but this term has more than 2 items");
+		}else{
+			Term const& aterm = v.l.l[0];
+			if(aterm.isStr()){
+				if(aterm.s.s != aLiteral){
+					throw TyperError(v.l.l[0], std::string("expected \"")+aLiteral+"\" here");
 				}
+				B b = bt->check(v.l.l[1]);
+				return b;
+			}else{
+				throw TyperError(aterm, "expected a string literal, \""+aLiteral+"\", but it's a list term");
 			}
 		}
+	}
+	template<typename B>
+	struct LiteralEnsureTranslator : Translator<B> {
+		std::string aLiteral;
+		rc<Translator<B>> bt;
+		LiteralEnsureTranslator(std::string aLiteral, rc<Translator<B>> bt):aLiteral(aLiteral), bt(bt) {}
+		virtual Term termify(B const& b){
+			return List::create(std::vector<Term>{Stri::create(aLiteral), bt->termify(b)});
+		}
+		virtual B check(Term const& v){
+			return checkEnsuredLiteral(v,aLiteral,&*bt);
+		}
 	};
+	template<typename B>
+	struct LiteralEnsureChecker : Checker<B> {
+		std::string aLiteral;
+		rc<Checker<B>> bt;
+		LiteralEnsureChecker(std::string aLiteral, rc<Checker<B>> bt):aLiteral(aLiteral), bt(bt) {}
+		virtual B check(Term const& v){
+			return checkEnsuredLiteral(v,aLiteral,&*bt);
+		}
+	};
+	template<typename B>
+	struct LiteralEnsureTermer : Termer<B> {
+		std::string aLiteral;
+		rc<Termer<B>> bt;
+		LiteralEnsureTermer(std::string aLiteral, rc<Termer<B>> bt):aLiteral(aLiteral), bt(bt) {}
+		virtual Term termify(B const& b){
+			return List::create(std::vector<Term>{Stri::create(aLiteral), bt.termify(b)});
+		}
+	};
+	
 	
 	template<typename A, typename B>
 	struct MapConverter : Translator<std::unordered_map<A,B>> {
@@ -951,46 +975,7 @@ namespace parsingDSL{
 		}
 	};
 	
-	// struct TagSlicing : Translator<List> {
-	// 	std::string tag;
-	// 	TagSlicing(
-	// 		std::string tag
-	// 	):tag(tag){}
-	// 	virtual List check(Term const& v){
-	// 		if(v.isStr()){
-	// 			throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\"");
-	// 		}else{
-	// 			std::vector<Term> const& fv = v.l.l;
-	// 			if(fv.size() >= 1){
-	// 				Term const& tagTerm = fv[0];
-	// 				if(tagTerm.isStr()){
-	// 					if(tagTerm.s.s != tag){
-	// 						throw TyperError(tagTerm, std::string("expected tag to be \"")+tag+"\", but it's "+tagTerm.s.s);
-	// 					}else{
-	// 						std::vector<Term> outv;
-	// 						for(int i=1; i<fv.size(); ++i){
-	// 							outv.push_back(fv[i]);
-	// 						}
-	// 						return List::create(outv, v.s.line + tagTerm.s.s.size(), v.s.column); //caveat, this will give slightly incorrect line numbers for many unicode strings, but I don't know who cares.
-	// 					}
-	// 				}else{
-	// 					throw TyperError(tagTerm, std::string("expected a tag term \"")+tag+"\" here, but it's a list");
-	// 				}
-	// 			}else{
-	// 				throw TyperError(v, std::string("expected a sequence starting with \"")+tag+"\", but the sequence is empty");
-	// 			}
-	// 		}
-	// 	}
-	// 	virtual Term termify(List const& v){
-	// 		std::vector<Term> cv;
-	// 		cv.reserve(v.l.size()+1);
-	// 		cv.push_back(Stri::create(std::string(tag)));
-	// 		cv += v.l;
-	// 		return List::create(cv, v.line, v.column);
-	// 	}
-	// };
-	
-	
+
 	template <class T>
 	T checkTagSlicing(Term const& v, std::string& tag, Checker<T>* inner){
 		if(v.isStr()){
@@ -1004,10 +989,11 @@ namespace parsingDSL{
 						throw TyperError(tagTerm, std::string("expected tag to be \"")+tag+"\", but it's "+tagTerm.s.s);
 					}else{
 						std::vector<Term> outv;
+						outv.reserve(fv.size()-1);
 						for(int i=1; i<fv.size(); ++i){
 							outv.push_back(fv[i]);
 						}
-						return inner->check(List::create(outv, v.s.line + tagTerm.s.s.size(), v.s.column)); //caveat, this will give slightly incorrect line numbers for many unicode strings, but I don't know who cares.
+						return inner->check(List::create(outv, v.l.line, v.l.column + tagTerm.s.s.size())); //caveat, this will give slightly incorrect line numbers for many unicode strings, but I don't know who cares.
 					}
 				}else{
 					throw TyperError(tagTerm, std::string("expected a tag term \"")+tag+"\" here, but it's a list");
@@ -1130,21 +1116,19 @@ namespace parsingDSL{
 		}
 	};
 	
-	
-	
-	template<int N, class... Args>
+	template<int N, int I, class... Args>
 	struct ReductionTermingMapThrough{
 		inline static void map_through(
 			std::tuple<Args...>& res,
 			std::tuple<Termer<Args>*...>& termers,
 			std::vector<Term>& out
 		){
-			out.push_back(std::get<N-1>(termers)->termify(std::get<N-1>(res)));
-			ReductionTermingMapThrough<N-1,Args...>::map_through(res,termers,out);
+			out.push_back(std::get<I>(termers)->termify(std::get<I>(res)));
+			ReductionTermingMapThrough<N,I+1,Args...>::map_through(res,termers,out);
 		}
 	};
-	template<class... Args>
-	struct ReductionTermingMapThrough<0,Args...>{
+	template<int N, class... Args>
+	struct ReductionTermingMapThrough<N,N,Args...>{
 		inline static void map_through(
 			std::tuple<Args...>& res,
 			std::tuple<Termer<Args>*...>& termers,
@@ -1156,7 +1140,7 @@ namespace parsingDSL{
 	private:
 		auto resolve(std::tuple<Args...>& result)-> std::vector<Term> {
 			std::vector<Term> out;
-			ReductionTermingMapThrough<sizeof...(Args), Args...>::map_through(result, termers, out);
+			ReductionTermingMapThrough<sizeof...(Args),0, Args...>::map_through(result, termers, out);
 			return out;
 		}
 		
@@ -1168,8 +1152,6 @@ namespace parsingDSL{
 			return List::create(resolve(f(v)));
 		}
 	};
-	
-	
 	
 	template<class Reduction, class Expansion, class... Types>
 	struct ReductionTranslator : Translator<decltype(of_result<Reduction,Types...>())> {
@@ -1205,7 +1187,7 @@ namespace parsingDSL{
 		auto translate_and_vectorize(std::tuple<Types...>& result)-> std::vector<Term> {
 			std::vector<Term> out;
 			auto termers = as_termers(translators);
-			ReductionTermingMapThrough<sizeof...(Types), Types...>::map_through(result, termers, out);
+			ReductionTermingMapThrough<sizeof...(Types),0, Types...>::map_through(result, termers, out);
 			return out;
 		}
 		
@@ -1246,6 +1228,7 @@ namespace parsingDSL{
 	){
 		return rc<Checker<std::vector<T>>>(new SequenceChecker<T>(std::move(tt)));
 	}
+	//functionally equivalent to sliceOffTag(tag, sequenceTrans(tt)).
 	template<typename T>
 	static rc<Translator<std::vector<T>>> taggedSequence(
 		std::string tag,
@@ -1260,15 +1243,23 @@ namespace parsingDSL{
 	){
 		return rc<Checker<std::vector<T>>>(new TaggedSequenceChecker<T>(tag, tt));
 	}
+	//requires that the first element in the term be tag, and and passes down a copy of the list one shorter.
 	template<typename T>
 	static rc<Translator<T>> sliceOffTag(std::string tag, rc<Translator<T>> inner){
 		return rc<Translator<T>>(new TagSlicing<T>(tag, inner)); }
 	template<typename T>
 	static rc<Checker<T>> sliceOffTag(std::string tag, rc<Checker<T>> inner){
 		return rc<Checker<T>>(new TagSlicingChecker<T>(tag, inner)); }
+	//requires that the first element in the term be `literal`, and passes the second element through to bt.
 	template<typename B>
-	static rc<Translator<B>> ensureTag(std::string const& literal, rc<Translator<std::pair<std::string,B>>> bt){
-		return new rc<Translator<B>>(LiteralEnsurer<B>(literal, bt)); }
+	static rc<Translator<B>> ensureTag(std::string literal, rc<Translator<B>> bt){
+		return rc<Translator<B>>(new LiteralEnsureTranslator<B>(literal, bt)); }
+	template<typename B>
+	static rc<Checker<B>> ensureTag(std::string literal, rc<Checker<B>> bt){
+		return rc<Checker<B>>(new LiteralEnsureChecker<B>(literal, bt)); }
+	template<typename B>
+	static rc<Termer<B>> ensureTag(std::string literal, rc<Termer<B>> bt){
+		return rc<Termer<B>>(new LiteralEnsureTermer<B>(literal, bt)); }
 	template<typename A, typename B>
 	static rc<Translator<std::pair<A,std::vector<B>>>> separateStartAndList(rc<Translator<A>> at, rc<Translator<B>> bt){
 		return rc<Translator<std::pair<A,std::vector<B>>>>(new StartAndSequence<A,B>(at,bt)); }
@@ -1297,6 +1288,8 @@ namespace parsingDSL{
 		return rc<Checker<int>>(new IntChecker()); }
 	static rc<Translator<float>> floatTrans(){
 		return rc<Translator<float>>(new FloatTranslator()); }
+	static rc<Checker<float>> floatCheck(){
+		return rc<Checker<float>>(new FloatChecker()); }
 	
 }
 
