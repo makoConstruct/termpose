@@ -85,18 +85,14 @@ int main(int argc, char const *argv[]){
 	{
 		using namespace termpose::parsingDSL;
 		
-		//constructing the 
-		auto productDataChecker = taggedSequence("products",
+		vector<Product> products = taggedSequence("products",
 			combineCheck(
 				[](string name, float cost, string description){
 					return Product(name, cost, description); },
 				stringCheck(),
 				ensureTag("cost", floatCheck()),
-				ensureTag("description", stringCheck()) ) );
-		
-		//and here it is, the big play,
-		vector<Product> products = productDataChecker->check(data);
-		//and it's as simple as that, folks.
+				ensureTag("description", stringCheck()) )
+		)->check(data);
 		
 		cout<< products[1].description <<endl;
 	}
@@ -105,14 +101,14 @@ int main(int argc, char const *argv[]){
 }
 ```
 
-But, why limit ourselves to a `Checker<vector<Product>>`, when we can have a `Translator<vector<Product>>` that goes both ways.
+But, why limit ourselves to a `Checker<vector<Product>>`, when we can have a `Translator<vector<Product>>` that goes both ways?
 
 ```C++
 {
 	using namespace termpose::parsingDSL;
 	
 	//constructing the 
-	auto productDataChecker = taggedSequence("products",
+	shared_ptr<Translator<vector<Product>>> productDataChecker = taggedSequence("products",
 		combineTrans(
 			[](string name, float cost, string description){
 				return Product(name, cost, description); },

@@ -18,32 +18,34 @@ namespace ctermpose{
 namespace termpose{
 
 
-template <typename T>
-std::vector<T> operator+(const std::vector<T> &A, const std::vector<T> &B)
-{
-	std::vector<T> AB;
-	AB.reserve( A.size() + B.size() );
-	AB.insert( AB.end(), A.begin(), A.end() );
-	AB.insert( AB.end(), B.begin(), B.end() );
-	return AB;
-}
-
-template <typename T>
-std::vector<T> &operator+=(std::vector<T> &A, const std::vector<T> &B)
-{
-	A.reserve( A.size() + B.size() );
-	A.insert( A.end(), B.begin(), B.end() );
-	return A;
-}
-
-// hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh  
-template<typename T, typename B> std::vector<B> map(std::vector<T>& v, std::function<B (T)> f){
-	unsigned ei = v.size();
-	std::vector<B> ret(ei);
-	for(int i=0; i<ei; ++i){
-		ret[i] = f(v[i]);
+namespace detail{
+	template <typename T>
+	std::vector<T> operator+(const std::vector<T> &A, const std::vector<T> &B)
+	{
+		std::vector<T> AB;
+		AB.reserve( A.size() + B.size() );
+		AB.insert( AB.end(), A.begin(), A.end() );
+		AB.insert( AB.end(), B.begin(), B.end() );
+		return AB;
 	}
-	return ret;
+
+	template <typename T>
+	std::vector<T> &operator+=(std::vector<T> &A, const std::vector<T> &B)
+	{
+		A.reserve( A.size() + B.size() );
+		A.insert( A.end(), B.begin(), B.end() );
+		return A;
+	}
+
+	// hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh  
+	template<typename T, typename B> std::vector<B> map(std::vector<T>& v, std::function<B (T)> f){
+		unsigned ei = v.size();
+		std::vector<B> ret(ei);
+		for(int i=0; i<ei; ++i){
+			ret[i] = f(v[i]);
+		}
+		return ret;
+	}
 }
 
 
@@ -190,6 +192,7 @@ struct TyperError:public TermposeError{
 	TyperError(std::vector<Error> errors): errors(errors), TermposeError("TyperError"){}
 	TyperError(unsigned line, unsigned column, std::string msg):errors({Error{line, column, msg}}), TermposeError("TyperError"){}
 	void suck(TyperError& other){
+		using namespace detail;
 		errors += other.errors;
 	}
 	virtual char const* what() const noexcept {
@@ -495,10 +498,7 @@ static Term terms(Rest... rest){
 
 
 namespace parsingDSL{
-	template<typename T>
-	using rc = std::shared_ptr<T>;
 	
-	template<typename T> struct dependent_false: std::false_type {};
 	template<typename T> struct Checker{
 		virtual T check(Term const& v) = 0; //throws TyperError
 	};
@@ -507,7 +507,7 @@ namespace parsingDSL{
 	};
 	template<typename T> struct Translator : Checker<T>, Termer<T>{
 	};
-	template<typename T> struct BasicTranslator : Translator<T> {
+	template<typename T> struct BuiltTranslator : Translator<T> {
 		Checker<T> ck;
 		Termer<T> tk;
 		virtual T check(Term& v){ return ck.check(v); }
@@ -627,9 +627,9 @@ namespace parsingDSL{
 	
 	template<typename A, typename B>
 	struct PairTranslator : Translator<std::pair<A,B>> {
-		rc<Translator<A>> at;
-		rc<Translator<B>> bt;
-		PairTranslator(rc<Translator<A>> at, rc<Translator<B>> bt):at(at),bt(bt) {}
+		std::shared_ptr<Translator<A>> at;
+		std::shared_ptr<Translator<B>> bt;
+		PairTranslator(std::shared_ptr<Translator<A>> at, std::shared_ptr<Translator<B>> bt):at(at),bt(bt) {}
 		virtual Term termify(std::pair<A,B> const& p){
 			return List::create(std::vector<Term>({at->termify(p.first), bt->termify(p.second)}));
 		}
@@ -651,10 +651,10 @@ namespace parsingDSL{
 	
 	template<typename A, typename B>
 	struct StartAndSequence : Translator<std::pair<A,std::vector<B>>> {
-		rc<Translator<A>> at;
-		rc<Translator<B>> bt;
+		std::shared_ptr<Translator<A>> at;
+		std::shared_ptr<Translator<B>> bt;
 		bool ignoreErroneousContent;
-		StartAndSequence(rc<Translator<A>> at, rc<Translator<B>> bt, bool ignoreErroneousContent = false):at(at),bt(bt),ignoreErroneousContent(ignoreErroneousContent) {}
+		StartAndSequence(std::shared_ptr<Translator<A>> at, std::shared_ptr<Translator<B>> bt, bool ignoreErroneousContent = false):at(at),bt(bt),ignoreErroneousContent(ignoreErroneousContent) {}
 		virtual Term termify(std::pair<A,std::vector<B>> const& p){
 			std::vector<Term> ov;
 			ov.push_back(at.termify(p.first));
@@ -698,6 +698,75 @@ namespace parsingDSL{
 	};
 	
 	
+	
+	
+	template <class A, class B>
+	std::pair<A,B> checkSliceStartAndList(Term const& v, Checker<A>* ac, Checker<B>* bc){
+		if(v.isStr()){
+			throw TyperError(v, std::string("expected a sequence with at least one element, but it's a string"));
+		}else{
+			std::vector<Term> const& fv = v.l.l;
+			if(fv.size() >= 1){
+				Term const& tagTerm = fv[0];
+				A a = ac->check(tagTerm);
+				std::vector<Term> outv;
+				outv.reserve(fv.size()-1);
+				for(int i=1; i<fv.size(); ++i){
+					outv.push_back(fv[i]);
+				}
+				return std::make_pair(a,bc->check(List::create(outv, v.l.line, v.l.column)));
+			}else{
+				throw TyperError(v, std::string("expected a list with at least one element, but the list is empty"));
+			}
+		}
+	}
+	
+	template<class A, class B>
+	struct SliceStartAndListChecker : Checker<std::pair<A,B>> {
+		std::shared_ptr<Checker<A>> ac;
+		std::shared_ptr<Checker<B>> bc;
+		SliceStartAndListChecker(
+			std::string tag,
+			std::shared_ptr<Checker<A>> ac,
+			std::shared_ptr<Checker<B>> bc
+		):ac(ac),bc(bc) {}
+		virtual std::pair<A,B> check(Term const& v){
+			return checkTagSlicing(v,&*ac,&*bc);
+		}
+	};
+	
+	template<class A, class B>
+	struct SliceStartAndListTranslator : Translator<std::pair<A,B>> {
+		std::shared_ptr<Checker<A>> ac;
+		std::shared_ptr<Checker<B>> bc;
+		SliceStartAndListTranslator(
+			std::shared_ptr<Checker<A>> ac,
+			std::shared_ptr<Checker<B>> bc
+		):ac(ac),bc(bc) {}
+		virtual std::pair<A,B> check(Term const& v){
+			return checkTagSlicing(v,&*ac,&*bc);
+		}
+		virtual Term termify(std::pair<A,B> const& v){
+			Term at = ac->termify(v.first);
+			Term bt = bc->termify(v.second);
+			std::vector<Term> cv;
+			if(bt.isStr()){
+				// throw TyperError(0,0, "couldn't termify, tagSlice expects the content to be a list, but it termed to a string");
+				cv.reserve(2);
+				cv.push_back(std::move(at));
+				cv.push_back(std::move(bt));
+			}else{
+				cv.reserve(bt.l.l.size()+1);
+				cv.push_back(std::move(at));
+				cv += bt.l.l;
+			}
+			return List::create(std::move(cv));
+		}
+	};
+	
+	
+	
+	
 	template<typename B>
 	B checkEnsuredLiteral(Term const& v, std::string& aLiteral, Checker<B>* bt){
 		//todo, detect and propagate all errors
@@ -723,8 +792,8 @@ namespace parsingDSL{
 	template<typename B>
 	struct LiteralEnsureTranslator : Translator<B> {
 		std::string aLiteral;
-		rc<Translator<B>> bt;
-		LiteralEnsureTranslator(std::string aLiteral, rc<Translator<B>> bt):aLiteral(aLiteral), bt(bt) {}
+		std::shared_ptr<Translator<B>> bt;
+		LiteralEnsureTranslator(std::string aLiteral, std::shared_ptr<Translator<B>> bt):aLiteral(aLiteral), bt(bt) {}
 		virtual Term termify(B const& b){
 			return List::create(std::vector<Term>{Stri::create(aLiteral), bt->termify(b)});
 		}
@@ -735,8 +804,8 @@ namespace parsingDSL{
 	template<typename B>
 	struct LiteralEnsureChecker : Checker<B> {
 		std::string aLiteral;
-		rc<Checker<B>> bt;
-		LiteralEnsureChecker(std::string aLiteral, rc<Checker<B>> bt):aLiteral(aLiteral), bt(bt) {}
+		std::shared_ptr<Checker<B>> bt;
+		LiteralEnsureChecker(std::string aLiteral, std::shared_ptr<Checker<B>> bt):aLiteral(aLiteral), bt(bt) {}
 		virtual B check(Term const& v){
 			return checkEnsuredLiteral(v,aLiteral,&*bt);
 		}
@@ -744,8 +813,8 @@ namespace parsingDSL{
 	template<typename B>
 	struct LiteralEnsureTermer : Termer<B> {
 		std::string aLiteral;
-		rc<Termer<B>> bt;
-		LiteralEnsureTermer(std::string aLiteral, rc<Termer<B>> bt):aLiteral(aLiteral), bt(bt) {}
+		std::shared_ptr<Termer<B>> bt;
+		LiteralEnsureTermer(std::string aLiteral, std::shared_ptr<Termer<B>> bt):aLiteral(aLiteral), bt(bt) {}
 		virtual Term termify(B const& b){
 			return List::create(std::vector<Term>{Stri::create(aLiteral), bt.termify(b)});
 		}
@@ -754,8 +823,8 @@ namespace parsingDSL{
 	
 	template<typename A, typename B>
 	struct MapConverter : Translator<std::unordered_map<A,B>> {
-		rc<Translator<std::vector<std::pair<A,B>>>> st;
-		MapConverter(rc<Translator<std::vector<std::pair<A,B>>>> st):st(st) {}
+		std::shared_ptr<Translator<std::vector<std::pair<A,B>>>> st;
+		MapConverter(std::shared_ptr<Translator<std::vector<std::pair<A,B>>>> st):st(st) {}
 		Term termify(std::unordered_map<A,B> const& m){
 			return st->termify(std::vector<std::pair<A,B>>(m.begin(), m.end()));
 		}
@@ -808,25 +877,25 @@ namespace parsingDSL{
 		}
 	}
 	template<typename T> struct SequenceTermer : Termer<std::vector<T>> {
-		rc<Termer<T>> innerTermer;
-		SequenceTermer(rc<Termer<T>> it):innerTermer(it) {}
+		std::shared_ptr<Termer<T>> innerTermer;
+		SequenceTermer(std::shared_ptr<Termer<T>> it):innerTermer(it) {}
 		virtual Term termify(std::vector<T> const& v){
 			return sequenceTermify(&*innerTermer, v);
 		}
 	};
 	template<typename T> struct SequenceChecker : Checker<std::vector<T>> {
-		rc<Checker<T>> innerChecker;
+		std::shared_ptr<Checker<T>> innerChecker;
 		bool ignoreErroneousContent;
-		SequenceChecker(rc<Checker<T>> ic, bool ignoreErroneousContent = false):innerChecker(ic), ignoreErroneousContent(ignoreErroneousContent) {}
+		SequenceChecker(std::shared_ptr<Checker<T>> ic, bool ignoreErroneousContent = false):innerChecker(ic), ignoreErroneousContent(ignoreErroneousContent) {}
 		virtual std::vector<T> check(Term const& t){
 			return sequenceCheck(&*innerChecker, ignoreErroneousContent, t);
 		}
 	};
 	template<typename T> struct SequenceTranslator : Translator<std::vector<T>> {
-		rc<Translator<T>> innerTranslator;
+		std::shared_ptr<Translator<T>> innerTranslator;
 		bool ignoreErroneousContent = false;
 		SequenceTranslator(
-			rc<Translator<T>> ic,
+			std::shared_ptr<Translator<T>> ic,
 			bool ignoreErroneousContent = false
 		):innerTranslator(ic), ignoreErroneousContent(ignoreErroneousContent) {}
 		virtual Term termify(std::vector<T> const& v){
@@ -840,11 +909,55 @@ namespace parsingDSL{
 	
 	
 	template<typename A, typename B>
+	std::unordered_map<A,B> checkMap(Term const& v, Checker<A>* ac, Checker<B>* bc, bool ignoreErroneousContent){
+		if(v.isStr()){
+			throw TyperError(v, "expected a map here, but it's a string term");
+		}else{
+			List& tl = (List&)v;
+			std::unordered_map<A,B> results;
+			std::vector<Error> errors;
+			for(Term& it : tl.l){
+				std::cout<<"tlis "<<it.isStr()<<std::endl;
+				if(it.isStr()){
+					errors.push_back(error(it, "expected a pair(in a map) here, but it's a string term")); continue;
+				}else if(it.l.l.size() < 2){
+					errors.push_back(error(it, "expected a pair(in a map) here, but this term has less than 2 items")); continue;
+				}else if(it.l.l.size() > 2){
+					errors.push_back(error(it, "expected a pair(in a map) here, but this term has more than 2 items")); continue;
+				}else{
+					try{
+						A a = ac->check(it.l.l[0]);
+						try{
+							B b = bc->check(it.l.l[1]);
+							if(errors.size() == 0){
+								results.insert({std::move(a), std::move(b)});
+							}
+						}catch(TyperError e){
+							if(!ignoreErroneousContent){
+								errors += e.errors;
+							}
+						}
+					}catch(TyperError e){
+						if(!ignoreErroneousContent){
+							errors += e.errors;
+						}
+					}
+				}
+			}
+			if(errors.size()){
+				throw TyperError(std::move(errors));
+			}else{
+				return results;
+			}
+		}
+	}
+	
+	template<typename A, typename B>
 	struct MapTranslator : Translator<std::unordered_map<A,B>> {
-		rc<Translator<A>> at;
-		rc<Translator<B>> bt;
+		std::shared_ptr<Translator<A>> at;
+		std::shared_ptr<Translator<B>> bt;
 		bool ignoreErroneousContent = false;
-		MapTranslator(rc<Translator<A>> at, rc<Translator<B>> bt, bool ignoreErroneousContent=false):
+		MapTranslator(std::shared_ptr<Translator<A>> at, std::shared_ptr<Translator<B>> bt, bool ignoreErroneousContent=false):
 			at(at),
 			bt(bt),
 			ignoreErroneousContent(ignoreErroneousContent)
@@ -857,46 +970,39 @@ namespace parsingDSL{
 			return List::create(std::move(ov));
 		}
 		std::unordered_map<A,B> check(Term const& v){
-			if(v.isStr()){
-				throw TyperError(v, "expected a map here, but it's a string term");
-			}else{
-				List& tl = (List&)v;
-				std::unordered_map<A,B> results;
-				std::vector<Error> errors;
-				for(Term& it : tl.l){
-					std::cout<<"tlis "<<it.isStr()<<std::endl;
-					if(it.isStr()){
-						errors.push_back(error(it, "expected a pair(in a map) here, but it's a string term")); continue;
-					}else if(it.l.l.size() < 2){
-						errors.push_back(error(it, "expected a pair(in a map) here, but this term has less than 2 items")); continue;
-					}else if(it.l.l.size() > 2){
-						errors.push_back(error(it, "expected a pair(in a map) here, but this term has more than 2 items")); continue;
-					}else{
-						try{
-							A a = at->check(it.l.l[0]);
-							try{
-								B b = bt->check(it.l.l[1]);
-								if(errors.size() == 0){
-									results.insert({std::move(a), std::move(b)});
-								}
-							}catch(TyperError e){
-								if(!ignoreErroneousContent){
-									errors += e.errors;
-								}
-							}
-						}catch(TyperError e){
-							if(!ignoreErroneousContent){
-								errors += e.errors;
-							}
-						}
-					}
-				}
-				if(errors.size()){
-					throw TyperError(std::move(errors));
-				}else{
-					return results;
-				}
+			return checkMap(v, &*at, &*bt, ignoreErroneousContent);
+		}
+	};
+	
+	template<typename A, typename B>
+	struct MapTermer : Termer<std::unordered_map<A,B>> {
+		std::shared_ptr<Termer<A>> at;
+		std::shared_ptr<Termer<B>> bt;
+		MapTermer(std::shared_ptr<Termer<A>> at, std::shared_ptr<Termer<B>> bt):
+			at(at),
+			bt(bt)
+		{}
+		Term termify(std::unordered_map<A,B> const& m){
+			std::vector<Term> ov;
+			for(auto& pair : m){
+				ov.push_back(List::create(std::vector<Term>({at->termify(pair.first), bt->termify(pair.second)})));
 			}
+			return List::create(std::move(ov));
+		}
+	};
+	
+	template<typename A, typename B>
+	struct MapChecker : Checker<std::unordered_map<A,B>> {
+		std::shared_ptr<Checker<A>> at;
+		std::shared_ptr<Checker<B>> bt;
+		bool ignoreErroneousContent = false;
+		MapChecker(std::shared_ptr<Checker<A>> at, std::shared_ptr<Checker<B>> bt, bool ignoreErroneousContent=false):
+			at(at),
+			bt(bt),
+			ignoreErroneousContent(ignoreErroneousContent)
+		{}
+		std::unordered_map<A,B> check(Term const& v){
+			return checkMap(v, &*at, &*bt);
 		}
 	};
 	
@@ -938,10 +1044,10 @@ namespace parsingDSL{
 	template<typename T>
 	struct TaggedSequenceTranslator : Translator<std::vector<T>> {
 		std::string tag;
-		rc<Translator<T>> tt;
+		std::shared_ptr<Translator<T>> tt;
 		TaggedSequenceTranslator(
 			std::string tag,
-			rc<Translator<T>> tt
+			std::shared_ptr<Translator<T>> tt
 		):tag(tag),tt(tt){}
 		virtual std::vector<T> check(Term const& v){
 			return checkTaggedSequence(v,tag,&*tt);
@@ -953,10 +1059,10 @@ namespace parsingDSL{
 	template<typename T>
 	struct TaggedSequenceChecker : Checker<std::vector<T>> {
 		std::string tag;
-		rc<Checker<T>> tt;
+		std::shared_ptr<Checker<T>> tt;
 		TaggedSequenceChecker(
 			std::string tag,
-			rc<Checker<T>> tt
+			std::shared_ptr<Checker<T>> tt
 		):tag(tag),tt(tt){}
 		virtual std::vector<T> check(Term const& v){
 			return checkTaggedSequence(v,tag,&*tt);
@@ -965,10 +1071,10 @@ namespace parsingDSL{
 	template<typename T>
 	struct TaggedSequenceTermer : Termer<std::vector<T>> {
 		std::string tag;
-		rc<Termer<T>> tt;
+		std::shared_ptr<Termer<T>> tt;
 		TaggedSequenceTermer(
 			std::string tag,
-			rc<Termer<T>> tt
+			std::shared_ptr<Termer<T>> tt
 		):tag(tag),tt(tt){}
 		virtual Term termify(std::vector<T> const& v){
 			return termifyTaggedSequence(v,tag,tt);
@@ -1007,10 +1113,10 @@ namespace parsingDSL{
 	template<class T>
 	struct TagSlicingChecker : Checker<T> {
 		std::string tag;
-		rc<Checker<T>> inner;
+		std::shared_ptr<Checker<T>> inner;
 		TagSlicingChecker(
 			std::string tag,
-			rc<Checker<T>> inner
+			std::shared_ptr<Checker<T>> inner
 		):tag(tag),inner(inner){}
 		virtual T check(Term const& v){
 			return checkTagSlicing(v,tag,&*inner);
@@ -1020,10 +1126,10 @@ namespace parsingDSL{
 	template<class T>
 	struct TagSlicing : Translator<T> {
 		std::string tag;
-		rc<Translator<T>> inner;
+		std::shared_ptr<Translator<T>> inner;
 		TagSlicing(
 			std::string tag,
-			rc<Translator<T>> inner
+			std::shared_ptr<Translator<T>> inner
 		):tag(tag),inner(inner){}
 		virtual T check(Term const& v){
 			return checkTagSlicing(v,tag,&*inner);
@@ -1077,12 +1183,12 @@ namespace parsingDSL{
 	template<int... Indices, class... Types>
 	static inline auto as_checker_ptrs_proper(
 		seq<Indices...>,
-		std::tuple<rc<Checker<Types>>...> const& args
+		std::tuple<std::shared_ptr<Checker<Types>>...> const& args
 	)-> std::tuple<Checker<Types>*...> {
 		return std::tuple<Checker<Types>*...>(&*std::get<Indices>(args)...);
 	}
 	template<class... Types>
-	static auto as_checker_ptrs(std::tuple<rc<Checker<Types>>...> const& args)-> std::tuple<Checker<Types>*...> {
+	static auto as_checker_ptrs(std::tuple<std::shared_ptr<Checker<Types>>...> const& args)-> std::tuple<Checker<Types>*...> {
 		return as_checker_ptrs_proper(typename count_to<sizeof...(Types)>::type(), args);
 	}
 	template<class F, class... Args>
@@ -1106,10 +1212,10 @@ namespace parsingDSL{
 	template<class F, class... Args>
 	struct ReductionChecker : Checker<decltype(of_result<F,Args...>())>{
 	private:
-		std::tuple<rc<Checker<Args>>...> checkers;
+		std::tuple<std::shared_ptr<Checker<Args>>...> checkers;
 		F f;
 	public:
-		ReductionChecker(std::tuple<rc<Checker<Args>>...> checkers, F f):checkers(checkers),f(f){}
+		ReductionChecker(std::tuple<std::shared_ptr<Checker<Args>>...> checkers, F f):checkers(checkers),f(f){}
 		decltype(of_result<F,Args...>()) check(Term const& v){
 			std::tuple<Checker<Args>*...> checkerPtrs = as_checker_ptrs(checkers);
 			return checkReduction(v, f, checkerPtrs);
@@ -1144,10 +1250,10 @@ namespace parsingDSL{
 			return out;
 		}
 		
-		std::tuple<rc<Termer<Args>>...> termers;
+		std::tuple<std::shared_ptr<Termer<Args>>...> termers;
 		F f;
 	public:
-		ReductionTermer(std::tuple<rc<Checker<Args>>...> termers, F f):termers(termers),f(f){}
+		ReductionTermer(std::tuple<std::shared_ptr<Checker<Args>>...> termers, F f):termers(termers),f(f){}
 		Term termify(T const& v){
 			return List::create(resolve(f(v)));
 		}
@@ -1157,31 +1263,31 @@ namespace parsingDSL{
 	struct ReductionTranslator : Translator<decltype(of_result<Reduction,Types...>())> {
 		Reduction rf;
 		Expansion ef;
-		std::tuple<rc<Translator<Types>>...> translators;
+		std::tuple<std::shared_ptr<Translator<Types>>...> translators;
 		
 		template<int... Indices>
 		static inline auto get_as_checkers(
 			seq<Indices...>,
-			std::tuple<rc<Translator<Types>>...>& args
+			std::tuple<std::shared_ptr<Translator<Types>>...>& args
 		)-> std::tuple<Checker<Types>*...> {
 			return std::tuple<Checker<Types>*...>(&*std::get<Indices>(args)...);
 		}
-		static auto as_checkers(std::tuple<rc<Translator<Types>>...>& args)-> std::tuple<Checker<Types>*...> {
+		static auto as_checkers(std::tuple<std::shared_ptr<Translator<Types>>...>& args)-> std::tuple<Checker<Types>*...> {
 			return get_as_checkers(typename count_to<sizeof...(Types)>::type(), args);
 		}
 		
 		template<int... Indices>
 		static inline auto get_as_termers(
 			seq<Indices...>,
-			std::tuple<rc<Translator<Types>>...>& args
+			std::tuple<std::shared_ptr<Translator<Types>>...>& args
 		)-> std::tuple<Termer<Types>*...> {
 			return std::tuple<Termer<Types>*...>(&*std::get<Indices>(args)...);
 		}
-		static auto as_termers(std::tuple<rc<Translator<Types>>...>& args)-> std::tuple<Termer<Types>*...> {
+		static auto as_termers(std::tuple<std::shared_ptr<Translator<Types>>...>& args)-> std::tuple<Termer<Types>*...> {
 			return get_as_termers(typename count_to<sizeof...(Types)>::type(), args);
 		}
 		
-		ReductionTranslator(Reduction rf, Expansion ef, std::tuple<rc<Translator<Types>>...> translators):
+		ReductionTranslator(Reduction rf, Expansion ef, std::tuple<std::shared_ptr<Translator<Types>>...> translators):
 			rf(rf), ef(ef), translators(translators)
 		{}
 		auto translate_and_vectorize(std::tuple<Types...>& result)-> std::vector<Term> {
@@ -1201,95 +1307,108 @@ namespace parsingDSL{
 		}
 	};
 	
+	
 	template<typename F, typename... Ts>
-	static rc<Checker<decltype(of_result<F,Ts...>())>> combineCheck(F fun, rc<Checker<Ts>>... mappers){
-		return rc<Checker<decltype(of_result<F,Ts...>())>>(new ReductionChecker<F,Ts...>(make_tuple(mappers...), fun));
+	static std::shared_ptr<Checker<decltype(of_result<F,Ts...>())>> combineCheck(F fun, std::shared_ptr<Checker<Ts>>... mappers){
+		return std::shared_ptr<Checker<decltype(of_result<F,Ts...>())>>(new ReductionChecker<F,Ts...>(make_tuple(mappers...), fun));
 	}
 	
 	template<typename Reducer, typename Input, typename... Ts>
-	static rc<Termer<Input>> combineTerm(Reducer fr, rc<Termer<Ts>>... mappers){
-		return rc<Termer<Input>>(new ReductionTermer<Reducer,Input,Ts...>(make_tuple(mappers...), fr));
+	static std::shared_ptr<Termer<Input>> combineTerm(Reducer fr, std::shared_ptr<Termer<Ts>>... mappers){
+		return std::shared_ptr<Termer<Input>>(new ReductionTermer<Reducer,Input,Ts...>(make_tuple(mappers...), fr));
 	}
 	template<class Reduction, class Expansion, class... Ts>
-	static rc<Translator<decltype(of_result<Reduction,Ts...>())>> combineTrans(Reduction fr, Expansion fe, rc<Translator<Ts>>... mappers){
-		return rc<Translator<decltype(of_result<Reduction,Ts...>())>>(
+	static std::shared_ptr<Translator<decltype(of_result<Reduction,Ts...>())>> combineTrans(Reduction fr, Expansion fe, std::shared_ptr<Translator<Ts>>... mappers){
+		return std::shared_ptr<Translator<decltype(of_result<Reduction,Ts...>())>>(
 			new ReductionTranslator<Reduction,Expansion,Ts...>(fr,fe,make_tuple(mappers...))
 		);
 	}
 	template<typename T>
-	static rc<Translator<std::vector<T>>> sequenceTrans(
-		rc<Translator<T>> tt
+	static std::shared_ptr<Translator<std::vector<T>>> sequenceTrans(
+		std::shared_ptr<Translator<T>> tt
 	){
-		return rc<Translator<std::vector<T>>>(new SequenceTranslator<T>(std::move(tt)));
+		return std::shared_ptr<Translator<std::vector<T>>>(new SequenceTranslator<T>(std::move(tt)));
 	}
 	template<typename T>
-	static rc<Checker<std::vector<T>>> sequenceTrans(
-		rc<Checker<T>> tt
+	static std::shared_ptr<Checker<std::vector<T>>> sequenceTrans(
+		std::shared_ptr<Checker<T>> tt
 	){
-		return rc<Checker<std::vector<T>>>(new SequenceChecker<T>(std::move(tt)));
+		return std::shared_ptr<Checker<std::vector<T>>>(new SequenceChecker<T>(std::move(tt)));
 	}
 	//functionally equivalent to sliceOffTag(tag, sequenceTrans(tt)).
 	template<typename T>
-	static rc<Translator<std::vector<T>>> taggedSequence(
+	static std::shared_ptr<Translator<std::vector<T>>> taggedSequence(
 		std::string tag,
-		rc<Translator<T>> tt
+		std::shared_ptr<Translator<T>> tt
 	){
-		return rc<Translator<std::vector<T>>>(new TaggedSequenceTranslator<T>(tag, tt));
+		return std::shared_ptr<Translator<std::vector<T>>>(new TaggedSequenceTranslator<T>(tag, tt));
 	}
 	template<typename T>
-	static rc<Checker<std::vector<T>>> taggedSequence(
+	static std::shared_ptr<Checker<std::vector<T>>> taggedSequence(
 		std::string tag,
-		rc<Checker<T>> tt
+		std::shared_ptr<Checker<T>> tt
 	){
-		return rc<Checker<std::vector<T>>>(new TaggedSequenceChecker<T>(tag, tt));
+		return std::shared_ptr<Checker<std::vector<T>>>(new TaggedSequenceChecker<T>(tag, tt));
 	}
 	//requires that the first element in the term be tag, and and passes down a copy of the list one shorter.
 	template<typename T>
-	static rc<Translator<T>> sliceOffTag(std::string tag, rc<Translator<T>> inner){
-		return rc<Translator<T>>(new TagSlicing<T>(tag, inner)); }
+	static std::shared_ptr<Translator<T>> sliceOffTag(std::string tag, std::shared_ptr<Translator<T>> inner){
+		return std::shared_ptr<Translator<T>>(new TagSlicing<T>(tag, inner)); }
 	template<typename T>
-	static rc<Checker<T>> sliceOffTag(std::string tag, rc<Checker<T>> inner){
-		return rc<Checker<T>>(new TagSlicingChecker<T>(tag, inner)); }
+	static std::shared_ptr<Checker<T>> sliceOffTag(std::string tag, std::shared_ptr<Checker<T>> inner){
+		return std::shared_ptr<Checker<T>>(new TagSlicingChecker<T>(tag, inner)); }
 	//requires that the first element in the term be `literal`, and passes the second element through to bt.
 	template<typename B>
-	static rc<Translator<B>> ensureTag(std::string literal, rc<Translator<B>> bt){
-		return rc<Translator<B>>(new LiteralEnsureTranslator<B>(literal, bt)); }
+	static std::shared_ptr<Translator<B>> ensureTag(std::string literal, std::shared_ptr<Translator<B>> bt){
+		return std::shared_ptr<Translator<B>>(new LiteralEnsureTranslator<B>(literal, bt)); }
 	template<typename B>
-	static rc<Checker<B>> ensureTag(std::string literal, rc<Checker<B>> bt){
-		return rc<Checker<B>>(new LiteralEnsureChecker<B>(literal, bt)); }
+	static std::shared_ptr<Checker<B>> ensureTag(std::string literal, std::shared_ptr<Checker<B>> bt){
+		return std::shared_ptr<Checker<B>>(new LiteralEnsureChecker<B>(literal, bt)); }
 	template<typename B>
-	static rc<Termer<B>> ensureTag(std::string literal, rc<Termer<B>> bt){
-		return rc<Termer<B>>(new LiteralEnsureTermer<B>(literal, bt)); }
+	static std::shared_ptr<Termer<B>> ensureTag(std::string literal, std::shared_ptr<Termer<B>> bt){
+		return std::shared_ptr<Termer<B>>(new LiteralEnsureTermer<B>(literal, bt)); }
 	template<typename A, typename B>
-	static rc<Translator<std::pair<A,std::vector<B>>>> separateStartAndList(rc<Translator<A>> at, rc<Translator<B>> bt){
-		return rc<Translator<std::pair<A,std::vector<B>>>>(new StartAndSequence<A,B>(at,bt)); }
+	static std::shared_ptr<Translator<std::pair<A,std::vector<B>>>> separateStartAndSequence(std::shared_ptr<Translator<A>> at, std::shared_ptr<Translator<B>> bt){
+		return std::shared_ptr<Translator<std::pair<A,std::vector<B>>>>(new StartAndSequence<A,B>(at,bt)); }
 	template<typename A, typename B>
-	static rc<Translator<std::pair<A,B>>> pairTrans(rc<Translator<A>> at, rc<Translator<B>> bt){
-		return rc<Translator<std::pair<A,B>>>(new PairTranslator<A,B>(at,bt)); }
+	static std::shared_ptr<Translator<std::pair<A,B>>> sliceStartAndList(std::shared_ptr<Translator<A>> at, std::shared_ptr<Translator<B>> bt){
+		return std::shared_ptr<Translator<std::pair<A,B>>>(new SliceStartAndListTranslator<A,B>(at,bt)); }
 	template<typename A, typename B>
-	static rc<Translator<std::unordered_map<A,B>>> mapConversion(rc<Translator<std::vector<std::pair<A,B>>>> v){
-		return rc<Translator<std::unordered_map<A,B>>>(new MapConverter<A,B>(std::move(v))); }
+	static std::shared_ptr<Checker<std::pair<A,B>>> sliceStartAndList(std::shared_ptr<Checker<A>> at, std::shared_ptr<Checker<B>> bt){
+		return std::shared_ptr<Checker<std::pair<A,B>>>(new SliceStartAndListChecker<A,B>(at,bt)); }
 	template<typename A, typename B>
-	static rc<Translator<std::unordered_map<A,B>>> mapTrans(rc<Translator<A>> at, rc<Translator<B>> bt){
-		return rc<Translator<std::unordered_map<A,B>>>(new MapTranslator<A,B>(at,bt)); }
-	static rc<Translator<Term>> identity(){
-		return rc<Translator<Term>>(new BlandTranslator()); }
-	static rc<Translator<bool>> boolTrans(){
-		return rc<Translator<bool>>(new BoolTranslator()); }
-	static rc<Checker<bool>> boolCheck(){ return boolTrans(); }
-	static rc<Termer<bool>> boolTerm(){ return boolTrans(); }
-	static rc<Translator<std::string>> stringTrans(){
-		return rc<Translator<std::string>>(new StringTranslator()); }
-	static rc<Translator<int>> intTrans(){
-		return rc<Translator<int>>(new IntTranslator()); }
-	static rc<Checker<std::string>> stringCheck(){
-		return rc<Checker<std::string>>(new StringChecker()); }
-	static rc<Checker<int>> intCheck(){
-		return rc<Checker<int>>(new IntChecker()); }
-	static rc<Translator<float>> floatTrans(){
-		return rc<Translator<float>>(new FloatTranslator()); }
-	static rc<Checker<float>> floatCheck(){
-		return rc<Checker<float>>(new FloatChecker()); }
+	static std::shared_ptr<Translator<std::pair<A,B>>> pairTrans(std::shared_ptr<Translator<A>> at, std::shared_ptr<Translator<B>> bt){
+		return std::shared_ptr<Translator<std::pair<A,B>>>(new PairTranslator<A,B>(at,bt)); }
+	template<typename A, typename B>
+	static std::shared_ptr<Translator<std::unordered_map<A,B>>> mapConversion(std::shared_ptr<Translator<std::vector<std::pair<A,B>>>> v){
+		return std::shared_ptr<Translator<std::unordered_map<A,B>>>(new MapConverter<A,B>(std::move(v))); }
+	template<typename A, typename B>
+	static std::shared_ptr<Translator<std::unordered_map<A,B>>> mapTrans(std::shared_ptr<Translator<A>> at, std::shared_ptr<Translator<B>> bt){
+		return std::shared_ptr<Translator<std::unordered_map<A,B>>>(new MapTranslator<A,B>(at,bt)); }
+	template<typename A, typename B>
+	static std::shared_ptr<Termer<std::unordered_map<A,B>>> mapTerm(std::shared_ptr<Termer<A>> at, std::shared_ptr<Termer<B>> bt){
+		return std::shared_ptr<Termer<std::unordered_map<A,B>>>(new MapTermer<A,B>(at,bt)); }
+	template<typename A, typename B>
+	static std::shared_ptr<Checker<std::unordered_map<A,B>>> mapCheck(std::shared_ptr<Checker<A>> at, std::shared_ptr<Checker<B>> bt){
+		return std::shared_ptr<Checker<std::unordered_map<A,B>>>(new MapChecker<A,B>(at,bt)); }
+	static std::shared_ptr<Translator<Term>> identity(){
+		return std::shared_ptr<Translator<Term>>(new BlandTranslator()); }
+	static std::shared_ptr<Translator<bool>> boolTrans(){
+		return std::shared_ptr<Translator<bool>>(new BoolTranslator()); }
+	static std::shared_ptr<Checker<bool>> boolCheck(){ return boolTrans(); }
+	static std::shared_ptr<Termer<bool>> boolTerm(){ return boolTrans(); }
+	static std::shared_ptr<Translator<std::string>> stringTrans(){
+		return std::shared_ptr<Translator<std::string>>(new StringTranslator()); }
+	static std::shared_ptr<Translator<int>> intTrans(){
+		return std::shared_ptr<Translator<int>>(new IntTranslator()); }
+	static std::shared_ptr<Checker<std::string>> stringCheck(){
+		return std::shared_ptr<Checker<std::string>>(new StringChecker()); }
+	static std::shared_ptr<Checker<int>> intCheck(){
+		return std::shared_ptr<Checker<int>>(new IntChecker()); }
+	static std::shared_ptr<Translator<float>> floatTrans(){
+		return std::shared_ptr<Translator<float>>(new FloatTranslator()); }
+	static std::shared_ptr<Checker<float>> floatCheck(){
+		return std::shared_ptr<Checker<float>>(new FloatChecker()); }
 	
 }
 
