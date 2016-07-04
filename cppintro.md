@@ -85,6 +85,7 @@ int main(int argc, char const *argv[]){
 	{
 		using namespace termpose::parsingDSL;
 		
+		//here we make and invoke a parser combinator. The combinechecker will map three terms through three combinators, then reduce them to a Product value.
 		vector<Product> products = taggedSequence("products",
 			combineCheck(
 				[](string name, float cost, string description){
@@ -107,7 +108,6 @@ But, why limit ourselves to a `Checker<vector<Product>>`, when we can have a `Tr
 {
 	using namespace termpose::parsingDSL;
 	
-	//constructing the 
 	shared_ptr<Translator<vector<Product>>> productDataChecker = taggedSequence("products",
 		combineTrans(
 			[](string name, float cost, string description){
