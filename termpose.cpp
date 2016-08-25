@@ -11,9 +11,7 @@
 #include <type_traits>
 #include <memory>
 
-namespace ctermpose{
-	#include "termpose.c"
-}
+#include "termpose.c"
 
 namespace termpose{
 
@@ -29,12 +27,11 @@ namespace detail{
 		return AB;
 	}
 
+	//could probably be optimized for moves:
 	template <typename T>
-	std::vector<T> &operator+=(std::vector<T> &A, const std::vector<T> &B)
-	{
+	void append(std::vector<T> &A, std::vector<T> const&B){
 		A.reserve( A.size() + B.size() );
 		A.insert( A.end(), B.begin(), B.end() );
-		return A;
 	}
 
 	// hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh  
@@ -161,10 +158,11 @@ private:
 union Term{
 public:
 	Stri s; List l;
-	static void mimicInterTerm(Term* r, ctermpose::InterTerm* v);
+	static void mimicInterTerm(Term* r, InterTerm* v);
 	unsigned estimateLength() const;
 	bool isStr() const;
 	std::string toString() const;
+	bool startsWith(std::string const& str) const;
 	std::string prettyPrint() const;
 	static inline Term parseMultiline(std::string& s);
 	static inline Term parse(std::string& s);
@@ -193,7 +191,7 @@ struct TyperError:public TermposeError{
 	TyperError(unsigned line, unsigned column, std::string msg):errors({Error{line, column, msg}}), TermposeError("TyperError"){}
 	void suck(TyperError& other){
 		using namespace detail;
-		errors += other.errors;
+		detail::append(errors, other.errors);
 	}
 	virtual char const* what() const noexcept {
 		std::stringstream ss;
@@ -223,16 +221,16 @@ void Stri::prettyPrinting(std::stringstream& ss, unsigned depth, std::string ind
 	ss << lineEndings;
 }
 
-void Term::mimicInterTerm(Term* r, ctermpose::InterTerm* v){
-	if(ctermpose::isInterStri(v)){
-		auto is = (ctermpose::InterStri*)v;
+void Term::mimicInterTerm(Term* r, InterTerm* v){
+	if(isInterStri(v)){
+		auto is = (InterStri*)v;
 		auto rs = &r->s;
 		rs->tag = 1;
 		rs->line = is->line;
 		rs->column = is->column;
 		new (& rs->s) std::string(is->v);
 	}else{
-		auto is = (ctermpose::InterSeqs*)v;
+		auto is = (InterSeqs*)v;
 		auto rl = &r->l;
 		rl->tag = 0;
 		rl->line = is->line;
@@ -241,13 +239,13 @@ void Term::mimicInterTerm(Term* r, ctermpose::InterTerm* v){
 		std::vector<Term>& rv = rl->l;
 		size_t vl = is->s.len;
 		rv.reserve(vl);
-		auto mimiced = [is](ctermpose::InterTerm* v){
+		auto mimiced = [is](InterTerm* v){
 			Term ntb;
 			mimicInterTerm(&ntb, v);
 			return ntb;
 		};
 		for(int i=0; i<vl; ++i){
-			rv.emplace_back(mimiced((ctermpose::InterTerm*)(is->s.v[i])));
+			rv.emplace_back(mimiced((InterTerm*)(is->s.v[i])));
 		}
 	}
 }
@@ -367,12 +365,16 @@ std::string Term::prettyPrint() const{
 	return ss.str();
 }
 
+bool Term::startsWith(std::string const& str) const{
+	return !isStr() && l.l.size() && l.l[0].isStr() && l.l[0].s.s == str;
+}
+
 inline Term Term::parseMultiline(std::string& unicodeString){ //note, throws ParserError if there was a syntax error
 	//redefining stuff so that we can avoid the middle part of the translation from interterm to ctermpose::term to termpose::term. Musing: If I were REALLY serious I'd cut out the interterms alltogether and do a proper C++ port. Hm. I suppose there might be a way of abstracting over the differences between C and C++ and using the same parsing code for both.
-	ctermpose::TermposeParsingError errorOut;
-	ctermpose::Parser p;
-	ctermpose::initParser(&p);
-	ctermpose::parseLengthedToSeqsTakingParserRef(&p, unicodeString.c_str(), unicodeString.size(), &errorOut);
+	TermposeParsingError errorOut;
+	Parser p;
+	initParser(&p);
+	parseLengthedToSeqsTakingParserRef(&p, unicodeString.c_str(), unicodeString.size(), &errorOut);
 	if(!errorOut.msg){
 		Term ret;
 		List* lv = (List*)&ret;
@@ -382,7 +384,7 @@ inline Term Term::parseMultiline(std::string& unicodeString){ //note, throws Par
 		new(&lv->l) std::vector<Term>();
 		std::vector<Term>& outVec = lv->l;
 		unsigned rarl = p.rootArBuf.len;
-		ctermpose::InterTerm** rarv = (ctermpose::InterTerm**)p.rootArBuf.v;
+		InterTerm** rarv = (InterTerm**)p.rootArBuf.v;
 		for(int i=0; i<rarl; ++i){
 			Term t;
 			mimicInterTerm(&t, rarv[i]);
@@ -481,6 +483,35 @@ List List::create(std::vector<Term> ov, uint32_t line, uint32_t column){
 	return List{0,line,column,ov};
 }
 
+bool operator==(Stri const& a, Stri const& b){ return a.s == b.s; }
+bool operator!=(Term const& a, Term const& b);
+bool operator==(List const& a, List const& b){
+	unsigned len = a.l.size();
+	if(len != b.l.size()) return false;
+	for(int i=0; i<len; ++i){
+		if(a.l[i] != b.l[i]) return false;
+	}
+	return true;
+}
+bool operator==(Term const& a, Term const& b){
+	if(a.isStr()){
+		if(b.isStr()){
+			return (Stri const&)a == (Stri const&)b;
+		}else{
+			return false;
+		}
+	}else{
+		if(b.isStr()){
+			return false;
+		}else{
+			return (List const&)a == (List const&)b;
+		}
+	}
+}
+
+bool operator!=(Stri const& a, Stri const& b){ return a.s != b.s; }
+bool operator!=(List const& a, List const& b){ return ! (a == b); }
+bool operator!=(Term const& a, Term const& b){ return ! (a == b); }
 
 template<class... Rest>
 inline static void load_terms(std::vector<Term>& o, Term t, Rest... rest){
@@ -625,6 +656,33 @@ namespace parsingDSL{
 		virtual float check(Term const& v){ return checkFloat(v); }
 	};
 	
+	
+	Term termifyDouble(double const& b){
+		std::stringstream ss;
+		ss << b;
+		return Stri::create(ss.str());
+	}
+	double checkDouble(Term const& v){
+		if(v.isStr()){
+			std::string const& st = v.s.s;
+			try{
+				return stof(st);
+			}catch(std::invalid_argument e){
+				throw TyperError(v, "expected a double here (can't be parsed to an double)");
+			}catch(std::out_of_range e){
+				throw TyperError(v, "expected a double here (is not in the allowable range)");
+			}
+		}else{
+			throw TyperError(v, "expected a double here (is a list)");
+		}
+	}
+	struct DoubleTermer : Termer<double>{ virtual Term termify(double const& b){ return termifyDouble(b); } };
+	struct DoubleChecker : Checker<double>{ virtual double check(Term const& v){ return checkDouble(v); } };
+	struct DoubleTranslator : Translator<double> {
+		virtual Term termify(double const& b){ return termifyFloat(b); }
+		virtual double check(Term const& v){ return checkFloat(v); }
+	};
+	
 	template<typename A, typename B>
 	struct PairTranslator : Translator<std::pair<A,B>> {
 		std::shared_ptr<Translator<A>> at;
@@ -648,6 +706,7 @@ namespace parsingDSL{
 			}
 		}
 	};
+	
 	
 	template<typename A, typename B>
 	struct StartAndSequence : Translator<std::pair<A,std::vector<B>>> {
@@ -683,7 +742,7 @@ namespace parsingDSL{
 							}
 						}catch(TyperError e){
 							if(!ignoreErroneousContent){
-								errors += e.errors;
+								detail::append(errors, e.errors);
 							}
 						}
 					}
@@ -731,20 +790,20 @@ namespace parsingDSL{
 			std::shared_ptr<Checker<B>> bc
 		):ac(ac),bc(bc) {}
 		virtual std::pair<A,B> check(Term const& v){
-			return checkTagSlicing(v,&*ac,&*bc);
+			return checkSliceStartAndList(v,&*ac,&*bc);
 		}
 	};
 	
 	template<class A, class B>
 	struct SliceStartAndListTranslator : Translator<std::pair<A,B>> {
-		std::shared_ptr<Checker<A>> ac;
-		std::shared_ptr<Checker<B>> bc;
+		std::shared_ptr<Translator<A>> ac;
+		std::shared_ptr<Translator<B>> bc;
 		SliceStartAndListTranslator(
-			std::shared_ptr<Checker<A>> ac,
-			std::shared_ptr<Checker<B>> bc
+			std::shared_ptr<Translator<A>> ac,
+			std::shared_ptr<Translator<B>> bc
 		):ac(ac),bc(bc) {}
 		virtual std::pair<A,B> check(Term const& v){
-			return checkTagSlicing(v,&*ac,&*bc);
+			return checkSliceStartAndList(v,&*ac,&*bc);
 		}
 		virtual Term termify(std::pair<A,B> const& v){
 			Term at = ac->termify(v.first);
@@ -758,7 +817,7 @@ namespace parsingDSL{
 			}else{
 				cv.reserve(bt.l.l.size()+1);
 				cv.push_back(std::move(at));
-				cv += bt.l.l;
+				detail::append(cv, bt.l.l);
 			}
 			return List::create(std::move(cv));
 		}
@@ -840,7 +899,7 @@ namespace parsingDSL{
 		std::vector<T> const& v
 	){
 		std::vector<Term> ov;
-		for(T&& iv : v){
+		for(T const& iv : v){
 			ov.push_back(innerTermer->termify(iv));
 		}
 		return List::create(std::move(ov));
@@ -865,7 +924,7 @@ namespace parsingDSL{
 					}
 				}catch(TyperError e){
 					if(!ignoreErroneousContent){
-						errors += e.errors;
+						detail::append(errors, e.errors);
 					}
 				}
 			}
@@ -934,12 +993,12 @@ namespace parsingDSL{
 							}
 						}catch(TyperError e){
 							if(!ignoreErroneousContent){
-								errors += e.errors;
+								detail::append(errors, e.errors);
 							}
 						}
 					}catch(TyperError e){
 						if(!ignoreErroneousContent){
-							errors += e.errors;
+							detail::append(errors, e.errors);
 						}
 					}
 				}
@@ -1146,7 +1205,7 @@ namespace parsingDSL{
 			}else{
 				cv.reserve(rt.l.l.size()+1);
 				cv.push_back(std::move(tagTerm));
-				cv += rt.l.l;
+				detail::append(cv, rt.l.l);
 			}
 			return List::create(std::move(cv));
 		}
@@ -1409,8 +1468,29 @@ namespace parsingDSL{
 		return std::shared_ptr<Translator<float>>(new FloatTranslator()); }
 	static std::shared_ptr<Checker<float>> floatCheck(){
 		return std::shared_ptr<Checker<float>>(new FloatChecker()); }
+	static std::shared_ptr<Translator<double>> doubleTrans(){
+		return std::shared_ptr<Translator<double>>(new DoubleTranslator()); }
+	static std::shared_ptr<Checker<double>> doubleCheck(){
+		return std::shared_ptr<Checker<double>>(new DoubleChecker()); }
 	
+	
+	template<class T>
+	static T findOrDefault(std::vector<Term> const& v, std::shared_ptr<Checker<T>> checker, T d){
+		for(Term const& t : v){
+			try{
+				T ret = checker->check(t);
+				return ret;
+			}catch(TyperError te){}
+		}
+		return d;
+	}
+	
+	template<class T>
+	static std::shared_ptr<Checker<T>> asChecker(std::shared_ptr<Translator<T>> tt){
+		return std::static_pointer_cast<Checker<T>>(tt); }
+	template<class T>
+	static std::shared_ptr<Termer<T>> asTermer(std::shared_ptr<Translator<T>> tt){
+		return std::static_pointer_cast<Termer<T>>(tt); }
 }
-
 
 }//namespace termpose

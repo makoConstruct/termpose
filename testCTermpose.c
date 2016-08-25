@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "termpose.h"
+#include "termpose.c"
 
 // #define ANSI_COLOR_YELLOW  "\x1b[33m"
 // #define ANSI_COLOR_BLUE    "\x1b[34m"
@@ -20,7 +21,7 @@
 #endif
 
 
-void compare(Term* result, char* err, char const* output){
+void compare(Term* result, TermposeParsingError* err, char const* output){
 	if(result){
 		char* strf = stringifyTerm(result);
 		if(strcmp(strf, output) == 0){
@@ -31,25 +32,40 @@ void compare(Term* result, char* err, char const* output){
 		free(strf);
 		destroyTerm(result);
 	}else{
-		printf(ANSI_COLOR_RED "[fail]" ANSI_COLOR_RESET " %s\n", err);
-		free(err);
+		printf(ANSI_COLOR_RED "[fail]" ANSI_COLOR_RESET " %s\n", err->msg);
 	}
 }
 
 void testParseAsList(char const* input, char const* output){
-	char* err;
+	TermposeParsingError err;
 	Term* result = parseAsList(input, &err);
-	compare(result, err, output);
+	compare(result, &err, output);
+}
+
+
+char* strCpy(char const* v){
+	unsigned strl = strlen(v);
+	char* ret = (char*)malloc(strl);
+	strncpy(ret, v, strl);
+	return ret;
+}
+
+void testParseAsListWithCoding(char const* input, char const* output, TermposeCoding const* coding){
+	TermposeParsingError err;
+	Term* result = parseAsListWithCoding(input, &err, coding);
+	compare(result, &err, output);
 }
 
 void testParse(char const* input, char const* output){
-	char* err;
+	TermposeParsingError err;
 	Term* result = parse(input, &err);
-	compare(result, err, output);
+	compare(result, &err, output);
 }
 
 
 int main(int argc, char** argv){
+	TermposeCoding oddCoding = { '[', ']', '=', false, strCpy("   ") };
+	
 	testParseAsList(
 		"a\n"
 		"  a\n"
@@ -74,4 +90,6 @@ int main(int argc, char** argv){
 		"(animol (anmal (oglomere (hemisphere (ok (no more no))) heronymous)))");
 	testParse("harry has a:larry nice", "(harry has (a larry) nice)");
 	testParse("harry has a:larry nice\nhori ana he", "((harry has (a larry) nice) (hori ana he))");
+	
+	testParseAsListWithCoding("haba[nome nome [thirty three]] ninety=2", "(((haba nome nome (thirty three)) (ninety 2)))", &oddCoding);
 }

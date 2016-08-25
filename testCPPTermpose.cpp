@@ -2,6 +2,7 @@
 using namespace termpose;
 #include <string>
 #include <sstream>
+#include <cassert>
 using namespace std;
 
 using namespace termpose::parsingDSL;
@@ -66,6 +67,11 @@ multistrings\n\
 	Term vecTerm = terms("vec","2","2");
 	v2 ovec = vecTranslator->check(vecTerm);
 	cout<<"vec("<<ovec.x<<" "<<ovec.y<<")"<<endl;
+	
+	
+	Term magog = terms("magog", terms("isa", "spider"));
+	assert(magog.startsWith("magog"));
+	
 	
 	return 0;
 }
