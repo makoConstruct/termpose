@@ -21,7 +21,7 @@
 #endif
 
 
-void compare(Term* result, TermposeParsingError* err, char const* output){
+void compare(Term_t* result, TermposeParsingError* err, char const* output){
 	if(result){
 		char* strf = stringifyTerm(result);
 		if(strcmp(strf, output) == 0){
@@ -38,7 +38,7 @@ void compare(Term* result, TermposeParsingError* err, char const* output){
 
 void testParseAsList(char const* input, char const* output){
 	TermposeParsingError err;
-	Term* result = parseAsList(input, &err);
+	Term_t* result = parseAsList(input, &err);
 	compare(result, &err, output);
 }
 
@@ -52,13 +52,13 @@ char* strCpy(char const* v){
 
 void testParseAsListWithCoding(char const* input, char const* output, TermposeCoding const* coding){
 	TermposeParsingError err;
-	Term* result = parseAsListWithCoding(input, &err, coding);
+	Term_t* result = parseAsListWithCoding(input, &err, coding);
 	compare(result, &err, output);
 }
 
 void testParse(char const* input, char const* output){
 	TermposeParsingError err;
-	Term* result = parse(input, &err);
+	Term_t* result = parse(input, &err);
 	compare(result, &err, output);
 }
 

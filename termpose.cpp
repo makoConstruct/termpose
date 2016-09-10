@@ -740,7 +740,7 @@ namespace parsingDSL{
 							if(errors.size() == 0){
 								results.push_back(std::move(res));
 							}
-						}catch(TyperError e){
+						}catch(TyperError& e){
 							if(!ignoreErroneousContent){
 								detail::append(errors, e.errors);
 							}
@@ -922,7 +922,7 @@ namespace parsingDSL{
 					if(errors.size() == 0){
 						results.push_back(std::move(res));
 					}
-				}catch(TyperError e){
+				}catch(TyperError& e){
 					if(!ignoreErroneousContent){
 						detail::append(errors, e.errors);
 					}
@@ -991,12 +991,12 @@ namespace parsingDSL{
 							if(errors.size() == 0){
 								results.insert({std::move(a), std::move(b)});
 							}
-						}catch(TyperError e){
+						}catch(TyperError& e){
 							if(!ignoreErroneousContent){
 								detail::append(errors, e.errors);
 							}
 						}
-					}catch(TyperError e){
+					}catch(TyperError& e){
 						if(!ignoreErroneousContent){
 							detail::append(errors, e.errors);
 						}
@@ -1480,7 +1480,7 @@ namespace parsingDSL{
 			try{
 				T ret = checker->check(t);
 				return ret;
-			}catch(TyperError te){}
+			}catch(TyperError& te){}
 		}
 		return d;
 	}
