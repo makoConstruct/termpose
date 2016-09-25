@@ -84,9 +84,6 @@ size_t utf8validate(Rune *u, size_t i){
 
 
 
-typedef uint32_t uint32_t;
-uint32_t min(uint32_t a, uint32_t b){ return a < b ? a : b; }
-uint32_t max(uint32_t a, uint32_t b){ return a < b ? b : a; }
 uint32_t ceilPowerTwo(uint32_t v){
 	v -= 1;
 	v = v | (v >> 16);
