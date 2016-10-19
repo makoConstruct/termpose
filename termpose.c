@@ -632,8 +632,8 @@ void initParserWithCoding(Parser* p, TermposeCoding const* coding){
 	copyCoding(&p->coding, coding);
 	initPtrBuffer(&p->rootArBuf,0,32);
 	initPtrBuffer(&p->parenTermStack,0,32);
-	p->line = 0;
-	p->column = 0;
+	p->line = 1;
+	p->column = 1;
 	p->index = 0;
 	p->lastAttachedTerm = NULL;
 	p->currentMode = NULL;

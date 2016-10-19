@@ -138,6 +138,17 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 						things writ""", "(a (b (c \"things writ\")))")
 		}
 		
+		"verify weird test from the c port" in {
+			expectsEqual(
+"""animol
+anmal
+ oglomere:
+  hemisphere ok:
+   no more no
+  heronymous""",
+"(animol (anmal (oglomere (hemisphere (ok (no more no))) heronymous)))");
+		}
+		
 		"chain colons according to the spec" in {
 			expectsEqual("""
 				a:b:c:d:
@@ -207,13 +218,16 @@ class TermposeParserSpec extends WordSpec with Matchers with TryValues{
 			resolvesTo("a b s:1 d:ham e:9", Map("s"->1, "e"->9), mapAgreeable(string, int))
 		}
 		"get optional members" in {
-			resolvesTo("(a:hogs)", Some("hogs"), optional(contained(property("a", string))))
-			resolvesTo("(for:hogs nothing:impresses)", None, optional(contained(property("a", string))))
-			resolvesTo("(for:hogs nothing:impresses)", Some("impresses"), optional(contained(property("nothing", string))))
+			resolvesTo("(a:hogs)", Some("hogs"), optional(find(property("a", string))))
+			resolvesTo("(for:hogs nothing:impresses)", None, optional(find(property("a", string))))
+			resolvesTo("(for:hogs nothing:impresses)", Some("impresses"), optional(find(property("nothing", string))))
 		}
 		"operate over tails" in {
 			resolvesTo("(0 1 2 fire 3)", Seq(1, 2, 3), tailAfter("0", seqAgreeable(int)))
 			resolvesTo("(0 1 2 fire 3)", None, optional(tailAfter("1", seqAgreeable(int))))
+		}
+		"attempt and remerge alternatives" in {
+			resolvesTo("c 18", 20, seq(either(int, char.map{ c => c - 97 })).map{ s => s.sum })
 		}
 		// "be able to resolve multiple typings" in {
 		// 	resolvesTo("a:hogs", (Some("hogs"), Map("a"->"hogs")), simultaneously(sought(property("a",string)), map(string,string))

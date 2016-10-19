@@ -13,11 +13,15 @@ struct v2{
 };
 
 int main(){
+	
+	auto printBothWays = [](Term const& t){
+		cout<<t.toString()<<endl;
+		cout<<t.prettyPrint()<<endl;
+	};
+	
 	string st("hogsmouth(heme heme)");
 	Term t(Term::parse(st));
-	cout<<t.toString()<<endl;
-	cout<<t.prettyPrint()<<endl;
-	
+	printBothWays(t);
 	string termposeString("\n\
 memories\n\
 	\"anthropolage\"\"\n\
@@ -25,8 +29,19 @@ memories\n\
 	occulse\"\n\
 		gleaming hero, shining light, greatest matron");
 	Term btt = Term::parse(termposeString);
-	cout << termposeString <<endl;
-	cout << btt.prettyPrint() <<endl;
+	printBothWays(btt);
+	
+	string multilineString("\n\
+memori\n\
+	bogbobog\n\
+dabado\n\
+	belebe\n\
+		todoro\"mogodeseseseseseseseseseses somaro domese domadega damaramomo\n\
+	medebe");
+	t = Term::parse(multilineString);
+	printBothWays(t);
+	
+	
 	
 	unordered_map<string,string> mems =
 		mapConversion(taggedSequence(
@@ -72,6 +87,10 @@ multistrings\n\
 	Term magog = terms("magog", terms("isa", "spider"));
 	assert(magog.startsWith("magog"));
 	
+	Term magag;
+	magag = move(magog);
+	
+	cout<<"magag:"<<magag.initialString()<<" magog:"<<magog.initialString()<<endl;
 	
 	return 0;
 }

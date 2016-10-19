@@ -43,6 +43,7 @@ namespace detail{
 		}
 		return ret;
 	}
+	const std::string EMPTY_STRING = "";
 }
 
 
@@ -163,7 +164,8 @@ public:
 	bool isStr() const;
 	std::string toString() const;
 	bool startsWith(std::string const& str) const;
-	std::string prettyPrint() const;
+	std::string prettyPrint(unsigned lineLimit = 80) const;
+	std::string const& initialString() const; //Stri("a") | List("a", ...) | List(List("a" ...) ...) -> "a", List() | List(List() ...) -> ""
 	static inline Term parseMultiline(std::string& s);
 	static inline Term parse(std::string& s);
 	Term();
@@ -171,9 +173,13 @@ public:
 	Term(Term const& other);
 	Term(List other);
 	Term(Stri other);
+	Term(std::vector<Term>&& ts);
+	Term(std::vector<Term> const& ts);
 	Term(char const* other);
-	Term(std::string other);
+	Term(std::string&& other);
+	Term(std::string const& other);
 	Term& operator=(Term const& other);
+	Term& operator=(Term&& other);
 	~Term();
 private:
 	void baseLineStringify(std::stringstream& ss) const;
@@ -294,7 +300,16 @@ Term::Term(Term const& other){
 Term::Term(char const* other){
 	new (this) Term(std::string(other));
 }
-Term::Term(std::string other){
+Term::Term(std::vector<Term> const& ts):Term(std::move(std::vector<Term>(ts))){}
+Term::Term(std::vector<Term>&& ts){
+	List* os = (List*)this;
+	os->tag = 0;
+	os->line = 0;
+	os->column = 0;
+	new (&os->l) std::vector<Term>(std::move(ts));
+}
+Term::Term(std::string const& ts):Term(std::move(std::string(ts))){}
+Term::Term(std::string&& other){
 	Stri* os = (Stri*)this;
 	os->tag = 1;
 	os->line = 0;
@@ -318,6 +333,12 @@ Term::Term(Stri other){
 Term& Term::operator=(Term const& other){
 	this->~Term();
 	new (this) Term(other);
+	return *this;
+}
+Term& Term::operator=(Term&& other){
+	this->~Term();
+	new (this) Term(std::move(other));
+	return *this;
 }
 Term::~Term(){
 	if(isStr()){
@@ -328,9 +349,9 @@ Term::~Term(){
 }
 unsigned Term::estimateLength() const{
 	if(isStr()){
-		s.estimateLength();
+		return s.estimateLength();
 	}else{
-		l.estimateLength();
+		return l.estimateLength();
 	}
 }
 void Term::baseLineStringify(std::stringstream& ss) const{
@@ -354,14 +375,36 @@ void Term::stringify(std::stringstream& ss) const{
 		l.stringify(ss);
 	}
 }
+std::string const& Term::initialString() const{
+	if(isStr()){
+		return s.s;
+	}else{
+		if(l.l.size()){
+			return l.l[0].initialString();
+		}else{
+			return detail::EMPTY_STRING;
+		}
+	}
+}
 std::string Term::toString() const{
 	std::stringstream ss;
 	stringify(ss);
 	return ss.str();
 }
-std::string Term::prettyPrint() const{
+std::string Term::prettyPrint(unsigned lineLimit) const{
 	std::stringstream ss;
-	prettyPrinting(ss, 0, "  ", "\n", 80);
+	if(isStr()){
+		s.stringify(ss);
+	}else{
+		//special case for root line of multiline files
+		if(l.l.size() > 1 && estimateLength() > lineLimit){
+			for(Term const& t : l.l){
+				t.prettyPrinting(ss, 0, "  ", "\n", lineLimit);
+			}
+		}else{
+			prettyPrinting(ss, 0, "  ", "\n", lineLimit);
+		}
+	}
 	return ss.str();
 }
 
@@ -514,16 +557,16 @@ bool operator!=(List const& a, List const& b){ return ! (a == b); }
 bool operator!=(Term const& a, Term const& b){ return ! (a == b); }
 
 template<class... Rest>
-inline static void load_terms(std::vector<Term>& o, Term t, Rest... rest){
-	o.push_back(t);
-	load_terms(o,rest...);
+inline static void recu_terms(std::vector<Term>& o, Term t, Rest... rest){
+	o.emplace_back(std::move(t));
+	recu_terms(o,rest...);
 }
-inline static void load_terms(std::vector<Term>& o){}
+inline static void recu_terms(std::vector<Term>& o){}
 
 template<class... Rest>
 static Term terms(Rest... rest){
 	std::vector<Term> o;
-	load_terms(o, rest...);
+	recu_terms(o, rest...);
 	return List::create(o);
 }
 
@@ -703,6 +746,49 @@ namespace parsingDSL{
 				A a = at->check(v.l.l[0]);
 				B b = bt->check(v.l.l[1]);
 				return std::make_pair(move(a), move(b));
+			}
+		}
+	};
+	
+	template<typename T>
+	struct CellChecker : Checker<T> {
+		std::shared_ptr<Checker<T>> it;
+		CellChecker(std::shared_ptr<Checker<T>> it):it(it) {}
+		T check(Term const& v) override {
+			if(v.isStr()){
+				throw TyperError(v, "expected list containing a single element, but it's a string term");
+			}else if(v.l.l.size() == 0){
+				throw TyperError(v, "expected list containing a single element, but it's empty");
+			}else if(v.l.l.size() > 1){
+				std::stringstream ss;
+				ss << "expected list containing a single element, but it's got ";
+				ss << v.l.l.size();
+				throw TyperError(v, ss.str());
+			}else{
+				return it->check(v.l.l[0]);
+			}
+		}
+	};
+	template<typename T>
+	struct CellTermer : Termer<T> {
+		std::shared_ptr<Termer<T>> it;
+		CellTermer(std::shared_ptr<Termer<T>> it):it(it) {}
+		Term termify(T const& p) override {
+			return List::create({it->termify(p)});
+		}
+	};
+	template<typename T>
+	struct CellTranslator : Translator<T> {
+		std::shared_ptr<Translator<T>> it;
+		CellTranslator(std::shared_ptr<Translator<T>> it):it(it) {}
+		Term termify(T const& p) override {
+			return List::create({it->termify(p)});
+		}
+		T check(Term const& v) override {
+			if(v.isStr() || v.l.l.size() != 1){
+				throw TyperError(v, "expected list containing a single element");
+			}else{
+				return it->check(v.l.l[0]);
 			}
 		}
 	};
@@ -1438,6 +1524,15 @@ namespace parsingDSL{
 	template<typename A, typename B>
 	static std::shared_ptr<Translator<std::pair<A,B>>> pairTrans(std::shared_ptr<Translator<A>> at, std::shared_ptr<Translator<B>> bt){
 		return std::shared_ptr<Translator<std::pair<A,B>>>(new PairTranslator<A,B>(at,bt)); }
+	template<typename T>
+	static std::shared_ptr<Translator<T>> cell(std::shared_ptr<Translator<T>> inner){ //expects a list term containing a single T
+		return std::shared_ptr<Translator<T>>(new CellTranslator<T>(inner)); }
+	template<typename T>
+	static std::shared_ptr<Checker<T>> cell(std::shared_ptr<Checker<T>> inner){ //expects a list term containing a single T
+		return std::shared_ptr<Checker<T>>(new CellChecker<T>(inner)); }
+	template<typename T>
+	static std::shared_ptr<Termer<T>> cell(std::shared_ptr<Termer<T>> inner){ //expects a list term containing a single T
+		return std::shared_ptr<Termer<T>>(new CellTermer<T>(inner)); }
 	template<typename A, typename B>
 	static std::shared_ptr<Translator<std::unordered_map<A,B>>> mapConversion(std::shared_ptr<Translator<std::vector<std::pair<A,B>>>> v){
 		return std::shared_ptr<Translator<std::unordered_map<A,B>>>(new MapConverter<A,B>(std::move(v))); }
@@ -1472,7 +1567,6 @@ namespace parsingDSL{
 		return std::shared_ptr<Translator<double>>(new DoubleTranslator()); }
 	static std::shared_ptr<Checker<double>> doubleCheck(){
 		return std::shared_ptr<Checker<double>>(new DoubleChecker()); }
-	
 	
 	template<class T>
 	static T findOrDefault(std::vector<Term> const& v, std::shared_ptr<Checker<T>> checker, T d){

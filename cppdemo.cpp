@@ -32,22 +32,16 @@ int main(int argc, char const *argv[]){
 	{
 		using namespace termpose::parsingDSL;
 		
-		//constructing the 
-		auto productDataChecker = taggedSequence("products",
-			combineTrans(
+		vector<Product> products = taggedSequence("products",
+			combineCheck(
 				[](string name, float cost, string description){
 					return Product(name, cost, description); },
-				[](Product p){
-					return make_tuple(p.name, p.cost, p.description); },
-				stringTrans(),
-				ensureTag("cost", floatTrans()),
-				ensureTag("description", stringTrans()) ) );
+				stringCheck(),
+				ensureTag("cost", floatCheck()),
+				ensureTag("description", stringCheck()) )
+		)->check(data);
 		
-		vector<Product> products = productDataChecker->check(data);
-		
-		Term andBackAgain = productDataChecker->termify(products);
-		
-		cout<< andBackAgain.prettyPrint() <<endl;
+		cout<< products[1].description <<endl;
 	}
 	
 	return 0;

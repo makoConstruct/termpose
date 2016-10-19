@@ -78,8 +78,8 @@ class StringIterator implements BufferedIterator<Int> {
 		buildJsonString(sb);
 		return sb.toString();
 	}
-	public function s():Null<Vector<Term>> return null;
-	public function v():Null<String> return null;
+	public var s:Null<Vector<Term>>;
+	public var v:Null<String>;
 	public function buildJsonString(sb:StringBuf){}
 	public function prettyPrint():String{
 		var sb = new StringBuf();
@@ -92,12 +92,12 @@ class StringIterator implements BufferedIterator<Int> {
 		buildPrettyPrinting(sb, 0, indent, lineEndings, maxLineWidth);
 	}
 	private function buildPrettyPrinting(sb:StringBuf, depth:Int, indent:String, lineEndings:String, lineWidth:Int){
-		if(this.v() != null){
+		if(this.v != null){
 			for(i in 0...depth){ sb.addSub(indent,0); }
 			stringify(sb);
 			sb.addSub(lineEndings,0);
 		}else{
-			var ts:Vector<Term> = this.s();
+			var ts:Vector<Term> = this.s;
 			for(i in 0...depth){ sb.addSub(indent,0); }
 			if(ts.length == 0){
 				sb.addChar(':'.code);
@@ -133,55 +133,51 @@ class StringIterator implements BufferedIterator<Int> {
 	private function baseLineStringify(sb:StringBuf){}
 	private function baseLinePrettyStringify(sb:StringBuf){}
 	private function estimateLength():Int{
-		if(this.s() != null){
+		if(this.s != null){
 			var sum = 0;
-			for(t in this.s()){
+			for(t in this.s){
 				sum += t.estimateLength() + 1;
 			}
 			return 2 + sum - 1;
 		}else{
-			return this.v().length + 2;
+			return this.v.length + 2;
 		}
 	}
 }
 
 @:expose class Stri extends Term{
-	public var vp:String;
-	override public function s():Null<Vector<Term>> return null;
-	override public function v():Null<String> return vp;
 	public function new(vp:String, line:Int, column:Int){
-		this.vp = vp;
+		this.s = null;
+		this.v = vp;
 		this.line = line;
 		this.column = column;
 	}
 	override public function stringify(sb:StringBuf){
-		if(Parser.escapeIsNeeded(vp)){
+		if(Parser.escapeIsNeeded(v)){
 			sb.addChar('"'.code);
-			Parser.escapeSymbol(sb, vp);
+			Parser.escapeSymbol(sb, v);
 			sb.addChar('"'.code);
 		}else{
-			sb.addSub(vp,0);
+			sb.addSub(v,0);
 		}
 	}
 	override public function prettyStringify(sb:StringBuf){stringify(sb);}
 	override private function baseLineStringify(sb:StringBuf){stringify(sb);}
 	override public function buildJsonString(sb:StringBuf){
 		sb.addChar('"'.code);
-		if(Parser.escapeIsNeeded(vp)){
-			Parser.escapeSymbol(sb, vp);
+		if(Parser.escapeIsNeeded(v)){
+			Parser.escapeSymbol(sb, v);
 		}else{
-			sb.addSub(vp,0);
+			sb.addSub(v,0);
 		}
 		sb.addChar('"'.code);
 	}
 }
 
 @:expose class Seqs extends Term{
-	public var sp:Vector<Term>;
-	override public function s():Null<Vector<Term>> return sp;
-	override public function v():Null<String> return null;
 	public function new(s:Vector<Term>, line:Int, column:Int){
-		this.sp = s;
+		this.s = s;
+		this.v = null;
 		this.line = line;
 		this.column = column;
 	}
@@ -199,59 +195,59 @@ class StringIterator implements BufferedIterator<Int> {
 		sbuf.addChar(')'.code);
 	}
 	override private function baseLineStringify(sbuf:StringBuf){
-		if(sp.length >= 1){
-			sp.get(0).stringify(sbuf);
-			for(i in 1...sp.length){
+		if(s.length >= 1){
+			s.get(0).stringify(sbuf);
+			for(i in 1...s.length){
 				sbuf.addChar(' '.code);
-				sp.get(i).stringify(sbuf);
+				s.get(i).stringify(sbuf);
 			}
 		}
 	}
 	override private function baseLinePrettyStringify(sbuf:StringBuf){
-		if(sp.length >= 1){
-			sp.get(0).prettyStringify(sbuf);
-			for(i in 1...sp.length){
+		if(s.length >= 1){
+			s.get(0).prettyStringify(sbuf);
+			for(i in 1...s.length){
 				sbuf.addChar(' '.code);
-				sp.get(i).prettyStringify(sbuf);
+				s.get(i).prettyStringify(sbuf);
 			}
 		}
 	}
 	override public function prettyStringify(sb:StringBuf){
-		if(sp.length == 0){
+		if(s.length == 0){
 			sb.addChar(':'.code);
-		}else if(sp.length == 2){
-			sp[0].prettyStringify(sb);
+		}else if(s.length == 2){
+			s[0].prettyStringify(sb);
 			sb.addChar(':'.code);
-			sp[1].prettyStringify(sb);
+			s[1].prettyStringify(sb);
 		}else{
 			var starts:Int;
-			if(sp[0].v() != null){
-				sp[0].stringify(sb);
+			if(s[0].v != null){
+				s[0].stringify(sb);
 				sb.addChar('('.code);
-				if(sp.length >= 1){
-					sp[1].prettyStringify(sb);
+				if(s.length >= 1){
+					s[1].prettyStringify(sb);
 				}
 				starts = 2;
 			}else{
 				sb.addChar('('.code);
-				sp[0].prettyStringify(sb);
+				s[0].prettyStringify(sb);
 				starts = 1;
 			}
-			for(i in starts...sp.length){
+			for(i in starts...s.length){
 				sb.addChar(' '.code);
-				sp[i].prettyStringify(sb);
+				s[i].prettyStringify(sb);
 			}
 			sb.addChar(')'.code);
 		}
 	}
 	override public function buildJsonString(sbuf:StringBuf){
 		sbuf.addChar('['.code);
-		if(sp.length > 0){
-			sp.get(0).buildJsonString(sbuf);
+		if(s.length > 0){
+			s.get(0).buildJsonString(sbuf);
 		}
-		for(i in 1...sp.length){
+		for(i in 1...s.length){
 			sbuf.addChar(','.code);
-			sp.get(i).buildJsonString(sbuf);
+			s.get(i).buildJsonString(sbuf);
 		}
 		sbuf.addChar(']'.code);
 	}
@@ -267,7 +263,6 @@ private interface InterTerm{
 	var line:Int;
 	var column:Int;
 	function toTerm():Term;
-	var pointing:PointsInterTerm;
 }
 private class PointsInterTerm{ //sometimes an interterm might want to reattach partway through the process. It should be attached through a PointsInterTerm which it knows so it can do that.
 	public var t:InterTerm;
@@ -278,12 +273,10 @@ private class Sq implements InterTerm{
 	public var s:Array<PointsInterTerm>;
 	public var line:Int;
 	public var column:Int;
-	public var pointing:PointsInterTerm;
 	public function new(s:Array<PointsInterTerm>, line:Int, column:Int, pointing:PointsInterTerm){
 		this.s = s;
 		this.line = line;
 		this.column = column;
-		this.pointing = pointing;
 		pointing.t = this;
 	}
 	public function toTerm():Term{return toSeqs();}
@@ -293,13 +286,11 @@ private class St implements InterTerm{
 	public var sy:String;
 	public var line:Int;
 	public var column:Int;
-	public var pointing:PointsInterTerm;
 	public function new(sy:String, line:Int, column:Int, pointing:PointsInterTerm){
 		this.sy = sy;
 		this.line = line;
 		this.column = column;
-		this.pointing = pointing;
-		this.pointing.t = this;
+		pointing.t = this;
 	}
 	public function toTerm():Term{ return new Stri(sy, line, column); }
 }
@@ -376,14 +367,12 @@ typedef PF = Bool -> Int -> Void;
 		var arb = cast(pt.t, Sq).s;
 		if(arb.length == 1){
 			var soleEl = arb[0].t;
-			soleEl.pointing = pt;
 			pt.t = soleEl;
 		}
 	}
 	private function growSeqsLayer(pi:PointsInterTerm):Sq {
 		var oldEl = pi.t;
 		var newPIT = new PointsInterTerm(oldEl);
-		oldEl.pointing = newPIT;
 		var newSq = new Sq(array(newPIT), line, column, pi);
 		return newSq;
 	}
@@ -763,8 +752,8 @@ typedef PF = Bool -> Int -> Void;
 @:expose class Termpose{
 	public static function parseMultiline(s:String):Seqs return new Parser().parseToSeqs(new StringIterator(s));
 	public static function parse(s:String):Term {
-		var res = parseToSeqs(s);
-		var ress = res.s();
+		var res = parseMultiline(s);
+		var ress = res.s;
 		if(ress.length == 1) return ress[0];
 		else return res;
 	}

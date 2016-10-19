@@ -10,7 +10,7 @@ libraryDependencies += "com.fasterxml.jackson.core" % "jackson-databind" % "2.4.
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.1" % "test"
 
-testFrameworks += new TestFramework("org.scalameter.ScalaMeterFramework")
+//testFrameworks += new TestFramework("org.scalameter.ScalaMeterFramework")
 
 parallelExecution in Test := false
 
