@@ -4,6 +4,7 @@
 #include <string>
 #include <stdexcept>
 #include <algorithm>
+#include <functional>
 #include <vector>
 #include <unordered_map>
 #include <cstring>
@@ -162,6 +163,7 @@ public:
 	static void mimicInterTerm(Term* r, InterTerm* v);
 	unsigned estimateLength() const;
 	bool isStr() const;
+	bool isList() const;
 	std::string toString() const;
 	bool startsWith(std::string const& str) const;
 	std::string prettyPrint(unsigned lineLimit = 80) const;
@@ -173,13 +175,16 @@ public:
 	Term(Term const& other);
 	Term(List other);
 	Term(Stri other);
-	Term(std::vector<Term>&& ts);
-	Term(std::vector<Term> const& ts);
-	Term(char const* other);
-	Term(std::string&& other);
-	Term(std::string const& other);
+	Term(std::vector<Term>&& ts, unsigned line=0, unsigned column=0);
+	Term(std::vector<Term> const& ts, unsigned line=0, unsigned column=0);
+	Term(char const* other, unsigned line=0, unsigned column=0);
+	Term(std::string&& other, unsigned line=0, unsigned column=0);
+	Term(std::string const& other, unsigned line=0, unsigned column=0);
+	uint32_t line() const;
+	uint32_t column() const;
 	Term& operator=(Term const& other);
 	Term& operator=(Term&& other);
+	size_t hash() const;
 	~Term();
 private:
 	void baseLineStringify(std::stringstream& ss) const;
@@ -256,6 +261,7 @@ void Term::mimicInterTerm(Term* r, InterTerm* v){
 	}
 }
 bool Term::isStr() const{ return (*(uint8_t*)this) != 0; }
+bool Term::isList() const{ return !isStr(); }
 Term::Term(){
 	List* os = (List*)this;
 	os->tag = 0;
@@ -297,19 +303,19 @@ Term::Term(Term const& other){
 		new (&ol->l) std::vector<Term>(fl->l);
 	}
 }
-Term::Term(char const* other){
-	new (this) Term(std::string(other));
+Term::Term(char const* other, unsigned line, unsigned column){
+	new (this) Term(std::string(other), line, column);
 }
-Term::Term(std::vector<Term> const& ts):Term(std::move(std::vector<Term>(ts))){}
-Term::Term(std::vector<Term>&& ts){
+Term::Term(std::vector<Term> const& ts, unsigned line, unsigned column):Term(std::move(std::vector<Term>(ts)), line, column){}
+Term::Term(std::vector<Term>&& ts, unsigned line, unsigned column){
 	List* os = (List*)this;
 	os->tag = 0;
-	os->line = 0;
-	os->column = 0;
+	os->line = line;
+	os->column = column;
 	new (&os->l) std::vector<Term>(std::move(ts));
 }
-Term::Term(std::string const& ts):Term(std::move(std::string(ts))){}
-Term::Term(std::string&& other){
+Term::Term(std::string const& ts, unsigned line, unsigned column):Term(std::move(std::string(ts)), line, column){}
+Term::Term(std::string&& other, unsigned line, unsigned column){
 	Stri* os = (Stri*)this;
 	os->tag = 1;
 	os->line = 0;
@@ -329,6 +335,12 @@ Term::Term(Stri other){
 	os->line = other.line;
 	os->column = other.column;
 	new (&os->s) std::string(std::move(other.s));
+}
+uint32_t Term::line() const {
+	return ((List*)(this))->line; //doesn't matter if not List, layout is same in both
+}
+uint32_t Term::column() const {
+	return ((List*)(this))->column; //doesn't matter if not List, layout is same in both
 }
 Term& Term::operator=(Term const& other){
 	this->~Term();
@@ -550,6 +562,16 @@ bool operator==(Term const& a, Term const& b){
 			return (List const&)a == (List const&)b;
 		}
 	}
+}
+size_t Term::hash() const{
+	/* your code here, e.g. "return hash<int>()(x.value);" */
+	size_t soFar = std::hash<bool>()(isList());
+	if(isList()){
+		for(Term const& nt : this->l.l){ soFar ^= nt.hash(); }
+	}else{
+		soFar ^= std::hash<string>()(this->s.s);
+	}
+	return soFar;
 }
 
 bool operator!=(Stri const& a, Stri const& b){ return a.s != b.s; }
