@@ -197,18 +197,17 @@ private:
 
 struct TyperError:public TermposeError{
 	std::vector<termpose::Error> errors;
+	string waht; //can't generate on demand, because what() is a const method. Needs to be created on construction. It needs to be stored in the body so that it's still available after what() returns.
 	TyperError(Term const& t, std::string msg): TyperError(t.l.line,t.l.column,msg){}
-	TyperError(std::vector<Error> errors): errors(errors), TermposeError("TyperError"){}
-	TyperError(unsigned line, unsigned column, std::string msg):errors({Error{line, column, msg}}), TermposeError("TyperError"){}
-	void suck(TyperError& other){
-		using namespace detail;
-		detail::append(errors, other.errors);
+	TyperError(unsigned line, unsigned column, std::string msg):TyperError({Error{line, column, msg}}) {}
+	TyperError(std::vector<Error> errors): errors(move(errors)), TermposeError("TyperError"){
+		stringstream ss;
+		ss<<"TyperError"<<'\n';
+		for(Error const& e : this->errors) putErr(ss, e); //this, because if we refer to the parameter, it's empty, it was moved see
+		waht = ss.str();
 	}
 	virtual char const* what() const noexcept {
-		std::stringstream ss;
-		ss<<"TyperError"<<'\n';
-		for(Error const& e : errors) putErr(ss, e);
-		return ss.str().c_str();
+		return waht.c_str();
 	}
 	TyperError():TermposeError("TyperError"){}
 };
