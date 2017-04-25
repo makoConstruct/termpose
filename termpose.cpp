@@ -164,12 +164,23 @@ public:
 	unsigned estimateLength() const;
 	bool isStr() const;
 	bool isList() const;
+	bool isEmpty() const; //iff it's an empty list
+	std::string& strContents();
+	std::vector<Term>& listContents();
+	Term& findTerm(std::string const& key);
+	Term* seekTerm(std::string const& key);
+	Term& findSubTerm(std::string const& key);
+	Term* seekSubTerm(std::string const& key);
+	Term const& findTermConst(std::string const& key) const;
+	Term const* seekTermConst(std::string const& key) const;
+	Term const& findSubTermConst(std::string const& key) const;
+	Term const* seekSubTermConst(std::string const& key) const;
 	std::string toString() const;
 	bool startsWith(std::string const& str) const;
 	std::string prettyPrint(unsigned lineLimit = 80) const;
 	std::string const& initialString() const; //Stri("a") | List("a", ...) | List(List("a" ...) ...) -> "a", List() | List(List() ...) -> ""
-	static inline Term parseMultiline(std::string& s);
-	static inline Term parse(std::string& s);
+	static inline Term parseMultiline(std::string const& s);
+	static inline Term parse(std::string const& s);
 	Term();
 	Term(Term&& other);
 	Term(Term const& other);
@@ -197,11 +208,11 @@ private:
 
 struct TyperError:public TermposeError{
 	std::vector<termpose::Error> errors;
-	string waht; //can't generate on demand, because what() is a const method. Needs to be created on construction. It needs to be stored in the body so that it's still available after what() returns.
+	std::string waht; //can't generate on demand, because what() is a const method. Needs to be created on construction. It needs to be stored in the body so that it's still available after what() returns.
 	TyperError(Term const& t, std::string msg): TyperError(t.l.line,t.l.column,msg){}
 	TyperError(unsigned line, unsigned column, std::string msg):TyperError({Error{line, column, msg}}) {}
 	TyperError(std::vector<Error> errors): errors(move(errors)), TermposeError("TyperError"){
-		stringstream ss;
+		std::stringstream ss;
 		ss<<"TyperError"<<'\n';
 		for(Error const& e : this->errors) putErr(ss, e); //this, because if we refer to the parameter, it's empty, it was moved see
 		waht = ss.str();
@@ -261,6 +272,131 @@ void Term::mimicInterTerm(Term* r, InterTerm* v){
 }
 bool Term::isStr() const{ return (*(uint8_t*)this) != 0; }
 bool Term::isList() const{ return !isStr(); }
+bool Term::isEmpty() const{ return !isStr() && l.l.size() == 0; }
+Term& Term::findTerm(std::string const& key){
+	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
+	for(Term& t : l.l){
+		if(t.isList() && t.l.l.size() > 1){
+			Term& ft = t.l.l[0];
+			if(ft.isStr() && ft.s.s == key){
+				return t;
+			}
+		}
+	}
+	std::stringstream ss;
+	ss<<"no term found having key ";
+	ss<<key;
+	throw TyperError(*this, ss.str());
+}
+Term* Term::seekTerm(std::string const& key){
+	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
+	for(Term& t : l.l){
+		if(t.isList() && t.l.l.size() > 1){
+			Term& ft = t.l.l[0];
+			if(ft.isStr() && ft.s.s == key){
+				return &t;
+			}
+		}
+	}
+	return nullptr;
+}
+Term& Term::findSubTerm(std::string const& key){
+	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
+	for(Term& t : l.l){
+		if(t.isList() && t.l.l.size() == 2){
+			Term& ft = t.l.l[0];
+			if(ft.isStr() && ft.s.s == key){
+				return t.l.l[1];
+			}
+		}
+	}
+	std::stringstream ss;
+	ss<<"no pair found having key ";
+	ss<<key;
+	throw TyperError(*this, ss.str());
+}
+Term* Term::seekSubTerm(std::string const& key){
+	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
+	for(Term& t : l.l){
+		if(t.isList() && t.l.l.size() == 2){
+			Term& ft = t.l.l[0];
+			if(ft.isStr() && ft.s.s == key){
+				return &t.l.l[1];
+			}
+		}
+	}
+	return nullptr;
+}
+Term const& Term::findTermConst(std::string const& key) const {
+	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
+	for(Term const& t : l.l){
+		if(t.isList() && t.l.l.size() > 1){
+			Term const& ft = t.l.l[0];
+			if(ft.isStr() && ft.s.s == key){
+				return t;
+			}
+		}
+	}
+	std::stringstream ss;
+	ss<<"no term found having key ";
+	ss<<key;
+	throw TyperError(*this, ss.str());
+}
+Term const* Term::seekTermConst(std::string const& key) const {
+	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
+	for(Term const& t : l.l){
+		if(t.isList() && t.l.l.size() > 1){
+			Term const& ft = t.l.l[0];
+			if(ft.isStr() && ft.s.s == key){
+				return &t;
+			}
+		}
+	}
+	return nullptr;
+}
+Term const& Term::findSubTermConst(std::string const& key) const {
+	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
+	for(Term const& t : l.l){
+		if(t.isList() && t.l.l.size() == 2){
+			Term const& ft = t.l.l[0];
+			if(ft.isStr() && ft.s.s == key){
+				return t.l.l[1];
+			}
+		}
+	}
+	std::stringstream ss;
+	ss<<"no pair found having key ";
+	ss<<key;
+	throw TyperError(*this, ss.str());
+}
+Term const* Term::seekSubTermConst(std::string const& key) const {
+	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
+	for(Term const& t : l.l){
+		if(t.isList() && t.l.l.size() == 2){
+			Term const& ft = t.l.l[0];
+			if(ft.isStr() && ft.s.s == key){
+				return &t.l.l[1];
+			}
+		}
+	}
+	return nullptr;
+}
+std::vector<Term>& Term::listContents(){
+	if(isList()){
+		return l.l;
+	}else{
+		throw TyperError(*this, "expected a list term here");
+	}
+}
+std::string& Term::strContents(){
+	if(isStr()){
+		return s.s;
+	}else{
+		throw TyperError(*this, "expected a str term here");
+	}
+}
+
+
 Term::Term(){
 	List* os = (List*)this;
 	os->tag = 0;
@@ -423,7 +559,7 @@ bool Term::startsWith(std::string const& str) const{
 	return !isStr() && l.l.size() && l.l[0].isStr() && l.l[0].s.s == str;
 }
 
-inline Term Term::parseMultiline(std::string& unicodeString){ //note, throws ParserError if there was a syntax error
+inline Term Term::parseMultiline(std::string const& unicodeString){ //note, throws ParserError if there was a syntax error
 	//redefining stuff so that we can avoid the middle part of the translation from interterm to ctermpose::term to termpose::term. Musing: If I were REALLY serious I'd cut out the interterms alltogether and do a proper C++ port. Hm. I suppose there might be a way of abstracting over the differences between C and C++ and using the same parsing code for both.
 	TermposeParsingError errorOut;
 	Parser p;
@@ -451,7 +587,7 @@ inline Term Term::parseMultiline(std::string& unicodeString){ //note, throws Par
 	}
 }
 
-inline Term Term::parse(std::string& unicodeString){ //if there is exactly one line, it will be given sole, otherwise the lines(or lack thereof) will be wrapped in a List. parseMultiline has more consistent behavior, always wrapping the input in a List no matter how many root lines there were. throws ParserError if there was a syntax error
+inline Term Term::parse(std::string const& unicodeString){ //if there is exactly one line, it will be given sole, otherwise the lines(or lack thereof) will be wrapped in a List. parseMultiline has more consistent behavior, always wrapping the input in a List no matter how many root lines there were. throws ParserError if there was a syntax error
 	Term ret = Term::parseMultiline(unicodeString);
 	if(ret.isStr()){
 		return ret;
@@ -568,7 +704,7 @@ size_t Term::hash() const{
 	if(isList()){
 		for(Term const& nt : this->l.l){ soFar ^= nt.hash(); }
 	}else{
-		soFar ^= std::hash<string>()(this->s.s);
+		soFar ^= std::hash<std::string>()(this->s.s);
 	}
 	return soFar;
 }

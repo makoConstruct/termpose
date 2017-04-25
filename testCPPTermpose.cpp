@@ -1,8 +1,8 @@
 #include "termpose.cpp"
 using namespace termpose;
 #include <string>
-#include <sstream>
 #include <cassert>
+#include <sstream>
 using namespace std;
 
 using namespace termpose::parsingDSL;
@@ -91,6 +91,35 @@ multistrings\n\
 	magag = move(magog);
 	
 	cout<<"magag:"<<magag.initialString()<<" magog:"<<magog.initialString()<<endl;
+	
+	
+	Term structure(Term::parse("\n\
+application\n\
+	knows_javascript true\n\
+	knows_C++ true\n\
+	passion\n\
+		delusions messianic\n\
+		legacy eternal"));
+	
+	assert(checkBool(structure.findSubTerm("knows_javascript")));
+	
+	Term& knowsCpp = structure.findTerm("knows_C++");
+	assert(checkBool(knowsCpp.listContents().at(1)));
+	
+	Term* passionSpecification = structure.seekTerm("passion");
+	if(!passionSpecification){
+		cout<< "well that's alright ¯\\_(ツ)_/¯. You don't necessarily need that" <<endl;
+	}else{
+		if(passionSpecification->seekTerm("delusions") != nullptr){
+			cout<< "You're going to have to let go of those thoughts. Let us help you" <<endl;
+		}else{
+			if(checkString(passionSpecification->findSubTerm("legacy")) == "eternal"){
+				cout<< "your position is assured. You will be appointed as the final arbiter of style" <<endl;
+			}else{
+				cout<< "requires further processing." <<endl;
+			}
+		}
+	}
 	
 	return 0;
 }
