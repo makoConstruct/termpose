@@ -4,77 +4,79 @@
 
 Termpose is an extremely flexible markup language with an elegant syntax.
 
-I think the quickest way to explain is that this arbitrary termpose structure:
+Termpose data, once parsed, is very simple to work with. It doesn't have maps and numbers. It only has lists and strings. APIs are provided for type-checking-translating into types like maps and numbers, of course, but the way you use the data doesn't constrain the way you might represent it.
+
+Termpose's advantage is its supreme writability. Termpose is minimal and flexible enough that if you wanted to make a programming language, but couldn't be bothered writing a parser, you could just use Termpose, and it wouldn't be all that bad. IMO, it would end up nicer than most lisps.
+
+Here's an example of the kind data I represent with termpose. This is very similar to the save format of a game I'm working on:
 ```
-alpha
-    bacchus
-    calea
-        drummond
-    ephemeral fog gloves
-    high intimacy(jade knossos)
-    liminal maker:nymph orphic:pull
-    quiet reconciliation successor transient:
-        umbrage
-        verity
-```
-equals this:
-```
-alpha(bacchus callea(drummon) ephemeral(fog gloves) high(intimacy(jade knossos)) liminal(maker(nymph) orphic(pull)) quiet(reconciliation successor transient(umbrage verity)))
-```
-which could also be posed in the style of an s-expression:
-```
-(alpha bacchus (callea drummon) (ephemeral fog gloves) (high (intimacy jade knossos)) (liminal (maker nymph) (orphic pull)) (quiet reconciliation successor (transient umbrage verity)))
+world
+  folk
+    id 0
+    position 0 10
+    name blue
+    tribe noctal
+    carrying staff "poisoned apple" "veiled umbrella" shawl
+  player
+    id 1
+    position 0 -3
+    name mako
+    tribe noctal
+    carrying string sencha "grey scarf"
+  creature
+    id 2
+    position -10 -2.6
+    visual_range 8.7
+    cognition
+      on detect(1 player) do chase(1)
+      on field(light) do chill_out
+  item
+    id 3
+    paper
+    position -12 3
+    text"
+      The agent sees that the cables of the rust-covered machine,
+      fraying out of their worn sheath, are already plugged into 
+      the wall. It finds a small lever on the side of the machine
+      , flips it, and after a pang and a searing flash that fills
+      the room, the red light on the machine starts to blink.
 ```
 
-Termpose is a minimal, extremely robust syntax for expressing tree structures of strings, and all that can be built from those.
+In an s-expression language, that would would break down to the following structure:
+```
+(world
+  (folk
+    (id 0)
+    (position 0 10)
+    (name blue)
+    (tribe noctal)
+    (carrying staff "poisoned apple" "veiled umbrella" shawl)
+    (conversation (id 3)))
+  (player
+    (id 1)
+    (position 0 -3)
+    (name mako)
+    (tribe noctal)
+    (carrying string sencha "grey scarf"))
+  (creature
+    (id 2)
+    (position -10 -2.6)
+    (visual_range 8.7)
+    (cognition
+      (on (detect 1 player) do (chase 1))
+      (on (field light) do chill_out)))
+  (item
+    (id 3)
+    paper
+    (position -12 3)
+    (text "The agent sees that the cables of the rust-covered machine,\nfraying out of their worn sheath, are already plugged into \nthe wall. It finds a small lever on the side of the machine\n, flips it, and after a pang and a searing flash that fills\nthe room, the red light on the machine starts to blink.")))
+```
 
 Termpose tries to keep out of your namespace, attributing its own meanings to the characters `":()`, but leaving ```\/?-+=[]*&^%$#@!`~;'.,<>``` for your domain-specific languages to define as they please.
 
-Though most of termpose's applications are in representing data(say, config files, make files), like S-Expressions, termpose is robust enough and minimal enough that you could easily express program code with it. To illustrate, here's what a termpose programming language might look like:
-```python
-var i 0
-while <(i 5)
-  print 'Hello
-  if ==(0 %(i 3))
-    then
-      println "' worldly people
-    else
-      println "' anxious dog
-  +=(i 1)
-
->Hello anxious dog
->Hello worldly people
->Hello worldly people
->Hello anxious dog
->Hello worldly people
-
-
-import std.Add
-import std.Copy
-import std.Clone
-import std.TermposeSerialize
-
-struct Vector x:Float y:Float
-
-impl Add for Vector
-  defun + self:Vector other:Vector ->:Vector
-    Vector
-      + self.x other.x
-      + self.y other.y
-impl Copy Clone TermposeSerialize for Vector
-
-defun * m:Number v:Vector -> Vector(*(m v.x) *(m v.y))
-
-println toSexp(*(5 Vector(1 3)
-
->(Vector 5 15)
-```
-
-We were always able to use S-Expressions instead of XML, Json, Toml, Yaml or whatever else, but there was something about that syntax that made the prospect unpalatable.
+We were always able to use a nice, minimal, flexible S-Expressions language instead of XML, Json, Toml, Yaml or whatever else, but there was something about those old syntaxes that made the prospect unpalatable.
 
 Termpose takes that something out of the picture.
-
-Further introduction: https://github.com/makoConstruct/termpose/wiki/Introducing-Termpose!-(To-Scala)
 
 ##Platform support?
 
@@ -88,100 +90,11 @@ Further introduction: https://github.com/makoConstruct/termpose/wiki/Introducing
 | Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | C | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
 | Rust | Basic support + custom Codings. | [Rust Source](https://github.com/makoConstruct/termpose/blob/master/rust/src/lib.rs) |
-| C++ | API is most of the way there. It's pretty nice and I'm using it. | [Intro](https://github.com/makoConstruct/termpose/blob/master/cppintro.md), [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
+| C++ | Very nice. Mako is using it actively right now. | [Basic API](https://github.com/makoConstruct/termpose/blob/master/basic%20C%2B%2B%20api.md), [Intro to parser combinators](https://github.com/makoConstruct/termpose/blob/master/cppintro.md), [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
 
 
 ##Tell us about the implementation?
-Termpose is implemented in the style of a streaming state-machine. This in combination with the obstinately design-led nature of the application has lead to very ugly code, which required a lot of documentation of the mutable state. HOWEVER, this style gets us pretty well optimal time and memory efficiency. It also makes it quite straightforward to build event-driven parsers(IE, parsers that can find specific structures at specific places in a giant masses of termpose without parsing the entire thing into memory first) if the need ever arises.
-
-
-##Termpose-formatted XML dialect
-Termpose → XML translation is partially implemented, see the function translateTermposeToSingleLineXML.
-
-Here's how one would write the first half of Mako's homepage in termpose's XML dialect:
-```python
-html
-  head
-    title >"about mako
-    meta -charset:utf-8
-    link -rel:"shortcut icon" -href:DGFavicon.png
-    style >"
-      CSS plaintext
-      ...
-    script -language:javascript >"
-      Javascript plaintext
-      ...
-  body
-    div -id:centerControlled
-      table tbody:
-        tr
-          td
-          td
-            div -id:downgust
-              canvas -height:43 -width:43
-        tr
-          td -class:leftCol >"who
-          td -class:rightCol >"mako yass, global handle @makoConstruct.
-        ...
-```
-
-##Termpose Json dialect
-
-The data
-
-```javascript
-{
-  "highlight_line": true,
-  "ignored_packages":
-  [
-    "Floobits",
-    "SublimeLinter",
-    "Vintage",
-    {
-      "ref":"http://enema.makopool.com/",
-      "name":"enema",
-      "update":"yes"
-    },
-    [1, 2, 3]
-  ],
-  "indent_guide_options":
-  {
-    "draw_active": true
-  },
-  "overlay scroll bars": "enabled",
-  "show tab close buttons": false,
-  "tab_size": 2,
-  "theme": "Spacegray.sublime-theme",
-  "word_wrap": "true"
-}
-
-```
-
-is jas expressed as
-
-
-```javascript
-highlight_line true
-
-ignored_packages [:
-  Floobits
-  SublimeLinter
-  Vintage
-  { ref:"http://enema.makopool.com/" name:enema update:yes
-  [ 1 2 3
-
-indent_guide_options
-  draw_active true
-"overlay scroll bars" enabled
-"show tab close buttons" false
-tab_size 2
-theme Spacegray.sublime-theme
-word_wrap true
-```
-
-(`'` may be used an escape for instances like, say, representing the string `"true"` with `'true`(parsed termpose has no record of whether there were double quotes, so `"true"` would be indistinguishable from `true`).)
-
-The scala API has a function that can be easily patched to check json-formatted termpose into whatever JSON representation classes your project uses.
+Termpose is implemented in the style of a streaming state-machine. This in combination with the obstinately design-led nature of the application, which flat out refused to turn around when it started to understand why no one else does syntaxes like this, has lead to very ugly code, which required a lot of documentation of the mutable state. HOWEVER, this style gets us pretty well optimal time and memory efficiency. It also makes it quite straightforward to build event-driven parsers(IE, parsers that can find specific structures at specific places in a giant mass of termpose without parsing the entire thing into memory first) if the need ever arises.
 
 
 ###Spec by example
