@@ -6,15 +6,15 @@ Term Term::parseMultiline(string const& str);
 ```
 If the input data may or may not have multiple root terms, parseMultiline may be more predictable. Even if there's only one line, it will wrap it in an extra list.
 
-###Building terms in code
+### Building terms in code
 By example
 ```C++
 Term a = "strterm";
 Term b = vector<Term>{"on", "bo", "den"};
-Term c = terms("on", "bo", terms("dell, "brook", "ringing glass"));
+Term c = terms("on", "bo", terms("dell", "brook", "ringing glass"));
 ```
 
-###Basic Term API
+### Basic Term API
 
 ```C++
 bool Term::isList() const;
@@ -22,12 +22,12 @@ bool Term::isStr() const;
 ```
 
 ```C++
-vector<Term>& Term.listContents();
-string& Term.stringContents();
+vector<Term>& Term::listContents();
+string& Term::stringContents();
 ```
 
-listContents throws a TyperError if the term's not a list,
-stringContents throws a TyperError if the term's not a str,
+listContents throws a TyperError if the term is not a list,
+stringContents throws a TyperError if the term is not a str,
 
 ```C++
 bool Term::isEmpty() const;
@@ -38,20 +38,20 @@ Returns true iff the term is an empty list
 
 
 
-####Searching by key
+#### Searching by key
 
 It is often more efficient to do a linear search, than to generate a hashmap from keys to values then traverse that. For lists of fewer than 20 elements, this will be more efficient in all cases.
 
 ```C++
-Term& Term::findTerm(string const& key)
-Term const& Term::findTermConst(string const& key) const
+Term& Term::findTerm(string const& key);
+Term const& Term::findTermConst(string const& key) const;
 ```
 
 Finds a term within `this` that is a list that starts with `key`. Throws a TyperError if there is no such term, or if `this` is not a list.
 
 ```C++
-Term* Term::seekTerm(string const& key)
-Term const* Term::seekTermConst(string const& key) const
+Term* Term::seekTerm(string const& key);
+Term const* Term::seekTermConst(string const& key) const;
 ```
 
 Seeks a term within `this` that is a list that starts with `key`. Returns null if there is no such term. Throws a TyperError if `this` is not a list.
@@ -59,15 +59,15 @@ Seeks a term within `this` that is a list that starts with `key`. Returns null i
 
 
 ```C++
-Term& Term::findSubTerm(string const& key)
-Term const& Term::findSubTermConst(string const& key) const
+Term& Term::findSubTerm(string const& key);
+Term const& Term::findSubTermConst(string const& key) const;
 ```
 
 Finds a list of two elements within `this` that starts with `key`, then returns the second element. Throws a TyperError if there is no such term, or if `this` is not a list.
 
 ```C++
-Term* Term::seekSubTerm(string const& key)
-Term const* Term::seekSubTermConst(string const& key) const
+Term* Term::seekSubTerm(string const& key);
+Term const* Term::seekSubTermConst(string const& key) const;
 ```
 
 Seeks a list of two elements within `this` that starts with `key`, then returns the second element. Returns null if there is no such term. Throws a TyperError if `this` is not a list.
@@ -75,7 +75,7 @@ Seeks a list of two elements within `this` that starts with `key`, then returns 
 
 
 
-###Example
+### Example
 
 ```C++
 #include <string>
