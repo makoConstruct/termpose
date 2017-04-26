@@ -1,5 +1,5 @@
 
-###Parsing
+### Parsing
 ```C++
 Term Term::parse(string const& str);
 Term Term::parseMultiline(string const& str);
