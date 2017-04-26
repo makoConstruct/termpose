@@ -23,7 +23,9 @@ bool Term::isStr() const;
 
 ```C++
 vector<Term>& Term::listContents();
+vector<Term> const& Term::listContentsConst() const;
 string& Term::stringContents();
+string const& Term::stringContentsConst() const;
 ```
 
 listContents throws a TyperError if the term is not a list,

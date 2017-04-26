@@ -175,6 +175,8 @@ public:
 	Term const* seekTermConst(std::string const& key) const;
 	Term const& findSubTermConst(std::string const& key) const;
 	Term const* seekSubTermConst(std::string const& key) const;
+	std::vector<Term> const& listContentsConst() const;
+	std::string const& strContentsConst() const;
 	std::string toString() const;
 	bool startsWith(std::string const& str) const;
 	std::string prettyPrint(unsigned lineLimit = 80) const;
@@ -389,6 +391,20 @@ std::vector<Term>& Term::listContents(){
 	}
 }
 std::string& Term::strContents(){
+	if(isStr()){
+		return s.s;
+	}else{
+		throw TyperError(*this, "expected a str term here");
+	}
+}
+std::vector<Term> const& Term::listContentsConst() const{
+	if(isList()){
+		return l.l;
+	}else{
+		throw TyperError(*this, "expected a list term here");
+	}
+}
+std::string const& Term::strContentsConst() const{
 	if(isStr()){
 		return s.s;
 	}else{
