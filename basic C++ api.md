@@ -4,7 +4,7 @@
 Term Term::parse(string const& str);
 Term Term::parseMultiline(string const& str);
 ```
-If the input data may or may not have multiple root terms, parseMultiline may be more predictable. Even if there's only one line, it will wrap it in an extra list.
+Where a root level term is a term that starts at indent_level:0, `parseMultiline` will always return a list of the root level terms, no matter how many there are, while `parse` is a bit inconsistent in some cases. If there is only one root level term, it will return that directly. If there are multiple, it will bundle them all in an extra list. If there is no root level term, it will return an empty list.
 
 ### Building terms in code
 By example
