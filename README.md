@@ -22,7 +22,7 @@ world
     position 0 -3
     name mako
     tribe noctal
-    carrying string sencha "grey scarf"
+    carrying string sticks "jar of sencha"
   creature
     id 2
     position -10 -2.6
@@ -57,7 +57,7 @@ In an s-expression language, that would would break down to the following struct
     (position 0 -3)
     (name mako)
     (tribe noctal)
-    (carrying string sencha "grey scarf"))
+    (carrying string sticks "jar of sencha"))
   (creature
     (id 2)
     (position -10 -2.6)
