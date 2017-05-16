@@ -278,7 +278,7 @@ bool Term::isEmpty() const{ return !isStr() && l.l.size() == 0; }
 Term& Term::findTerm(std::string const& key){
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
 	for(Term& t : l.l){
-		if(t.isList() && t.l.l.size() > 1){
+		if(t.isList() && t.l.l.size() > 0){
 			Term& ft = t.l.l[0];
 			if(ft.isStr() && ft.s.s == key){
 				return t;
@@ -293,7 +293,7 @@ Term& Term::findTerm(std::string const& key){
 Term* Term::seekTerm(std::string const& key){
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
 	for(Term& t : l.l){
-		if(t.isList() && t.l.l.size() > 1){
+		if(t.isList() && t.l.l.size() > 0){
 			Term& ft = t.l.l[0];
 			if(ft.isStr() && ft.s.s == key){
 				return &t;
@@ -332,7 +332,7 @@ Term* Term::seekSubTerm(std::string const& key){
 Term const& Term::findTermConst(std::string const& key) const {
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
 	for(Term const& t : l.l){
-		if(t.isList() && t.l.l.size() > 1){
+		if(t.isList() && t.l.l.size() > 0){
 			Term const& ft = t.l.l[0];
 			if(ft.isStr() && ft.s.s == key){
 				return t;
@@ -347,7 +347,7 @@ Term const& Term::findTermConst(std::string const& key) const {
 Term const* Term::seekTermConst(std::string const& key) const {
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
 	for(Term const& t : l.l){
-		if(t.isList() && t.l.l.size() > 1){
+		if(t.isList() && t.l.l.size() > 0){
 			Term const& ft = t.l.l[0];
 			if(ft.isStr() && ft.s.s == key){
 				return &t;
@@ -641,10 +641,16 @@ unsigned List::estimateLength() const{
 void List::baseLineStringify(std::stringstream& ss) const{
 	size_t ls = l.size();
 	if(ls > 0){
-		l[0].stringify(ss);
-		for(int i=1; i<ls; ++i){
-			ss<<' ';
-			l[i].stringify(ss);
+		if(ls > 1){
+			l[0].stringify(ss);
+			for(int i=1; i<ls; ++i){
+				ss<<' ';
+				l[i].stringify(ss);
+			}
+		}else{
+			ss << '(';
+			l[0].stringify(ss);
+			ss << ')';
 		}
 	}else{
 		ss << ':';
@@ -819,7 +825,7 @@ namespace parsingDSL{
 		Term check(Term const& v){ return v; }
 	};
 	
-	Term termInt(int const& b){
+	Term termifyInt(int const& b){
 		std::stringstream ss;
 		ss << b;
 		return Stri::create(ss.str());
@@ -838,10 +844,10 @@ namespace parsingDSL{
 			throw TyperError(v, "expected a int here (is a list)");
 		}
 	}
-	struct IntTermer : Termer<int>{ virtual Term termify(int const& b){ return termInt(b); } };
+	struct IntTermer : Termer<int>{ virtual Term termify(int const& b){ return termifyInt(b); } };
 	struct IntChecker : Checker<int>{ int check(Term const& v){ return checkInt(v); } };
 	struct IntTranslator : Translator<int> {
-		virtual Term termify(int const& b){ return termInt(b); }
+		virtual Term termify(int const& b){ return termifyInt(b); }
 		virtual int check(Term const& v){ return checkInt(v); }
 	};
 	
@@ -1235,7 +1241,6 @@ namespace parsingDSL{
 			std::unordered_map<A,B> results;
 			std::vector<Error> errors;
 			for(Term& it : tl.l){
-				std::cout<<"tlis "<<it.isStr()<<std::endl;
 				if(it.isStr()){
 					errors.push_back(error(it, "expected a pair(in a map) here, but it's a string term")); continue;
 				}else if(it.l.l.size() < 2){
