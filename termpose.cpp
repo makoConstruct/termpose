@@ -167,17 +167,25 @@ public:
 	bool isEmpty() const; //iff it's an empty list
 	std::string& strContents();
 	std::vector<Term>& listContents();
-	Term& findTerm(std::string const& key);
-	Term* seekTerm(std::string const& key);
-	Term& findSubTerm(std::string const& key);
+	Term& findTerm(std::string const& key); //seeks term by initialString, throws if it doesn't find
+	Term* seekTerm(std::string const& key); //seeks term by initialString, returns null if it doesn't find
+	Term& findSubTerm(std::string const& key); //seeks term by initialString, then returns the second element of it
 	Term* seekSubTerm(std::string const& key);
 	Term const& findTermConst(std::string const& key) const;
 	Term const* seekTermConst(std::string const& key) const;
 	Term const& findSubTermConst(std::string const& key) const;
 	Term const* seekSubTermConst(std::string const& key) const;
+	Term& subTerm();
+	Term const& subTermConst() const;
 	std::vector<Term> const& listContentsConst() const;
 	std::string const& strContentsConst() const;
 	std::string toString() const;
+	std::vector<Term> const& listContentsConst(uint expectedLength) const;
+	std::vector<Term>& listContents(uint expectedLength);
+	std::vector<Term> const& listContentsOfLengthConst(uint expectedLength) const ;
+	std::vector<Term>& listContentsOfLength(uint expectedLength);
+	std::vector<Term> const& listContentsOfMinimumLengthConst(uint minimumLength) const ;
+	std::vector<Term>& listContentsOfMinimumLength(uint minimumLength);
 	bool startsWith(std::string const& str) const;
 	std::string prettyPrint(unsigned lineLimit = 80) const;
 	std::string const& initialString() const; //Stri("a") | List("a", ...) | List(List("a" ...) ...) -> "a", List() | List(List() ...) -> ""
@@ -278,11 +286,8 @@ bool Term::isEmpty() const{ return !isStr() && l.l.size() == 0; }
 Term& Term::findTerm(std::string const& key){
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
 	for(Term& t : l.l){
-		if(t.isList() && t.l.l.size() > 0){
-			Term& ft = t.l.l[0];
-			if(ft.isStr() && ft.s.s == key){
-				return t;
-			}
+		if(t.initialString() == key){
+			return t;
 		}
 	}
 	std::stringstream ss;
@@ -293,11 +298,8 @@ Term& Term::findTerm(std::string const& key){
 Term* Term::seekTerm(std::string const& key){
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
 	for(Term& t : l.l){
-		if(t.isList() && t.l.l.size() > 0){
-			Term& ft = t.l.l[0];
-			if(ft.isStr() && ft.s.s == key){
-				return &t;
-			}
+		if(t.initialString() == key){
+			return &t;
 		}
 	}
 	return nullptr;
@@ -332,11 +334,8 @@ Term* Term::seekSubTerm(std::string const& key){
 Term const& Term::findTermConst(std::string const& key) const {
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
 	for(Term const& t : l.l){
-		if(t.isList() && t.l.l.size() > 0){
-			Term const& ft = t.l.l[0];
-			if(ft.isStr() && ft.s.s == key){
-				return t;
-			}
+		if(t.initialString() == key){
+			return t;
 		}
 	}
 	std::stringstream ss;
@@ -347,11 +346,8 @@ Term const& Term::findTermConst(std::string const& key) const {
 Term const* Term::seekTermConst(std::string const& key) const {
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
 	for(Term const& t : l.l){
-		if(t.isList() && t.l.l.size() > 0){
-			Term const& ft = t.l.l[0];
-			if(ft.isStr() && ft.s.s == key){
-				return &t;
-			}
+		if(t.initialString() == key){
+			return &t;
 		}
 	}
 	return nullptr;
@@ -383,6 +379,16 @@ Term const* Term::seekSubTermConst(std::string const& key) const {
 	}
 	return nullptr;
 }
+Term& Term::subTerm() {
+	if(!isList()){ throw TyperError(*this, "wanted to find a subterm, but it is not a list term"); }
+	if(l.l.size() < 2){ throw TyperError(*this, "wanted to find a subterm, but the list is too short"); }
+	return l.l[1];
+}
+Term const& Term::subTermConst() const {
+	if(!isList()){ throw TyperError(*this, "wanted to find a subterm, but it is not a list term"); }
+	if(l.l.size() < 2){ throw TyperError(*this, "wanted to find a subterm, but the list is too short"); }
+	return l.l[1];
+}
 std::vector<Term>& Term::listContents(){
 	if(isList()){
 		return l.l;
@@ -410,6 +416,27 @@ std::string const& Term::strContentsConst() const{
 	}else{
 		throw TyperError(*this, "expected a str term here");
 	}
+}
+
+std::vector<Term> const& Term::listContentsOfLengthConst(uint expectedLength) const {
+	vector<Term> const& l = listContentsConst();
+	if(l.size() != expectedLength){ throw TyperError(*this, std::string("expected a list of length ")+::toString(expectedLength)); }
+	return l;
+}
+std::vector<Term>& Term::listContentsOfLength(uint expectedLength){
+	vector<Term>& l = listContents();
+	if(l.size() != expectedLength){ throw TyperError(*this, std::string("expected a list of length ")+::toString(expectedLength)); }
+	return l;
+}
+std::vector<Term> const& Term::listContentsOfMinimumLengthConst(uint minimumLength) const {
+	vector<Term> const& l = listContentsConst();
+	if(l.size() < minimumLength){ throw TyperError(*this, std::string("expected a list of length ")+::toString(minimumLength)); }
+	return l;
+}
+std::vector<Term>& Term::listContentsOfMinimumLength(uint minimumLength){
+	vector<Term>& l = listContents();
+	if(l.size() < minimumLength){ throw TyperError(*this, std::string("expected a list of length ")+::toString(minimumLength)); }
+	return l;
 }
 
 
@@ -773,8 +800,8 @@ namespace parsingDSL{
 	bool checkBool(Term const& v){
 		if(v.isStr()){
 			std::string const& st = v.s.s;
-			if(st == "true" || st == "⊤") return true;
-			else if(st == "false" || st == "⊥") return false;
+			if(st == "true" || st == "⊤" || st == "yes" || st == "on") return true;
+			else if(st == "false" || st == "⊥" || st == "no" || st == "off") return false;
 			else throw TyperError(v, "expected a bool here");
 		}else{
 			throw TyperError(v, "expected a bool here");
@@ -825,10 +852,14 @@ namespace parsingDSL{
 		Term check(Term const& v){ return v; }
 	};
 	
-	Term termifyInt(int const& b){
+	std::string toString(int b){
 		std::stringstream ss;
 		ss << b;
-		return Stri::create(ss.str());
+		return ss.str();
+	}
+	
+	Term termifyInt(int const& b){
+		return Stri::create(toString(b));
 	}
 	int checkInt(Term const& v){
 		if(v.isStr()){
