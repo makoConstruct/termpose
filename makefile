@@ -6,3 +6,6 @@ testCPPTermpose: testCPPTermpose.cpp termpose.cpp termpose.c termpose.h
 
 basicCppExample: basicCppExample.cpp termpose.cpp termpose.c termpose.h
 	g++ -std=c++11 basicCppExample.cpp -o basicCppExample
+
+perftest: perftest.cpp termpose.cpp termpose.c termpose.h
+	g++ -std=c++11 perftest.cpp -o perftest

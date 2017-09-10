@@ -42,7 +42,9 @@ Returns true iff the term is an empty list
 
 #### Searching by key
 
-It is often more efficient to do a linear search, than to generate a hashmap from keys to values then traverse that. For lists of fewer than 20 elements, this will be more efficient in all cases.
+It is often more efficient to do a linear search over a list than it is to generate a hashmap over the list's keys and values. Even just querying that hashmap can take longer than a linear search in many cases. For lists of fewer than 20 elements*, using the following methods will be more efficient than creating a mapping.
+
+ (cases of lists with fewer than )
 
 ```C++
 Term& Term::findTerm(string const& key);
@@ -76,6 +78,38 @@ Seeks a list of two elements within `this` that starts with `key`, then returns 
 
 
 
+### Type Checking
+
+```C++
+float checkFloat(Term const& v);
+Term termifyFloat(float const& v);
+
+double checkDouble(Term const& v);
+Term termifyDouble(double const& v);
+
+int checkInt(Term const& v);
+Term termifyInt(int const& v);
+
+string checkString(Term const& v);
+Term termifyString(string const& v);
+
+bool checkBool(Term const& v);
+Term termifyBool(bool const& v);
+```
+
+You can also compose bidirectional functions for checking or termifying complex structures
+
+```C++
+Term term;
+
+rc<Translator<unordered_map<string, vector<bool>>>> tr = mapTrans(stringTrans(), sequenceTrans(boolTrans()));
+
+unordered_map<string, vector<bool>>> r = tr->check(term);
+cout<< tr->termify(r).prettyPrint() <<endl;
+```
+
+One of the advantages of using a `Translator`; if there are type errors, a `Translator` will find all of them and it will list their line and column number in the `TyperError` it will throw. For comparable code you would be likely to write using check and termify methods, it is likely that you will only find the first error, and then throw there.
+
 
 ### Example
 
@@ -86,8 +120,7 @@ Seeks a list of two elements within `this` that starts with `key`, then returns 
 using namespace termpose::parsingDSL;
 using namespace std;
 
-
-void processApplication(Term& v){
+void processApplication(Term const& v){
 	assert(checkBool(v.findSubTerm("knows_javascript")));
 
 	Term& knowsCpp = v.findTerm("knows_C++");
@@ -96,16 +129,12 @@ void processApplication(Term& v){
 	Term* passionSpecification = v.seekTerm("passion");
 	if(!passionSpecification){
 		cout<< "well that's alright ¯\\_(ツ)_/¯. You don't necessarily need that" <<endl;
-	}else{
-		if(passionSpecification->seekTerm("delusions") != nullptr){
+	}else if(passionSpecification->seekTerm("delusions") != nullptr){
 			cout<< "You're going to have to let go of those thoughts. Let us help you" <<endl;
-		}else{
-			if(checkString(passionSpecification->findSubTerm("legacy")) == "eternal"){
-				cout<< "your position is assured. You will be appointed as an arbiter of style" <<endl;
-			}else{
-				cout<< "requires further processing." <<endl;
-			}
-		}
+	}else if(checkString(passionSpecification->findSubTerm("legacy")) == "eternal"){
+		cout<< "your position is assured. You will be appointed as an arbiter of style" <<endl;
+	}else{
+		cout<< "requires further processing." <<endl;
 	}
 }
 

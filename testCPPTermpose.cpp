@@ -121,5 +121,12 @@ application\n\
 		}
 	}
 	
+	
+	{
+		Term a = "strterm";
+		Term b = vector<Term>{"on", "bo", "den"};
+		Term c = terms("on", "bo", terms("dell", "brook", "ringing glass"));
+	}
+	
 	return 0;
 }
