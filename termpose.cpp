@@ -188,6 +188,7 @@ public:
 	std::vector<Term>& listContentsOfMinimumLength(uint minimumLength);
 	bool startsWith(std::string const& str) const;
 	std::string prettyPrint(unsigned lineLimit = 80) const;
+	std::string prettyPrintMultiline(unsigned lineLimit = 80) const;
 	std::string const& initialString() const; //Stri("a") | List("a", ...) | List(List("a" ...) ...) -> "a", List() | List(List() ...) -> ""
 	static inline Term parseMultiline(std::string const& s);
 	static inline Term parse(std::string const& s);
@@ -355,10 +356,14 @@ Term const* Term::seekTermConst(std::string const& key) const {
 Term const& Term::findSubTermConst(std::string const& key) const {
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
 	for(Term const& t : l.l){
-		if(t.isList() && t.l.l.size() == 2){
+		if(t.isList() && t.l.l.size() >= 1){
 			Term const& ft = t.l.l[0];
 			if(ft.isStr() && ft.s.s == key){
-				return t.l.l[1];
+				if(t.l.l.size() == 2){
+					return t.l.l[1];
+				}else{
+					throw TyperError(t, "seekSubTerm matched this term's key, but the term is not a pair. It should only have two elements.");
+				}
 			}
 		}
 	}
@@ -370,10 +375,14 @@ Term const& Term::findSubTermConst(std::string const& key) const {
 Term const* Term::seekSubTermConst(std::string const& key) const {
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
 	for(Term const& t : l.l){
-		if(t.isList() && t.l.l.size() == 2){
+		if(t.isList() && t.l.l.size() >= 1){
 			Term const& ft = t.l.l[0];
 			if(ft.isStr() && ft.s.s == key){
-				return &t.l.l[1];
+				if(t.l.l.size() == 2){
+					return &t.l.l[1];
+				}else{
+					throw TyperError(t, "seekSubTerm matched this term's key, but the term is not a pair");
+				}
 			}
 		}
 	}
@@ -490,7 +499,7 @@ Term::Term(std::vector<Term>&& ts, unsigned line, unsigned column){
 	os->tag = 0;
 	os->line = line;
 	os->column = column;
-	new (&os->l) std::vector<Term>(std::move(ts));
+	new (&os->l) std::vector<Term>(ts);
 }
 Term::Term(std::string const& ts, unsigned line, unsigned column):Term(std::move(std::string(ts)), line, column){}
 Term::Term(std::string&& other, unsigned line, unsigned column){
@@ -498,7 +507,7 @@ Term::Term(std::string&& other, unsigned line, unsigned column){
 	os->tag = 1;
 	os->line = 0;
 	os->column = 0;
-	new (&os->s) std::string(std::move(other));
+	new (&os->s) std::string(other);
 }
 Term::Term(List other){
 	List* ol = (List*)this;
@@ -597,6 +606,18 @@ std::string Term::prettyPrint(unsigned lineLimit) const{
 	}
 	return ss.str();
 }
+std::string Term::prettyPrintMultiline(unsigned lineLimit) const{
+	std::stringstream ss;
+	if(isStr()){
+		//this should maybe throw exception..
+		s.stringify(ss);
+	}else{
+		for(Term const& t : l.l){
+			t.prettyPrinting(ss, 0, "  ", "\n", lineLimit);
+		}
+	}
+	return ss.str();
+}
 
 bool Term::startsWith(std::string const& str) const{
 	return !isStr() && l.l.size() && l.l[0].isStr() && l.l[0].s.s == str;
@@ -680,13 +701,15 @@ void List::baseLineStringify(std::stringstream& ss) const{
 			ss << ')';
 		}
 	}else{
-		ss << ':';
+		ss << '(';
+		ss << ')';
 	}
 }
 void List::prettyPrinting(std::stringstream& sb, unsigned depth, std::string indent, std::string lineEndings, unsigned lineWidth) const{
 	for(int i=0; i<depth; ++i){ sb << indent; }
 	if(l.size() == 0){
-		sb << ':';
+		sb << '(';
+		sb << ')';
 		sb << lineEndings;
 	}else{
 		if(estimateLength() > lineWidth){
@@ -748,7 +771,6 @@ bool operator==(Term const& a, Term const& b){
 	}
 }
 size_t Term::hash() const{
-	/* your code here, e.g. "return hash<int>()(x.value);" */
 	size_t soFar = std::hash<bool>()(isList());
 	if(isList()){
 		for(Term const& nt : this->l.l){ soFar ^= nt.hash(); }
@@ -822,7 +844,7 @@ namespace parsingDSL{
 		}
 	};
 	
-	Term termString(std::string const& b){
+	Term termifyString(std::string const& b){
 		std::stringstream ss;
 		ss << b;
 		return Stri::create(ss.str());
@@ -835,14 +857,14 @@ namespace parsingDSL{
 		}
 	}
 	struct StringTermer : Termer<std::string>{ virtual Term termify(std::string const& b){
-		return termString(b);
+		return termifyString(b);
 	}};
 	struct StringChecker : Checker<std::string>{ virtual std::string check(Term const& v){
 		return checkString(v);
 	}};
 	struct StringTranslator : Translator<std::string> {
 		std::string check(Term const& v){ return checkString(v); }
-		Term termify(std::string const& v){ return termString(v); }
+		Term termify(std::string const& v){ return termifyString(v); }
 	};
 	
 	struct BlandTermer : Termer<Term>{ virtual Term termify(Term const& b){ return b; }};
