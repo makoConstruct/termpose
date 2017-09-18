@@ -505,7 +505,7 @@ typedef PF = Bool -> Int -> Void;
 		if(parenTermStack.length <= 1) //not supposed to be <= 0, the bottom level is the root line, and must be retained
 			giveUp("unbalanced paren");
 		containsImmediateNext = null;
-		parenTermStack.pop();
+		lastAttachedTerm = parenTermStack.pop();
 	}
 	private function receiveFinishedSymbol():PointsInterTerm{
 		var ret = interSt(stringBuffer.toString());

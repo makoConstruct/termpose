@@ -82,15 +82,15 @@ Termpose takes that something out of the picture.
 
 | language | status | the closest thing we have to documentation |
 | ---------|--------|------ |
+| C++ | Very nice. The maintainer is using it actively right now. | [Basic API](https://github.com/makoConstruct/termpose/blob/master/basic%20C%2B%2B%20api.md), [Intro to parser combinators](https://github.com/makoConstruct/termpose/blob/master/cppintro.md), [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
+| Haxe | Pretty good. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Scala | Very nice | [This brief intro](https://github.com/makoConstruct/termpose/wiki/Introducing-Termpose!-(To-Scala)) and the [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
 | Javascript | There is a basic API that converts termpose to arrays of strings. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| Haxe | Pretty good. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | C# | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | C | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
 | Rust | Basic support + custom Codings. | [Rust Source](https://github.com/makoConstruct/termpose/blob/master/rust/src/lib.rs) |
-| C++ | Very nice. Mako is using it actively right now. | [Basic API](https://github.com/makoConstruct/termpose/blob/master/basic%20C%2B%2B%20api.md), [Intro to parser combinators](https://github.com/makoConstruct/termpose/blob/master/cppintro.md), [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
 
 
 ## Tell us about the implementation?

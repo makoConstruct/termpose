@@ -381,6 +381,7 @@ object Termpose{
 			if(parenTermStack.length <= 1) //not supposed to be <= 0, the bottom level is the root line, and must be retained
 				break("unbalanced paren")
 			containsImmediateNext = null
+			lastAttachedTerm = parenTermStack.last
 			parenTermStack.trimEnd(1)
 		}
 		private def receiveFinishedSymbol:PointsInterTerm ={

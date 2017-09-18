@@ -844,8 +844,8 @@ void closeParen(Parser* p){
 		lodgeErrorAt(p, p->line, p->column, "unbalanced paren");
 	}
 	p->containsImmediateNext = NULL;
-	popPtr(&p->parenTermStack);
 	p->lastAttachedTerm = (InterTerm*)lastPtr(&p->parenTermStack);
+	popPtr(&p->parenTermStack);
 }
 InterStri* receiveFinishedSymbol(Parser* p){
 	return interSt(p, copyOutNullTerminatedString(&p->stringBuffer));
