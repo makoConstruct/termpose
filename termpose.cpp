@@ -34,6 +34,12 @@ namespace detail{
 		A.reserve( A.size() + B.size() );
 		A.insert( A.end(), B.begin(), B.end() );
 	}
+	
+	std::string toString(int b){
+		std::stringstream ss;
+		ss << b;
+		return ss.str();
+	}
 
 	// hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh  
 	template<typename T, typename B> std::vector<B> map(std::vector<T>& v, std::function<B (T)> f){
@@ -428,23 +434,23 @@ std::string const& Term::strContentsConst() const{
 }
 
 std::vector<Term> const& Term::listContentsOfLengthConst(uint expectedLength) const {
-	vector<Term> const& l = listContentsConst();
-	if(l.size() != expectedLength){ throw TyperError(*this, std::string("expected a list of length ")+::toString(expectedLength)); }
+	std::vector<Term> const& l = listContentsConst();
+	if(l.size() != expectedLength){ throw TyperError(*this, std::string("expected a list of length ")+detail::toString(expectedLength)); }
 	return l;
 }
 std::vector<Term>& Term::listContentsOfLength(uint expectedLength){
-	vector<Term>& l = listContents();
-	if(l.size() != expectedLength){ throw TyperError(*this, std::string("expected a list of length ")+::toString(expectedLength)); }
+	std::vector<Term>& l = listContents();
+	if(l.size() != expectedLength){ throw TyperError(*this, std::string("expected a list of length ")+detail::toString(expectedLength)); }
 	return l;
 }
 std::vector<Term> const& Term::listContentsOfMinimumLengthConst(uint minimumLength) const {
-	vector<Term> const& l = listContentsConst();
-	if(l.size() < minimumLength){ throw TyperError(*this, std::string("expected a list of length ")+::toString(minimumLength)); }
+	std::vector<Term> const& l = listContentsConst();
+	if(l.size() < minimumLength){ throw TyperError(*this, std::string("expected a list of length ")+detail::toString(minimumLength)); }
 	return l;
 }
 std::vector<Term>& Term::listContentsOfMinimumLength(uint minimumLength){
-	vector<Term>& l = listContents();
-	if(l.size() < minimumLength){ throw TyperError(*this, std::string("expected a list of length ")+::toString(minimumLength)); }
+	std::vector<Term>& l = listContents();
+	if(l.size() < minimumLength){ throw TyperError(*this, std::string("expected a list of length ")+detail::toString(minimumLength)); }
 	return l;
 }
 
@@ -874,14 +880,8 @@ namespace parsingDSL{
 		Term check(Term const& v){ return v; }
 	};
 	
-	std::string toString(int b){
-		std::stringstream ss;
-		ss << b;
-		return ss.str();
-	}
-	
 	Term termifyInt(int const& b){
-		return Stri::create(toString(b));
+		return Stri::create(detail::toString(b));
 	}
 	int checkInt(Term const& v){
 		if(v.isStr()){

@@ -109,16 +109,12 @@ application\n\
 	Term* passionSpecification = structure.seekTerm("passion");
 	if(!passionSpecification){
 		cout<< "well that's alright ¯\\_(ツ)_/¯. You don't necessarily need that" <<endl;
+	}else if(passionSpecification->seekTerm("delusions") != nullptr){
+		cout<< "You're going to have to let go of those thoughts. Let us help you" <<endl;
+	}else if(checkString(passionSpecification->findSubTerm("legacy")) == "eternal"){
+		cout<< "your position is assured. You will be appointed as the final arbiter of style" <<endl;
 	}else{
-		if(passionSpecification->seekTerm("delusions") != nullptr){
-			cout<< "You're going to have to let go of those thoughts. Let us help you" <<endl;
-		}else{
-			if(checkString(passionSpecification->findSubTerm("legacy")) == "eternal"){
-				cout<< "your position is assured. You will be appointed as the final arbiter of style" <<endl;
-			}else{
-				cout<< "requires further processing." <<endl;
-			}
-		}
+		cout<< "requires further processing." <<endl;
 	}
 	
 	
@@ -126,6 +122,18 @@ application\n\
 		Term a = "strterm";
 		Term b = vector<Term>{"on", "bo", "den"};
 		Term c = terms("on", "bo", terms("dell", "brook", "ringing glass"));
+	}
+	
+	{
+		Term a = Term::parse("a(b)(b)");
+		cout<<"it'sa "<<a.toString()<<endl;
+		assert(a.toString() == "((a b) b)");
+	}
+	
+	{
+		Term a = Term::parse("(a b):a");
+		cout<<"it's "<<a.toString()<<endl;
+		assert(a.toString() == "((a b) a)");
 	}
 	
 	return 0;

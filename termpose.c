@@ -565,7 +565,7 @@ typedef struct Parser{
 	uint32_t line;
 	uint32_t column;
 	uint32_t index;
-	InterTerm* lastAttachedTerm;
+	InterTerm* lastAttachedTerm; //the most prominent last term, not necessarily the last attached. If a paren just closed, it's the one whose paren just closed.
 	PF currentMode;
 	PtrBuffer modes; //[PF]
 	TermposeParsingError error;
@@ -589,7 +589,7 @@ void dropSeqLayerIfSole(Parser* p, InterSeqs* pt){
 	}
 }
 void exudeSeqs(Parser* p, InterTerm* pi){ //pi becomes interSeqs, its previous content is copied out and linked as its new first element.
-	assert( pi->seqs.line == pi->stri.line && pi->seqs.column == pi->stri.column ); //it should not matter which interpretation of the union type we use.
+	assert( pi->seqs.line == pi->stri.line && pi->seqs.column == pi->stri.column ); //making sure that ti doesn't matter which interpretation of the union type we use.
 	uint32_t l = pi->seqs.line;
 	uint32_t c = pi->seqs.column;
 	InterTerm* nit = (InterTerm*)malloc(sizeof(InterTerm));
@@ -845,6 +845,7 @@ void closeParen(Parser* p){
 	}
 	p->containsImmediateNext = NULL;
 	popPtr(&p->parenTermStack);
+	p->lastAttachedTerm = (InterTerm*)lastPtr(&p->parenTermStack);
 }
 InterStri* receiveFinishedSymbol(Parser* p){
 	return interSt(p, copyOutNullTerminatedString(&p->stringBuffer));
@@ -893,16 +894,15 @@ void seekingTerm(Parser* p, bool fileEnd, Rune c){
 	if(fileEnd){
 		finishTakingIndentationAndAdjustLineAttachment(p);
 	}else{
-		InterSeqs* newSq;
 		if(c == p->coding.openingBracket){
-			newSq = interSq(p);
+			InterSeqs* newSq = interSq(p);
 			attach(p, (InterTerm*)newSq);
 			addPtr(&p->parenTermStack, newSq);
 		}else if(c == p->coding.closingBracket){
 			closeParen(p);
 			transition(p, immediatelyAfterTerm);
 		}else if(c == p->coding.pairingChar){
-			newSq = interSq(p);
+			InterSeqs* newSq = interSq(p);
 			attach(p, (InterTerm*)newSq);
 			p->containsImmediateNext = &newSq->s;
 		}else if(c == '\n'){
@@ -920,16 +920,15 @@ void immediatelyAfterTerm(Parser* p, bool fileEnd, Rune c){
 	if(fileEnd){
 		finishTakingIndentationAndAdjustLineAttachment(p);
 	}else{
-		InterTerm* newLevel;
 		if(c == p->coding.openingBracket){
-			newLevel = p->lastAttachedTerm;
+			InterTerm* newLevel = p->lastAttachedTerm;
 			exudeSeqs(p, newLevel);
 			addPtr(&p->parenTermStack, newLevel);
 			transition(p, seekingTerm);
 		}else if(c == p->coding.closingBracket){
 			closeParen(p);
 		}else if(c == p->coding.pairingChar){
-			newLevel = p->lastAttachedTerm;
+			InterTerm* newLevel = p->lastAttachedTerm;
 			exudeSeqs(p, newLevel);
 			p->containsImmediateNext = &newLevel->seqs.s;
 			transition(p, seekingTerm);
@@ -938,7 +937,7 @@ void immediatelyAfterTerm(Parser* p, bool fileEnd, Rune c){
 		}else if(c == ' ' || c == '\t'){
 			transition(p, seekingTerm);
 		}else if(c == '"'){
-			newLevel = p->lastAttachedTerm;
+			InterTerm* newLevel = p->lastAttachedTerm;
 			exudeSeqs(p, newLevel);
 			p->containsImmediateNext = &newLevel->seqs.s;
 			transition(p, buildingQuotedSymbol);
