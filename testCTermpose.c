@@ -91,5 +91,15 @@ int main(int argc, char** argv){
 	testParse("harry has a:larry nice", "(harry has (a larry) nice)");
 	testParse("harry has a:larry nice\nhori ana he", "((harry has (a larry) nice) (hori ana he))");
 	
+	testParseAsList(
+		"a\n"
+		" b: o\n"
+		" c d\n"
+		"a\n"
+		" b: o\n"
+		" c d\n"
+		,
+		"((a (b o) (c d)) (a (b o) (c d)))");
+	
 	testParseAsListWithCoding("haba[nome nome [thirty three]] ninety=2", "(((haba nome nome (thirty three)) (ninety 2)))", &oddCoding);
 }

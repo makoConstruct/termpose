@@ -136,5 +136,15 @@ application\n\
 		assert(a.toString() == "((a b) a)");
 	}
 	
+	{
+		Term a = Term::parseMultiline(
+"mainModes physical\n\
+cfgModes faunEntry (conf (scroll 0))\n\
+backgroundModes background\n");
+		cout<<"it's "<<a.toString()<<endl;
+		assert(a.toString() == "((mainModes physical) (cfgModes faunEntry (conf (scroll 0))) (backgroundModes background))");
+	}
+	
+	
 	return 0;
 }

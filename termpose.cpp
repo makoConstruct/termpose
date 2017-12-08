@@ -818,8 +818,8 @@ namespace parsingDSL{
 	template<typename T> struct BuiltTranslator : Translator<T> {
 		Checker<T> ck;
 		Termer<T> tk;
-		virtual T check(Term& v){ return ck.check(v); }
-		virtual Term termify(T& v){ return tk.termify(v); }
+		virtual T check(Term const& v){ return ck.check(v); }
+		virtual Term termify(T const& v){ return tk.termify(v); }
 	};
 	
 	Term termifyBool(bool const& v){

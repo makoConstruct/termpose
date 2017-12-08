@@ -102,7 +102,7 @@ You can also compose bidirectional functions for checking or termifying complex 
 ```C++
 Term term;
 
-rc<Translator<unordered_map<string, vector<bool>>>> tr = mapTrans(stringTrans(), sequenceTrans(boolTrans()));
+std::shared_ptr<Translator<unordered_map<string, vector<bool>>>> tr = mapTrans(stringTrans(), sequenceTrans(boolTrans()));
 
 unordered_map<string, vector<bool>>> r = tr->check(term);
 cout<< tr->termify(r).prettyPrint() <<endl;
