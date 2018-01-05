@@ -906,8 +906,11 @@ namespace parsingDSL{
 	
 	
 	Term termifyFloat(float const& b){
+		//ensure that the number is large enough that it wont underflow when it's deserialized =_____=
+		float mino = std::numeric_limits<float>::min()*16;
+		float out = b == 0 ? 0 : abs(b) <= mino ? mino*(b/abs(b)) : b;
 		std::stringstream ss;
-		ss << b;
+		ss << out;
 		return Stri::create(ss.str());
 	}
 	float checkFloat(Term const& v){
@@ -933,18 +936,22 @@ namespace parsingDSL{
 	
 	
 	Term termifyDouble(double const& b){
+		double mino = std::numeric_limits<double>::min()*16;
+		double out = b == 0 ? 0 : abs(b) <= mino ? mino*(b/abs(b)) : b;
 		std::stringstream ss;
-		ss << b;
-		return Stri::create(ss.str());
+		ss << out;
+		return ss.str();
+		// return Stri::create(std::string(dtos(b)));
 	}
 	double checkDouble(Term const& v){
 		if(v.isStr()){
 			std::string const& st = v.s.s;
 			try{
-				return stof(st);
+				return stod(st);
 			}catch(std::invalid_argument e){
 				throw TyperError(v, "expected a double here (can't be parsed to an double)");
 			}catch(std::out_of_range e){
+				return 0;
 				throw TyperError(v, "expected a double here (is not in the allowable range)");
 			}
 		}else{
