@@ -90,8 +90,8 @@ fn seriously_unreachable()-> ! {
 	if cfg!(debug_assertions) { panic!("this code path is not supposed to be reachable") }
 	else{ unsafe{std::intrinsics::unreachable()} } }
 
+/// Codings specify termpose dialects, formats very similar to termpose but perhaps, for instance, they might use []s instead of ()s, or = instead of :. They may also specify style constraints, a Coding might require all indentation to be two spaces, or require it all to be tabs.
 #[allow(dead_code)] //permitting cstr, which is not visibly used, but is needed to provide ownership for the cstring in TermposeCoding
-#[doc = "Codings specify termpose dialects, formats very similar to termpose but perhaps, for instance, they might use []s instead of ()s, or = instead of :. They may also specify style constraints, a Coding might require all indentation to be two spaces, or require it all to be tabs."]
 pub struct Coding{
 	cstr:CString,
 	termpose_coding:TermposeCoding,

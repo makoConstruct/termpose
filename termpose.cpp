@@ -8,6 +8,7 @@
 #include <vector>
 #include <unordered_map>
 #include <cstring>
+#include <cstdlib>
 #include <sstream>
 #include <type_traits>
 #include <memory>
@@ -79,7 +80,7 @@ public:
 	ParserError(unsigned line, unsigned column, std::string msg):e{line, column, msg}, TermposeError("ParserError") {}
 	virtual char const* what(){
 		std::stringstream ss;
-		ss<<"ParserError"<<'\n';
+		ss<<"ParserError ";
 		putErr(ss, e);
 		return ss.str().c_str();
 	}
@@ -230,8 +231,8 @@ struct TyperError:public TermposeError{
 	TyperError(unsigned line, unsigned column, std::string msg):TyperError({Error{line, column, msg}}) {}
 	TyperError(std::vector<Error> errors): errors(move(errors)), TermposeError("TyperError"){
 		std::stringstream ss;
-		ss<<"TyperError"<<'\n';
-		for(Error const& e : this->errors) putErr(ss, e); //this, because if we refer to the parameter, it's empty, it was moved see
+		ss<<"TyperError ";
+		for(Error const& e : this->errors){ putErr(ss, e); } //`this->`, because if we refer to the parameter, it's empty, it was moved see
 		waht = ss.str();
 	}
 	virtual char const* what() const noexcept {
@@ -904,6 +905,20 @@ namespace parsingDSL{
 		virtual int check(Term const& v){ return checkInt(v); }
 	};
 	
+	struct u32Translator : Translator<uint32_t> {
+		Term termify(uint32_t const& b) override { return to_string(b); }
+		uint32_t check(Term const& v) override {
+			string const& sv = v.strContentsConst();
+			uint ret = ::strtoul(sv.c_str(), nullptr, 10);
+			if(errno || ret > numeric_limits<uint32_t>::max()){
+				errno = 0;
+				throw TyperError(v, "range error");
+			}else{
+				return ret;
+			}
+		}
+	};
+	
 	
 	Term termifyFloat(float const& b){
 		//ensure that the number is large enough that it wont underflow when it's deserialized =_____=
@@ -1415,6 +1430,27 @@ namespace parsingDSL{
 		}
 	}
 	template<class T>
+	std::vector<T> negligentCheckTaggedSequence(Term const& v, Checker<T>* tt){ //doesn't check the tag, requires a tag, ignores the tag
+		if(v.isStr()){
+			throw TyperError(v, std::string("expected a sequence"));
+		}else{
+			std::vector<Term> const& fv = v.l.l;
+			if(fv.size() >= 1){
+				Term const& tagTerm = fv[0];
+				if(!tagTerm.isStr()){
+					throw TyperError(tagTerm, std::string("expected a tag term, but it's a list"));
+				}
+				std::vector<T> outv;
+				for(int i=1; i<fv.size(); ++i){
+					outv.push_back(tt->check(fv[i]));
+				}
+				return outv;
+			}else{
+				throw TyperError(v, std::string("expected a sequence starting with a tag, but the sequence is empty"));
+			}
+		}
+	}
+	template<class T>
 	Term termifyTaggedSequence(std::vector<T> const& v, std::string& tag, Termer<T>* tt){
 		std::vector<Term> cv;
 		cv.reserve(v.size()+1);
@@ -1464,6 +1500,16 @@ namespace parsingDSL{
 		}
 	};
 	
+	template<typename T>
+	struct NegligentTaggedSequenceChecker : Checker<std::vector<T>> {
+		std::shared_ptr<Checker<T>> tt;
+		NegligentTaggedSequenceChecker(
+			std::shared_ptr<Checker<T>> tt
+		):tt(tt){}
+		virtual std::vector<T> check(Term const& v){
+			return negligentCheckTaggedSequence(v,&*tt);
+		}
+	};
 
 	template <class T>
 	T checkTagSlicing(Term const& v, std::string& tag, Checker<T>* inner){
@@ -1733,6 +1779,12 @@ namespace parsingDSL{
 	){
 		return std::shared_ptr<Checker<std::vector<T>>>(new TaggedSequenceChecker<T>(tag, tt));
 	}
+	template<typename T>
+	static std::shared_ptr<Checker<std::vector<T>>> someTaggedSequence(
+		std::shared_ptr<Checker<T>> tt
+	){
+		return std::shared_ptr<Checker<std::vector<T>>>(new NegligentTaggedSequenceChecker<T>(tt));
+	}
 	//requires that the first element in the term be tag, and and passes down a copy of the list one shorter.
 	template<typename T>
 	static std::shared_ptr<Translator<T>> sliceOffTag(std::string tag, std::shared_ptr<Translator<T>> inner){
@@ -1783,7 +1835,7 @@ namespace parsingDSL{
 	template<typename A, typename B>
 	static std::shared_ptr<Checker<std::unordered_map<A,B>>> mapCheck(std::shared_ptr<Checker<A>> at, std::shared_ptr<Checker<B>> bt){
 		return std::shared_ptr<Checker<std::unordered_map<A,B>>>(new MapChecker<A,B>(at,bt)); }
-	static std::shared_ptr<Translator<Term>> identity(){
+	static std::shared_ptr<Translator<Term>> identityTrans(){
 		return std::shared_ptr<Translator<Term>>(new BlandTranslator()); }
 	static std::shared_ptr<Translator<bool>> boolTrans(){
 		return std::shared_ptr<Translator<bool>>(new BoolTranslator()); }
@@ -1793,6 +1845,8 @@ namespace parsingDSL{
 		return std::shared_ptr<Translator<std::string>>(new StringTranslator()); }
 	static std::shared_ptr<Translator<int>> intTrans(){
 		return std::shared_ptr<Translator<int>>(new IntTranslator()); }
+	static std::shared_ptr<Translator<u32>> u32Trans(){
+		return std::shared_ptr<Translator<u32>>(new u32Translator()); }
 	static std::shared_ptr<Checker<std::string>> stringCheck(){
 		return std::shared_ptr<Checker<std::string>>(new StringChecker()); }
 	static std::shared_ptr<Checker<int>> intCheck(){
