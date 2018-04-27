@@ -1068,7 +1068,7 @@ void multiLineTakingIndent(Parser* p, bool fileEnd, Rune c){
 			finishTakingSymbolAndAttach(p);
 			clearCharBuffer(&p->stringBuffer);
 			if(indentAsItWasLength > 0){
-				addStr(&p->stringBuffer, indentAsItWas);
+				addString(&p->stringBuffer, indentAsItWas, indentAsItWasLength);
 			}
 			transition(p, eatingIndentation);
 			eatingIndentation(p,false,c);
