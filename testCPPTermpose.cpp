@@ -145,6 +145,19 @@ backgroundModes background\n");
 		assert(a.toString() == "((mainModes physical) (cfgModes faunEntry (conf (scroll 0))) (backgroundModes background))");
 	}
 	
+	{
+		Term a = Term::parseMultiline("\
+a `\"\n\
+	b\n\
+		c\n\
+			d\n\
+				e\n\
+			d\n\
+e\n"
+		);
+		cout<<"it's "<<a.toString()<<endl;
+		assert(a.toString() == "((a (` \"b\\n\\tc\\n\\t\\td\\n\\t\\t\\te\\n\\t\\td\")) e)");
+	}
 	
 	return 0;
 }

@@ -160,9 +160,4 @@ A:B:C:D:E
 
 A :B :C :D :E
 #(A (B) (C) (D) (E)). I don't know when anyone would use this but it's not like " :" has any other reasonable meanings.
-
-A B:
-  C
-  D
-#(A (B C D))
 ```

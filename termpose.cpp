@@ -8,6 +8,7 @@
 #include <vector>
 #include <unordered_map>
 #include <cstring>
+#include <cmath>
 #include <cstdlib>
 #include <sstream>
 #include <type_traits>
@@ -77,12 +78,15 @@ struct TermposeError:public std::runtime_error{
 struct ParserError:public TermposeError{
 public:
 	Error e;
-	ParserError(unsigned line, unsigned column, std::string msg):e{line, column, msg}, TermposeError("ParserError") {}
-	virtual char const* what(){
+	std::string errString;
+	ParserError(unsigned line, unsigned column, std::string msg):e{line, column, msg}, TermposeError("ParserError") {
 		std::stringstream ss;
 		ss<<"ParserError ";
 		putErr(ss, e);
-		return ss.str().c_str();
+		errString = ss.str();
+	}
+	char const* what() const noexcept override{
+		return errString.c_str();
 	}
 };
 union Term;
@@ -164,6 +168,7 @@ private:
 	friend Term;
 	friend Stri;
 };
+struct Checker;
 union Term{
 public:
 	Stri s; List l;
@@ -243,11 +248,14 @@ struct TyperError:public TermposeError{
 
 Error error(Term& t, std::string msg){ return Error{t.l.line, t.l.column, msg}; }
 
+void escapedStringification(std::stringstream& ss, std::string const& s){
+	ss<<'"';
+	escapeSymbol(ss, s);
+	ss<<'"';
+}
 void Stri::stringify(std::stringstream& ss) const{
 	if(termpose::escapeIsNeeded(s)){
-		ss<<'"';
-		escapeSymbol(ss,s);
-		ss<<'"';
+		escapedStringification(ss, s);
 	}else{
 		ss<<s;
 	}
@@ -817,10 +825,22 @@ namespace parsingDSL{
 	template<typename T> struct Translator : Checker<T>, Termer<T>{
 	};
 	template<typename T> struct BuiltTranslator : Translator<T> {
-		Checker<T> ck;
-		Termer<T> tk;
-		virtual T check(Term const& v){ return ck.check(v); }
-		virtual Term termify(T const& v){ return tk.termify(v); }
+		std::shared_ptr<Checker<T>> ck;
+		std::shared_ptr<Termer<T>> tk;
+		BuiltTranslator(std::shared_ptr<Checker<T>> ck, std::shared_ptr<Termer<T>> tk): ck(move(ck)), tk(move(tk)) {}
+		T check(Term const& v) override { return ck->check(v); }
+		Term termify(T const& v) override { return tk->termify(v); }
+	};
+	
+	template<typename T> struct LambdaChecker : Checker<T> {
+		std::function<T(Term const&)> f;
+		LambdaChecker(std::function<T(Term const&)> f):f(move(f)) {}
+		T check(Term const& v) override { return f(v); }
+	};
+	template<typename T> struct LambdaTermer : Termer<T> {
+		std::function<Term(T const&)> f;
+		LambdaTermer(std::function<Term(T const&)> f):f(move(f)) {}
+		Term termify(T const& v) override { return f(v); }
 	};
 	
 	Term termifyBool(bool const& v){
@@ -906,13 +926,15 @@ namespace parsingDSL{
 	};
 	
 	struct u32Translator : Translator<uint32_t> {
-		Term termify(uint32_t const& b) override { return to_string(b); }
+		Term termify(uint32_t const& b) override { return std::to_string(b); }
 		uint32_t check(Term const& v) override {
-			string const& sv = v.strContentsConst();
+			std::string const& sv = v.strContentsConst();
+			errno = 0;
 			uint ret = ::strtoul(sv.c_str(), nullptr, 10);
-			if(errno || ret > numeric_limits<uint32_t>::max()){
+			if(errno || ret > std::numeric_limits<uint32_t>::max()){
+				uint errnooo = errno;
 				errno = 0;
-				throw TyperError(v, "range error");
+				throw TyperError(v, std::string("range error ") + std::to_string(errnooo) + " " + sv);
 			}else{
 				return ret;
 			}
@@ -923,7 +945,7 @@ namespace parsingDSL{
 	Term termifyFloat(float const& b){
 		//ensure that the number is large enough that it wont underflow when it's deserialized =_____=
 		float mino = std::numeric_limits<float>::min()*16;
-		float out = b == 0 ? 0 : abs(b) <= mino ? mino*(b/abs(b)) : b;
+		float out = b == 0 ? 0 : std::fabs(b) <= mino ? mino*(b/std::fabs(b)) : b;
 		std::stringstream ss;
 		ss << out;
 		return Stri::create(ss.str());
@@ -952,7 +974,7 @@ namespace parsingDSL{
 	
 	Term termifyDouble(double const& b){
 		double mino = std::numeric_limits<double>::min()*16;
-		double out = b == 0 ? 0 : abs(b) <= mino ? mino*(b/abs(b)) : b;
+		double out = b == 0 ? 0 : std::fabs(b) <= mino ? mino*(b/std::fabs(b)) : b;
 		std::stringstream ss;
 		ss << out;
 		return ss.str();
@@ -1835,6 +1857,21 @@ namespace parsingDSL{
 	template<typename A, typename B>
 	static std::shared_ptr<Checker<std::unordered_map<A,B>>> mapCheck(std::shared_ptr<Checker<A>> at, std::shared_ptr<Checker<B>> bt){
 		return std::shared_ptr<Checker<std::unordered_map<A,B>>>(new MapChecker<A,B>(at,bt)); }
+	template<typename T>
+	static std::shared_ptr<Checker<T>> lambdaCheck(std::function<T(Term const&)> check){
+		return std::static_pointer_cast<Checker<T>>(std::make_shared<LambdaChecker<T>>(std::move(check)));
+	}
+	template<typename T>
+	static std::shared_ptr<Termer<T>> lambdaTerm(std::function<Term(T const&)> term){
+		return std::static_pointer_cast<Termer<T>>(std::make_shared<LambdaChecker<T>>(std::move(term)));
+	}
+	template<typename T>
+	static std::shared_ptr<Translator<T>> lambdaTrans(std::function<T(Term const&)> check, std::function<Term(T const&)> term){
+		return std::make_shared<BuiltTranslator<T>>(
+			std::static_pointer_cast<Checker<T>>(std::make_shared<LambdaChecker<T>>(std::move(check))),
+			std::static_pointer_cast<Termer<T>>(std::make_shared<LambdaTermer<T>>(std::move(term)))
+		);
+	}
 	static std::shared_ptr<Translator<Term>> identityTrans(){
 		return std::shared_ptr<Translator<Term>>(new BlandTranslator()); }
 	static std::shared_ptr<Translator<bool>> boolTrans(){
@@ -1845,8 +1882,8 @@ namespace parsingDSL{
 		return std::shared_ptr<Translator<std::string>>(new StringTranslator()); }
 	static std::shared_ptr<Translator<int>> intTrans(){
 		return std::shared_ptr<Translator<int>>(new IntTranslator()); }
-	static std::shared_ptr<Translator<u32>> u32Trans(){
-		return std::shared_ptr<Translator<u32>>(new u32Translator()); }
+	static std::shared_ptr<Translator<uint32_t>> u32Trans(){
+		return std::shared_ptr<Translator<uint32_t>>(new u32Translator()); }
 	static std::shared_ptr<Checker<std::string>> stringCheck(){
 		return std::shared_ptr<Checker<std::string>>(new StringChecker()); }
 	static std::shared_ptr<Checker<int>> intCheck(){
@@ -1859,24 +1896,118 @@ namespace parsingDSL{
 		return std::shared_ptr<Translator<double>>(new DoubleTranslator()); }
 	static std::shared_ptr<Checker<double>> doubleCheck(){
 		return std::shared_ptr<Checker<double>>(new DoubleChecker()); }
-	
-	template<class T>
-	static T findOrDefault(std::vector<Term> const& v, std::shared_ptr<Checker<T>> checker, T d){
-		for(Term const& t : v){
-			try{
-				T ret = checker->check(t);
-				return ret;
-			}catch(TyperError& te){}
-		}
-		return d;
-	}
-	
-	template<class T>
+	template<typename T>
 	static std::shared_ptr<Checker<T>> asChecker(std::shared_ptr<Translator<T>> tt){
 		return std::static_pointer_cast<Checker<T>>(tt); }
-	template<class T>
+	template<typename T>
 	static std::shared_ptr<Termer<T>> asTermer(std::shared_ptr<Translator<T>> tt){
 		return std::static_pointer_cast<Termer<T>>(tt); }
-}
+	
+	
+	template<typename T>
+	T checkTermOrDefault(Term const& v, std::string const& key, std::shared_ptr<Checker<T>> checker, T def){
+		for(Term const& t : v.listContentsConst()){
+			if(t.initialString() == key){
+				return checker->check(t);
+			}
+		}
+		return def;
+	}
+	template<typename T>
+	T checkSubTermOrDefault(Term const& v, std::string const& key, std::shared_ptr<Checker<T>> checker, T def){
+		for(Term const& t : v.listContentsConst()){
+			if(t.initialString() == key){
+				if(!t.isList()){ throw TyperError(t, "expected a pair here, but it is just a string"); }
+				std::vector<Term> const& tl = t.listContentsConst();
+				if(tl.size() != 2){ throw TyperError(t, "expected a pair here, but the list is not the right length"); }
+				return checker->check(tl[1]);
+			}
+		}
+		return def;
+	}
+	
+}//namespace parsingDSL
+
+template<typename T>
+struct Serialization{ Term serialize(T const& v) = 0; };
+
+template<>
+struct Serialization<std::string>{ Term serialize(std::string const& v){
+	return parsingDSL::termifyString(v);
+}};
+template<>
+struct Serialization<bool>{ Term serialize(bool const& v){
+	return parsingDSL::termifyBool(v);
+}};
+template<>
+struct Serialization<uint32_t>{ Term serialize(uint32_t const& v){
+	return parsingDSL::termifyInt(v);
+}};
+template<>
+struct Serialization<int>{ Term serialize(int const& v){
+	return parsingDSL::termifyInt(v);
+}};
+template<>
+struct Serialization<float>{ Term serialize(float const& v){
+	return parsingDSL::termifyFloat(v);
+}};
+template<>
+struct Serialization<double>{ Term serialize(double const& v){
+	return parsingDSL::termifyDouble(v);
+}};
+template<typename T>
+struct Serialization<std::vector<T>>{ Term serialize(std::vector<T> const& v){
+	std::vector<Term> ret;
+	ret.reserve(v.size());
+	for(T const& vv : v){
+		ret.emplace_back(Serialization<T>::serialize(vv));
+	}
+	return ret;
+}};
+
+
+template<typename T>
+struct Deserialization{ T deserialize(Term const& v) = 0; };
+
+template<>
+struct Deserialization<std::string>{ std::string deserialize(Term const& v){
+	return parsingDSL::checkString(v);
+}};
+template<>
+struct Deserialization<bool>{ bool deserialize(Term const& v){
+	return parsingDSL::checkBool(v);
+}};
+template<>
+struct Deserialization<uint32_t>{ uint32_t deserialize(Term const& v){
+	return parsingDSL::checkInt(v);
+}};
+template<>
+struct Deserialization<int>{ int deserialize(Term const& v){
+	return parsingDSL::checkInt(v);
+}};
+template<>
+struct Deserialization<float>{ float deserialize(Term const& v){
+	return parsingDSL::checkFloat(v);
+}};
+template<>
+struct Deserialization<double>{ double deserialize(Term const& v){
+	return parsingDSL::checkDouble(v);
+}};
+template<typename T>
+struct Deserialization<std::vector<T>>{ std::vector<T> deserialize(Term const& v){
+	std::vector<T> ret;
+	std::vector<Term> const& out = v.listContentsConst();
+	ret.reserve(out.size());
+	for(T const& vv : out){
+		ret.emplace_back(Deserialization<T>::deserialize(vv));
+	}
+	return ret;
+}};
+
+
+template<typename T>
+Term serialize(T const& v){ return Serialization<T>::serialize(v); }
+template<typename T>
+T deserialize(Term const& v){ return Deserialization<T>::deserialize(v); }
 
 }//namespace termpose
