@@ -1,0 +1,46 @@
+
+"tests
+	"that bug
+		=
+			(::)
+			((()))
+	"treat colons as colons even if there's a space
+		=
+			ne ne : ne
+			(ne (ne ne))
+	"central feature about terms alone on their lines not being in a list
+		=
+			a
+				b
+				c
+			a b c
+	"nested colons work the same way
+		=
+			a:::b
+			(((a b)))
+	"colon at beginning of parens
+		=
+			(::)
+			((()))
+	"escaped chars can occur in the middle of unquoted atoms. Yes it was weird that you did it the other way. The intuition driving this is=> If there are no spaces a person should just be able to remove the quotes and the string should mean the same thing.
+		=
+			h\"ow
+			"h\"ow"
+			"
+				h"ow
+	"finalize the multiline string's newline only after finding another line matching the indent given. Only newline if the indent goes all the way up.
+		=
+			m "
+				something
+				
+			(m "something\n")
+		=
+			m "
+				something
+			(m something)
+		=
+			m "
+				something
+			
+			(m something)
+		
