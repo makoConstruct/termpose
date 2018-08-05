@@ -1,0 +1,27 @@
+{
+	"folders":
+	[
+		{
+			"follow_symlinks": true,
+			"path": "."
+		}
+	],
+	"build_systems":[
+		{
+			"name":"termpose rust",
+			"shell_cmd": "cargo build",
+			"working_dir": "${project_path}",
+			"file_regex": "(?|, ([^,<\n]*\\.[A-z]{2}):([0-9]+)|[ \t]*-->[ \t]*([^<\n]*):([0-9]+):([0-9]+))",
+			"variants": [
+				{
+					"name":"Run",
+					"shell_cmd": "cargo test",
+				},
+				{
+					"name":"Test",
+					"shell_cmd": "cargo test",
+				}
+			]
+		}
+	]
+}

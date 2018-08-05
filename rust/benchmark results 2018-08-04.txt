@@ -1,0 +1,8 @@
+
+rust:
+test parsers::tests::bench_long_long_term ... bench:     347,574 ns/iter (+/- 9,739)
+test parsers::tests::bench_long_long_term ... bench:     354,057 ns/iter (+/- 7,580)
+
+C:
+the result was 146687504, the time taken was 562076.181750 per test
+the result was 575161872, the time taken was 561863.601750 per test
