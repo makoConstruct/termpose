@@ -18,9 +18,9 @@ tests
 			b
 			c
 		a b c
-	"nested colons work the same way
+	"repeated colons do the repeated colon thing
 		a:::b
-		(((a b)))
+		(a ((b)))
 	"escaped chars can occur in the middle of unquoted atoms. Yes it was weird that you did it the other way. The intuition driving this is=> If there are no spaces a person should just be able to remove the quotes and the string should mean the same thing.
 		h\"ow
 		"h\"ow"
@@ -35,7 +35,7 @@ tests
 		m "
 			something
 		(m something)
-	"and what if we be tricky and have it be invisibly different but different in meaning
+	"newline without equivalent indent should *not* produce a newline
 		m "
 			something
 		
@@ -68,3 +68,11 @@ tests
 	"chained colons, uhhh
 		A:B:C:D:E
 		(A (B (C (D E))))
+	"indent does not create empty lists
+		a
+			
+			b
+			
+			c
+		a b c
+	

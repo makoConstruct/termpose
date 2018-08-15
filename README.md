@@ -99,7 +99,7 @@ Often, in programming languages, and in data, we want an easy way to express pai
 CGRect(x: 0, y: 0, width: 320, height: 500)
 ```
 
-In a termpose context, a structure like this could be expressed in just the same way, minus the colons. We don't need or want any colons around here.
+In a termpose context, a structure like this could be expressed in just the same way, minus the commas. We don't need or want any commas around here.
 
 ```
 CGRect(x: 0  y: 0  width: 320  height: 500)
@@ -164,7 +164,7 @@ print "and then another"
 
 We could simply open a string into an indent before we want it to start and unindent when we want it to end.
 
-If you were really making a termpose-based programming language, you might want to add something extra to quoted atoms to signal that you intend them to be read as string literals. Termpose tries to make that easy by having quoted strings be *invoked* by anything they appear immediately after- without any space. For instance,
+If we were really making a termpose-based programming language, we might want to add something extra to quoted atoms to signal that we intend them to be read as string literals. Termpose tries to make that easy by having quoted strings be *invoked* by anything they are directly adjacent to. For instance, if we used a `'`,
 
 ```
 print '"
@@ -176,7 +176,7 @@ print '"and then another"
 would break down to
 
 ```
-( (print (' "a string\nanother string")) (print (' "and then another")) )
+((print ("'" "a string\nanother string")) (print ("'" "and then another")))
 ```
 
 Which would make it very easy to detect literals by looking for terms that start with `'`.
