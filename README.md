@@ -130,22 +130,22 @@ You might interrupt: "But didn't you say there were only lists and atoms in term
 You might say they pair things. You might also say that a colon invokes the first thing as a function of the second thing. Either interpretation is valid.
 
 ```
-print:"chill"
+print:"maybe"
 ```
 
-If you chose to chain these commas for a series of chained one-parameter invocations, you could.
+If you wanted to invoke a series of chained one-parameter invocations, you could.
 
 ```
-print: to_lowercase: duplicate_back_letter: "CHIL"
+print:to_lowercase:reverse:"EBYAM"
 ```
 
 Would translate to
 
 ```
-print(to_lowercase(duplicate_back_letter(CHIL)))
+print(to_lowercase(reverse(EBYAM)))
 ```
 
-You might notice the quote marks around "CHILL" went away in the translation. Quotes are for including whitespace in atoms. If you aren't using any whitespace within the atom string, they aren't needed. Here are some more typical examples of the quote syntax:
+You might notice the quote marks around "EBYAM" were omitted away in the translation. Quotes are for including whitespace in atoms. If you aren't using any whitespace within the atom string, they aren't needed. Here are some more typical examples of the quote syntax:
 
 ```
 print "a string"
@@ -164,7 +164,7 @@ print "and then another"
 
 We could simply open a string into an indent before we want it to start and unindent when we want it to end.
 
-If you were really making a termpose-based programming language, you might want to add something extra to quoted atoms to signal that they are literals. Termpose tries to make that easy.
+If you were really making a termpose-based programming language, you might want to add something extra to quoted atoms to signal that they are literals. Termpose tries to make that easy by having quoted strings be invoked by anything they appear immediately after- without any space.
 
 ```
 print '"
@@ -181,4 +181,4 @@ This would break down to
 
 Which would make it very easy to detect literals by looking for terms that start with `'`.
 
-I hope I've been able to convince you that termpose is flexible enough for whatever data you want to express. To understand how easy it is to work with termpose, take a look at some of the APIs.
+I hope I've been able to convince you that termpose is flexible enough for whatever data you want to express. To understand how easy it is to work with termpose, take a look at some the API intros listed above.
