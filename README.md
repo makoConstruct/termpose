@@ -164,7 +164,7 @@ print "and then another"
 
 We could simply open a string into an indent before we want it to start and unindent when we want it to end.
 
-If you were really making a termpose-based programming language, you might want to add something extra to quoted atoms to signal that they are literals. Termpose tries to make that easy by having quoted strings be invoked by anything they appear immediately after- without any space.
+If you were really making a termpose-based programming language, you might want to add something extra to quoted atoms to signal that you intend them to be read as string literals. Termpose tries to make that easy by having quoted strings be *invoked* by anything they appear immediately after- without any space. For instance,
 
 ```
 print '"
@@ -173,7 +173,7 @@ print '"
 print '"and then another"
 ```
 
-This would break down to
+would break down to
 
 ```
 ( (print (' "a string\nanother string")) (print (' "and then another")) )
