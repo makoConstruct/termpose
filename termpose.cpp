@@ -199,6 +199,7 @@ public:
 	std::vector<Term> const& listContentsOfMinimumLengthConst(uint minimumLength) const ;
 	std::vector<Term>& listContentsOfMinimumLength(uint minimumLength);
 	bool startsWith(std::string const& str) const;
+	std::string escapedString() const ;
 	std::string prettyPrint(unsigned lineLimit = 80) const;
 	std::string prettyPrintMultiline(unsigned lineLimit = 80) const;
 	std::string const& initialString() const; //Stri("a") | List("a", ...) | List(List("a" ...) ...) -> "a", List() | List(List() ...) -> ""
@@ -543,6 +544,11 @@ uint32_t Term::line() const {
 }
 uint32_t Term::column() const {
 	return ((List*)(this))->column; //doesn't matter if not List, layout is same in both
+}
+std::string Term::escapedString() const {
+	std::stringstream ss;
+	escapedStringification(ss, initialString());
+	return ss.str();
 }
 Term& Term::operator=(Term const& other){
 	this->~Term();

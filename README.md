@@ -2,11 +2,11 @@
 
 ## Termpose - a sensitive markup language
 
-Termpose is an extremely flexible markup language with an elegant syntax.
+Termpose is an extremely flexible markup language with an elegant whitespace syntax.
 
-Termpose data, once parsed, is very simple to work with. It doesn't have maps and numbers. It only has lists and strings. APIs are provided for type-checking-translating into types like maps and numbers, of course, but the way you use the data doesn't constrain the way you might represent it.
+Termpose data, once parsed, is very simple to work with. It doesn't have maps and numbers. It only has lists and strings. APIs are provided for type-checking-translating into types like maps and numbers, but the format itself does not impose. The only characters termpose applies special meaning to are `":() `. The rest are yours to use as you please.
 
-Termpose's advantage is its supreme writability. Termpose is minimal and flexible enough that if you wanted to make a programming language, but couldn't be bothered writing a parser, you could just use Termpose, and it wouldn't be all that bad. IMO, it would end up nicer than most lisps.
+
 
 Here's an example of the kind data I store in termpose. This is very similar to the save format of a game I'm working on:
 ```
@@ -51,8 +51,6 @@ Watch out, it's fragile!")
 
 We were always able to use a nice, minimal, flexible S-Expressions language instead of XML, Json, Toml, Yaml or whatever else, but there was something about those old syntaxes that made the prospect unpalatable. Termpose takes that something out of the picture.
 
-The only characters termpose applies special meaning to are `":() `. The rest are yours to use as you please
-
 ## Platform support?
 
 | language | status | the closest thing we have to documentation |
@@ -68,6 +66,119 @@ The only characters termpose applies special meaning to are `":() `. The rest ar
 | Rust | Basic support + custom Codings. | [Rust Source](https://github.com/makoConstruct/termpose/blob/master/rust/src/lib.rs) |
 
 
-## Tell us about the implementation?
-Termpose is implemented in the style of a streaming state-machine. This in combination with the obstinately design-led nature of the application, which flat out refused to turn around when it started to understand why no one else does syntaxes like this, has lead to very ugly code, which required a lot of documentation of the mutable state. HOWEVER, this style gets us pretty well optimal time and memory efficiency. It also makes it quite straightforward to build event-driven parsers(IE, parsers that can find specific structures at specific places in a giant mass of termpose without parsing the entire thing into memory first) if the need ever arises.
+## Format in detail
 
+Here, I'm going to describe how data and structures can be written in termpose.
+
+In s-expression based languages, the first term in a list is considered special. For instance,
+
+```
+(f a b c)
+```
+
+Here, this would generally be an application of the function `f`, being invoked on the variables `a`, `b` and `c`.
+
+In termpose, this structure can also be expressed in a way that will be more familiar to most programmers and mathematicians, one character shorter to type, and perhaps more explicit
+
+```
+f(a b c)
+```
+
+Anything that can be expressed that way can also be written
+
+```
+f
+  a
+  b
+  c
+```
+
+Often, in programming languages, and in data, we want an easy way to express pairs. For instance, in swift, you might define or create a rectangle with
+
+```
+CGRect(x: 0, y: 0, width: 320, height: 500)
+```
+
+In a termpose context, a structure like this could be expressed in just the same way, minus the colons. We don't need or want any colons around here.
+
+```
+CGRect(x: 0  y: 0  width: 320  height: 500)
+```
+
+Or more minimally
+
+```
+CGRect x:0 y:0 width:320 height:500
+```
+
+Or
+
+```
+CGRect
+  x:0
+  y:0
+  width:320
+  height:500
+```
+
+You might interrupt: "But didn't you say there were only lists and atoms in termpose"? Right. Colons are nothing special really, they break down like this
+
+```
+(CGRect (x 0) (y 0) (width 320) (height 500))
+```
+
+You might say they pair things. You might also say that a colon invokes the first thing as a function of the second thing. Either interpretation is valid.
+
+```
+print:"chill"
+```
+
+If you chose to chain these commas for a series of chained one-parameter invocations, you could.
+
+```
+print: to_lowercase: duplicate_back_letter: "CHIL"
+```
+
+Would translate to
+
+```
+print(to_lowercase(duplicate_back_letter(CHIL)))
+```
+
+You might notice the quote marks around "CHILL" went away in the translation. Quotes are for including whitespace in atoms. If you aren't using any whitespace within the atom string, they aren't needed. Here are some more typical examples of the quote syntax:
+
+```
+print "a string"
+print "another string"
+print "and then another"
+```
+
+But what if our hypothetical termpose-based programming language wanted to print something very long, with multiple lines?
+
+```
+print "
+  a string
+  another string
+print "and then another"
+```
+
+We could simply open a string into an indent before we want it to start and unindent when we want it to end.
+
+If you were really making a termpose-based programming language, you might want to add something extra to quoted atoms to signal that they are literals. Termpose tries to make that easy.
+
+```
+print '"
+  a string
+  another string
+print '"and then another"
+```
+
+This would break down to
+
+```
+( (print (' "a string\nanother string")) (print (' "and then another")) )
+```
+
+Which would make it very easy to detect literals by looking for terms that start with `'`.
+
+I hope I've been able to convince you that termpose is flexible enough for whatever data you want to express. To understand how easy it is to work with termpose, take a look at some of the APIs.

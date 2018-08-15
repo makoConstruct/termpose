@@ -13,23 +13,29 @@ struct SexpParserState<'a>{
 	column:isize,
 }
 
-unsafe fn seriously_pop<T>(v: &mut Vec<T>)-> T {
-	seriously_unwrap(v.pop())
-}
 
-fn seriously_unreach(s:&str)-> ! {
+//This is supposed to invoke unreachable (UB) in release and panic in debug. The point is, it's a *strong* assertion to the optimizer that one of the two branches isn't supposed to be reachable, and that whatever conditionals lead to it do not need to be evaluated. See below for benchmarks demonstrating that this doesn't much occur.
+#[inline(always)]
+unsafe fn seriously_unreach(s:&str)-> ! {
 	if cfg!(debug_assertions) { panic!("{}", s) }
-	else{ unsafe{ unreachable() } }
+	else{ unreachable() }
 }
 
+#[inline(always)]
 unsafe fn serious_get_back_mut<T>(v:&mut Vec<T>)-> &mut T {
 	if let Some(v) = v.last_mut() { v }
 	else{ seriously_unreach("this vec should never be empty"); }
 }
 
+#[inline(always)]
 unsafe fn seriously_unwrap<T>(v:Option<T>)-> T {
 	if let Some(va) = v { va }
 	else{ seriously_unreach("this option should have been some"); }
+}
+
+#[inline(always)]
+unsafe fn seriously_pop<T>(v: &mut Vec<T>)-> T {
+	seriously_unwrap(v.pop())
 }
 
 #[derive(Debug)]
@@ -464,7 +470,7 @@ impl<'a> ParserState<'a> {
 					Ok(())
 				},
 				'\n' => {
-					self.next_col();
+					self.next_line();
 					Ok(())
 				},
 				_ => {
@@ -542,6 +548,7 @@ impl<'a> ParserState<'a> {
 				'n'=> { push(self, '\n'); }
 				'r'=> { push(self, '\r'); }
 				't'=> { push(self, '\t'); }
+				'h'=> { push(self, '☃'); }
 				'"'=> { push(self, '"'); }
 				'\\'=> { push(self, '\\'); }
 				_=> { return self.a_fail(match_fail_message.into()); }
@@ -911,14 +918,124 @@ mod tests {
 		});
 	}
 	
-	#[bench]
-	fn bench_long_long_term_with_dynamic_style(b: &mut Bencher) {
-		let data = read_file_from_root("longterm.term");
-		b.iter(||{
-			parse_multiline_style(
-				data.as_str(),
-				test::black_box(DEFAULT_STYLE.clone())
-			)
-		})
-	}
+	//results: dynamic style makes no difference to performance. The files have different structures under different styles, so a masking effect could be going on (dynamic may have an advantage), but meh
+	// #[bench]
+	// fn bench_long_long_term_with_dynamic_style(b: &mut Bencher) {
+	// 	let data = read_file_from_root("longterm.term");
+	// 	b.iter(||{
+	// 		parse_multiline_style(
+	// 			data.as_str(),
+	// 			test::black_box(DEFAULT_STYLE.clone())
+	// 		)
+	// 	})
+	// }
+	
+	
+	
+	//the following tests are for testing the performance effects of the seriously_assume methods. Results: They are small. seriously_unwrap is significant, but methods about assuming vecs contain something don't seem to do much at all. Around 3% speedup.
+	
+	#[inline(always)]
+	fn array_some_predicate(i:usize)-> bool { (((i & (i >> 1)) ^ (i/3)) & 1) != 0 } //an odd condition so that the optimizer wont just infer all of this
+	
+	// #[inline(always)]
+	// fn option_array_test<F>(b: &mut Bencher, f:F) where F : Fn(usize, &Option<usize>)-> usize {
+	// 	let mut subject = Vec::new();
+	// 	for i in 0..30000 {
+	// 		if array_some_predicate(i) {
+	// 			subject.push(Some(i));
+	// 		}else{
+	// 			subject.push(None);
+	// 		}
+	// 	}
+		
+	// 	b.iter(||{
+	// 		let mut total = 0;
+	// 		for (i, o) in subject.iter().enumerate() {
+	// 			total += f(i, o)
+	// 		}
+	// 		total
+	// 	})
+	// }
+	
+	// #[bench]
+	// fn test_array_seriously_unwrap(b: &mut Bencher){
+	// 	option_array_test(b, |i:usize, o:&Option<usize>|{
+	// 		if array_some_predicate(i) {
+	// 			unsafe{ seriously_unwrap(*o) }
+	// 		}else{
+	// 			0
+	// 		}
+	// 	})
+	// }
+	
+	// #[bench]
+	// fn test_array_control(b: &mut Bencher){
+	// 	option_array_test(b, |i:usize, o:&Option<usize>|{
+	// 		if array_some_predicate(i) {
+	// 			match *o {
+	// 				Some(i)=> i,
+	// 				None=> panic!("bahh!"),
+	// 			}
+	// 		}else{
+	// 			0
+	// 		}
+	// 	})
+	// }
+	
+	
+	
+	
+	// #[inline(always)]
+	// fn vec_array_test<F>(b: &mut Bencher, f:F) where F : Fn(usize, &Vec<usize>)-> usize {
+	// 	let mut subject = Vec::new();
+	// 	for i in 0..30000 {
+	// 		if array_some_predicate(i) {
+	// 			subject.push(vec!(i));
+	// 			// println!("on");
+	// 		}else{
+	// 			subject.push(vec!());
+	// 			// println!("off");
+	// 		}
+	// 	}
+		
+	// 	b.iter(||{
+	// 		let mut total = 0;
+	// 		for (i, o) in subject.iter().enumerate() {
+	// 			total += f(i, o)
+	// 		}
+	// 		total
+	// 	})
+	// }
+	
+	// #[inline(always)]
+	// unsafe fn serious_get_back<T>(v:&Vec<T>)-> &T {
+	// 	if v.len() != 0 { v.get_unchecked(v.len() - 1) }
+	// 	else{ seriously_unreach("this vec should never be empty"); }
+	// }
+	
+	// #[bench]
+	// fn test_vec_array_seriously(b: &mut Bencher){
+	// 	vec_array_test(b, |i:usize, o:&Vec<usize>|{
+	// 		if array_some_predicate(i) {
+	// 			unsafe{ *o.get_unchecked(0) }
+	// 		}else{
+	// 			0
+	// 		}
+	// 	})
+	// }
+	
+	// #[bench]
+	// fn test_vec_array_control(b: &mut Bencher){
+	// 	vec_array_test(b, |i:usize, o:&Vec<usize>|{
+	// 		if array_some_predicate(i) {
+	// 			match o.last() {
+	// 				Some(i)=> *i,
+	// 				None=> panic!("bahh!"),
+	// 			}
+	// 		}else{
+	// 			0
+	// 		}
+	// 	})
+	// }
+	
 }
