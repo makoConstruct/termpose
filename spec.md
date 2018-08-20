@@ -1,8 +1,8 @@
-# Termpose Spec
+# termpose spec
 
-*:keywords*, words to which we assign special definitions, are written with a colon. :keywords will be bolded when mentioned for the first time in the document
+**:keywords**, words to which we assign special definitions, are written with a colon. :keywords will be bolded when mentioned for the first time in the document
 
-We will name the elements of the syntax, then explain how those elements are mapped by a parsing method into *:term* data
+We will name the elements of the syntax, then explain how those elements are mapped by a parsing method into **:term** data
 
 "any number of" means zero or more
 
@@ -12,37 +12,37 @@ We will name the elements of the syntax, then explain how those elements are map
 
 ### data
 
-The process of parsing a :file produces a *:term*
+the process of parsing a :file produces a **:term**
 
-A :term is either either a *:list* or a string. In a Rust API, for instance, it is defined as `enum Term { Listv(List), Atomv(Atom) }`. In the C API, it is a tagged union
+a :term is either either a **:list** or a string. In a Rust API, for instance, it is defined as `enum Term { Listv(List), Atomv(Atom) }`. In the C API, it is a tagged union
 
-A *:list* is a sequence type containing any number of :terms
-
-
+a **:list** is a sequence type containing any number of :terms
 
 
 
-### Elements of Syntax
 
-file = some *:lines*
 
-line = an *:indentation*, optional *:linecontent*, then a *:newline* or the end of the file
+### elements of Syntax
+
+file = some **:lines**
+
+line = an **:indentation**, optional *:linecontent*, then a *:newline* or the end of the file
 
 newline = any combination of `\n` and `\r`
 
 indentation = any number of `space` or `tab`
 
-linecontent = some *:items* separated by *:whitespace*
+linecontent = some **:items** separated by *:whitespace*
 
 whitespace = a sequence of `space` or `tab`
 
-item = one of *:slist* *:word* *:pair* *:quoted* *:invocation* *:quonvokation*
+item = one of **:slist** **:word** **:pair** **:quoted** **:invocation** **:quonvokation**
 
 
 
 slist = `(` followed by any number of :items followed by `)`
 
-word = some *:letters* other than :whitespace
+word = some **:letters** other than :whitespace
 
 pair = a non-:pair :item followed by a `:`, followed by an :item
 
@@ -54,7 +54,7 @@ quonvokation = an :item followed immediately by a :quoted
 
 
 
-letter = an *:escaped*, or any unicode letter other than `:` `(` `)` `"` `\n` `\r` `\`
+letter = an **:escaped**, or any unicode letter other than `:` `(` `)` `"` `\n` `\r` `\`
 
 escaped = either `\\` or `\"`
 
@@ -66,11 +66,11 @@ indental of a head line = the indental is the lines with content that are indent
 
 ### misc requirements/exceptions
 
-Each indentation must be either prefixed by the :indentation of the previous line, or be the prefix of the indentation of the next line. This allows common deviations in indenting without allowing any inconsistent or misleading indentation patterns
+each indentation must be either prefixed by the :indentation of the previous line, or be the prefix of the indentation of the next line. This allows common deviations in indenting without allowing any inconsistent or misleading indentation patterns
 
-During *:multilinestrings*, the :indentation is set by the first line of the multiline, then remains at that length until the :multilinestring ends (that is, when a line with content and a shorter indentation is encountered.)
+during **:multilinestrings**, the :indentation is set by the first line of the multiline, then remains at that length until the :multilinestring ends (that is, when a line with content and a shorter indentation is encountered.)
 
-Any item can be *:interrupted* by a :newline. Through this, :slists will not always close, :quoteds wont always have an end-quote, and :pairs wont always have their second :item. The meaning of :interrupted :items will be explained below
+any item can be **:interrupted** by a :newline. Through this, :slists will not always close, :quoteds wont always have an end-quote, and :pairs wont always have their second :item. The meaning of :interrupted :items will be explained below
 
 
 
@@ -88,9 +88,9 @@ word → a string
 
 pair → a :list containing two :terms, one for each :item. If :interrupted after the `:` and before the second term, the :list will contain the :indental
 
-quoted → a string. If :interrupted, and the string contains non-:whitespace content, then the string will end normally at the end of the line. If there is only whitespace, the whitespace will be stripped out and if the line has :indental, it will be parsed as a *:multilinestring*
+quoted → a string. If :interrupted, and the string contains non-:whitespace content, then the string will end normally at the end of the line. If there is only whitespace, the whitespace will be stripped out and if the line has :indental, it will be parsed as a **:multilinestring**
 
-multilinestring → Once a non-:whitespace character is encountered on the first indented line of the :multilinestring, the *:mindnt* of the multiline string is set as the preceeding :whitespace string. On each line within the multiline string, this :mindnt is repeated. everything beyond the multiline string's indent is included in the resultant string.
+multilinestring → Once a non-:whitespace character is encountered on the first indented line of the :multilinestring, the **:mindnt** of the multiline string is set as the preceeding :whitespace string. On each line within the multiline string, this :mindnt is repeated. everything beyond the multiline string's indent is included in the resultant string.
 
 invocation → the :item part at the head of the invocation will be inserted as the first of the immediately following :slist part
 
