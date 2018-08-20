@@ -56,7 +56,7 @@ a **:list** is a sequence type containing any number of :terms
 
 :letter = an **:escaped**, or any unicode letter other than `:` `(` `)` `"` `\n` `\r` `\`
 
-:escaped = either `\\` or `\"`
+:escaped = `\\`, `\"`, `\n` (newline), `\r` (other newline), `\t` (tab)
 
 **:indental** of a line = the :indental is the set of lines with content that are indented beneath the line. More formally, it is the lines that appear after the head line that have longer indentation than the head line does, and before the next line with content that has an indentation that is shorter than or equal to the indentation of the head line
 
@@ -87,7 +87,7 @@ any item can be **:interrupted** by a :newline. Through this, :slists will not a
 
 :quoted → a string. If :interrupted, and the string contains non-:whitespace content, then the string will end normally at the end of the line. If there is only whitespace, the whitespace will be stripped out and if the line has :indental, it will be parsed as a **:multilinestring**
 
-:multilinestring → Once a non-:whitespace character is encountered on the first indented line of the :multilinestring, the **:mindnt** of the multiline string is set as the preceeding :whitespace string. On each line within the multiline string, this :mindnt is repeated. everything beyond the multiline string's indent is included in the resultant string.
+:multilinestring → Once a non-:whitespace character is encountered on the first indented line of the :multilinestring, the **:mindnt** of the multiline string is set as the preceeding :whitespace string. On each line within the multiline string, this :mindnt is repeated. everything beyond each :mindnt is included in the resultant string. The string will not be terminated with a newline unless a final empty :mindnt is stated.
 
 :invocation → the :item part at the head of the invocation will be inserted as the first of the immediately following :slist part
 
