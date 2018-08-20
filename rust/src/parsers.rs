@@ -252,6 +252,8 @@ unsafe fn str_from_bounds<'a>(o:*const u8, f:*const u8)-> &'a str {
 	std::str::from_utf8_unchecked(std::slice::from_raw_parts(o, f as usize - o as usize))
 }
 
+fn is_whitespace(c:char)-> bool { c == ' ' || c == '\t' }
+
 struct ParserState<'a>{
 	root: Term,
 	indent_stack: Vec<&'a str>,
@@ -566,8 +568,10 @@ impl<'a> ParserState<'a> {
 			match c {
 				'\n'=> {
 					self.stretch_reading_start = self.next_char_ptr();
-					if unsafe{(*self.atom_being_read_into).len()} == 0 {
+					let ar = unsafe{&mut *self.atom_being_read_into};
+					if ar.chars().all(is_whitespace) {
 						//begin multiline string
+						ar.clear();
 						self.mode = Self::eating_initial_multline_string_indentation;
 					}else {
 						self.mode = Self::eating_indentation;

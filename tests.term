@@ -8,8 +8,8 @@ tests
 		let (life happen)
 		let life:happen
 	"colons alone in list
-		(::)
-		((()))
+		(:)
+		(())
 	"treat colons as colons even if there's a space
 		ne ne : ne
 		(ne (ne ne))
@@ -18,9 +18,14 @@ tests
 			b
 			c
 		a b c
-	"repeated colons do the repeated colon thing
-		a:::b
-		(a ((b)))
+	"head linecontent list doesn't open onto the indental
+		if cond
+			then
+			else
+		((if cond) then else)
+	"invoked string
+		a b"s
+		(a (b s))
 	"escaped chars can occur in the middle of unquoted atoms. Yes it was weird that you did it the other way. The intuition driving this is=> If there are no spaces a person should just be able to remove the quotes and the string should mean the same thing.
 		h\"ow
 		"h\"ow"
@@ -75,4 +80,9 @@ tests
 			
 			c
 		a b c
-	
+
+failing
+	"double colon
+		a:: c
+	"colon before paren
+		a(b:)

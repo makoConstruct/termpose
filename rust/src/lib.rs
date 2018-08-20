@@ -33,7 +33,7 @@ use ref_slice::ref_slice;
 // }
 
 impl PartialEq for Term {
-	fn eq(&self, other: &Self)-> bool {
+	fn eq(&self, other: &Self)-> bool { //line numbers are not considered important
 		match *self {
 			Atomv(ref sa)=> {
 				match *other {
