@@ -57,7 +57,9 @@ a **:list** is a sequence type containing any number of :terms
 
 ### misc requirements/exceptions
 
-each :indentation must be either prefixed by the :indentation of the previous line, or be the prefix of the :indentation of the next line. This permits deviations in indenting style that are common, without allowing any inconsistent or misleading :indentation patterns
+the first :line with :linecontent must have an indent of zero length
+
+each :indentation must be either prefixed by the :indentation of the previous line, or be the prefix of the :indentation of the next line. This permits common deviations in indenting style, without allowing any inconsistent or misleading :indentation patterns
 
 any :item can be **:interrupted** by a :newline. Through this, :slists will not always close, :quoteds wont always have an end-quote, and :pairs wont always have their second :item. The meaning of :interrupted :items will be explained below
 
