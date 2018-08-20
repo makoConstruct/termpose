@@ -22,13 +22,13 @@ a **:list** is a sequence type containing any number of :terms
 
 :file = one or more **:lines**
 
-:line = an **:indentation**, optional *:linecontent*, then a *:newline* or the end of the :file
+:line = an **:indentation**, optional **:linecontent**, then a **:newline** or the end of the :file
 
 :newline = one or more `\n` `\r`
 
 :indentation = any number of `space` `tab`
 
-:linecontent = one or more **:items** separated by *:whitespace*
+:linecontent = one or more **:items** separated by **:whitespace**
 
 :whitespace = one or more `space` `tab`
 
