@@ -4,17 +4,13 @@
 
 We will name the elements of the syntax, then explain how those elements are mapped by a parsing method into **:term** data
 
-"any number of" means zero or more
-
-"some things" means one or more
-
 
 
 ### data
 
-the process of parsing a :file produces a **:term**
+the process of parsing a **:file** produces a **:term**
 
-a :term is either either a **:list** or a string. In a Rust API, for instance, it is defined as `enum Term { Listv(List), Atomv(Atom) }`. In the C API, it is a tagged union
+a :term is either either a **:list** or a string. In the fast Rust API, for instance, it is defined as `enum Term { Listv(List), Atomv(Atom) }`. In the C API, it is a tagged union
 
 a **:list** is a sequence type containing any number of :terms
 
@@ -24,17 +20,17 @@ a **:list** is a sequence type containing any number of :terms
 
 ### elements of syntax
 
-:file = some **:lines**
+:file = one or more **:lines**
 
-:line = an **:indentation**, optional *:linecontent*, then a *:newline* or the end of the file
+:line = an **:indentation**, optional *:linecontent*, then a *:newline* or the end of the :file
 
-:newline = any combination of `\n` and `\r`
+:newline = one or more `\n` `\r`
 
-:indentation = any number of `space` or `tab`
+:indentation = any number of `space` `tab`
 
-:linecontent = some **:items** separated by *:whitespace*
+:linecontent = one or more **:items** separated by *:whitespace*
 
-:whitespace = a sequence of `space` or `tab`
+:whitespace = one or more `space` `tab`
 
 :item = one of **:slist** **:word** **:pair** **:quoted** **:invocation** **:quonvokation**
 
@@ -58,14 +54,14 @@ a **:list** is a sequence type containing any number of :terms
 
 :escaped = `\\`, `\"`, `\n` (newline), `\r` (other newline), `\t` (tab)
 
-**:indental** of a line = the :indental is the set of lines with content that are indented beneath the line. More formally, it is the lines that appear after the head line that have longer indentation than the head line does, and before the next line with content that has an indentation that is shorter than or equal to the indentation of the head line
+**:indental** of a line = the :indental is the set of lines with content that are indented beneath the line. More formally, it is the lines that appear after the head line that have longer :indentation than the head line does, and before the next line with content that has an :indentation that is shorter than or equal to the :indentation of the head line
 
 
 ### misc requirements/exceptions
 
-each indentation must be either prefixed by the :indentation of the previous line, or be the prefix of the indentation of the next line. This allows common deviations in indenting without allowing any inconsistent or misleading indentation patterns
+each :indentation must be either prefixed by the :indentation of the previous line, or be the prefix of the :indentation of the next line. This permits deviations in indenting style that are common, without allowing any inconsistent or misleading :indentation patterns
 
-during **:multilinestrings**, the :indentation is set by the first line of the multiline, then remains at that length until the :multilinestring ends (that is, when a line with content and a shorter indentation is encountered.)
+during **:multilinestrings**, the :indentation is set by the first line of the multiline, then remains at that length until the :multilinestring ends (that is, when a line with content and a shorter :indentation is encountered.)
 
 any item can be **:interrupted** by a :newline. Through this, :slists will not always close, :quoteds wont always have an end-quote, and :pairs wont always have their second :item. The meaning of :interrupted :items will be explained below
 
