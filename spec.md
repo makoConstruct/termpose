@@ -10,7 +10,7 @@ we will name the elements of the syntax, then explain how those elements are map
 
 the process of parsing a **:file** produces a **:term**
 
-a :term is either either a **:list** or a string. In the fast Rust API, for instance, it is defined as `enum Term { Listv(List), Atomv(Atom) }`. In the C API, it is a tagged union
+a :term is either either a **:list** or a string. In the fast Rust API, for instance, a :term is defined with a signature similar to `enum Term { Listv(Vec<Term>), Atomv(String) }`. In the C API, it is a tagged union
 
 a **:list** is a sequence type containing any number of :terms
 
@@ -18,7 +18,7 @@ a **:list** is a sequence type containing any number of :terms
 
 ### elements of syntax
 
-:file = one or more **:lines**
+:file = any number of **:lines**
 
 :line = an **:indentation**, optional **:linecontent**, then a **:newline** or the end of the :file
 
