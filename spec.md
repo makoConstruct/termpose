@@ -1,22 +1,13 @@
-# termpose spec
+# definition of syntax and data
+
+this document provides a (mostly) formal definition of the generating rules that define the syntax, and the data that results from the identified syntactical elements
 
 **:keywords**, words to which we assign special definitions, are written with a colon. :keywords will be bolded when mentioned for the first time in the document
 
 we will name the elements of the syntax, then explain how those elements are mapped by a parsing method into **:term** data
 
 
-
-### data
-
-the process of parsing a **:file** produces a **:term**
-
-a :term is either either a **:list** or a string. In the fast Rust API, for instance, a :term is defined with a signature similar to `enum Term { Listv(Vec<Term>), Atomv(String) }`. In the C API, it is a tagged union
-
-a **:list** is a sequence type containing any number of :terms
-
-
-
-### elements of syntax
+### syntax rules
 
 :file = any number of **:lines**
 
@@ -65,24 +56,53 @@ any :item can be **:interrupted** by a :newline. Through this, :slists will not 
 
 
 
-### resulting term data defined as a function of syntactical elements
+### data as a function of syntax
 
-:file → parsing will return a :list with a :term for each :linecontent at root level (that is, each :line having an indent of zero length)
+the process of parsing a **:file** produces a **:term**
 
-:linecontent → if the :linecontent contains multiple items, it will result in a :list of the :terms of those items. If it contains just one item, it will result in the term of that :item. If the line has :indental, wrap the results in a list and add the :terms of the :indental lines to it and return that resultant list
+a :term is a tagged union of a **:list** type or a string. In the fast Rust API, for instance, a :term is defined with a signature similar to `enum Term { Listv(Vec<Term>), Atomv(String) }`. In the C API, it is a tagged union
 
-:item → see the following :item types
+a **:list** is a sequence type containing any number of :terms
 
-:slist → a :list containing a :term for each :item. If :interrupted, the slist will contain any :indental
+here, we will describe the function mapping our named syntactical elements to :terms. This funciton's name will be "data". We will use member syntax to refer to the parts of the syntactical elements. EG, :line.:linecontent refers to the linecontent syntactical element that must be present in each :line. If two syntactical elements of the same type are present, they will be numbered, for instance, the two :items of a :pair will be called :pair.:item_0 and :pair.:item_1
 
-:word → a string
+data(:file) → a :list  data(:linecontent) at root level (that is, each :line having an indent of zero length)
+```
+← :file.:lines.filter(l → l.:indent.len = 0).map(l → data(l.:linecontent)) as :list
+```
 
-:pair → a :list containing two :terms, one for each :item. If :interrupted after the `:` and before the second term, the :list will contain the :indental
+data(:linecontent) → if the :linecontent contains multiple :items, it will result in a :list of the data of those items. If it contains just one item, it will result in just the data of that :item, without putting a list around it. If the line has :indental, wrap the data in a list and add the data of the :indental :linecontents to it and return that resultant list
+```
+if :linecontent.:items.len = 1
+  ← data(:linecontent.:items[0])
+else
+  ← :linecontent.:items.map(data) as :list
+```
 
-:quoted → a string. If :interrupted, and the string contains non-:whitespace content, then the string will end normally at the end of the line. If there is only whitespace, the whitespace will be stripped out and if the line has :indental, it will be parsed as a **:multilinestring**
+data(:item) → see the following :item variants
 
-:multilinestring → Once a non-:whitespace character is encountered on the first indented line of the :multilinestring, the **:mindnt** of the multiline string is set as the preceeding :whitespace string. On each line within the multiline string, this :mindnt is repeated. Everything beyond each :mindnt is included in the resultant string. The string will not be terminated with a newline unless a final empty :mindnt is present
+data(:slist) → a list with the data of each contained :item. If :interrupted, the slist will contain any :indental
+```
+← :slist.:items.map(data) as :list
+```
 
-:invocation → the :item part at the head of the invocation will be inserted as the first of the immediately following :slist part
+data(:word) → a string
 
-:quonvokation → a :list containing the :term of the :item and the :term of the :quoted
+data(:pair) → a :list containing the data of each of the two :items. If :interrupted after the `:` (if there is no second term), the resultant :list will contain the :indental
+```
+← :list(data(:pair.:item_0) data(:pair.:item_1))
+```
+
+data(:quoted) → a string. If :interrupted, and the string contains non-:whitespace content, then the string will end normally at the end of the line. If there is nothing, or if there is only whitespace, the whitespace will be stripped out and if the line has :indental, it will be parsed as a **:multilinestring**
+
+data(:multilinestring) → Once a non-:whitespace character is encountered on the first indented line of the :multilinestring, the **:mindnt** of the multiline string is set as the preceeding :whitespace string. On each line within the multiline string, this :mindnt is repeated. Everything beyond each :mindnt is included in the resultant string. The string will not be terminated with a newline unless a final empty :mindnt is present
+
+data(:invocation) → the data of the :item part at the head of the invocation will be inserted as the first of the immediately following data(:slist) :list
+```
+concat(:list(data(:invocation.:item)) data(:invocation.:slist))
+```
+
+data(:quonvokation) → a :list containing the data(:item) and the data(:quoted)
+```
+:list(data(:quonvokation.:item) data(:quonvokation.:quoted))
+```
