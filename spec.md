@@ -64,7 +64,7 @@ a :term is a tagged union of a **:list** type or a string. In the fast Rust API,
 
 a **:list** is a sequence type containing any number of :terms
 
-here, we will describe the function mapping our named syntactical elements to :terms. This funciton's name will be "data"
+here, we will describe the function mapping our named syntactical elements to :terms. This function's name will be "data"
 
 data(:file) → the data of the :linecontent of each of the root :lines, that is, of each of the lines with an :indent of zero length
 
