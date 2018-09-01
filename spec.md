@@ -11,7 +11,7 @@ we will name the elements of the syntax, then explain how those elements are map
 
 :file = any number of **:lines**
 
-:line = an **:indentation**, optional **:linecontent**, then a **:newline** or the end of the :file
+:line = an **:indentation**, optional **:linecontent**, then a **:newline** or `EOF`
 
 :newline = one or more `\n` `\r`
 
@@ -31,7 +31,7 @@ we will name the elements of the syntax, then explain how those elements are map
 
 :pair = a non-:pair :item followed by a `:`, followed by an :item
 
-:quoted = `"` followed by any number of :letters other than a :newline or an `EOF`. Can end with a `"`
+:quoted = `"` followed by any number of :letters other than a :newline or `EOF`. Can end with a `"`
 
 :invocation = an :item followed immediately by a :slist
 
