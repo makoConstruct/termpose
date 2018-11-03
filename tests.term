@@ -45,6 +45,13 @@ tests
 			something
 		
 		(m something)
+	":mindnt-punctuated multiline string
+		m "
+			something
+			
+			something
+			
+		(m "something\nsomething\n")
 	"many open parens
 		-
 			A(B(C(D(E

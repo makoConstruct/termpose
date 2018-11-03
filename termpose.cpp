@@ -79,7 +79,7 @@ struct ParserError:public TermposeError{
 public:
 	Error e;
 	std::string errString;
-	ParserError(unsigned line, unsigned column, std::string msg):e{line, column, msg}, TermposeError("ParserError") {
+	ParserError(unsigned line, unsigned column, std::string msg):TermposeError("ParserError"), e{line, column, msg} {
 		std::stringstream ss;
 		ss<<"ParserError ";
 		putErr(ss, e);
@@ -92,6 +92,7 @@ public:
 union Term;
 
 bool escapeIsNeeded(std::string const& str){
+	if(str == ""){ return true; } //empty strings need to be quoted, so, escape
 	for(int i=0; i<str.size(); ++i){
 		switch(str[i]){
 			case ' ': return true; break;
@@ -206,7 +207,7 @@ public:
 	static inline Term parseMultiline(std::string const& s);
 	static inline Term parse(std::string const& s);
 	Term();
-	Term(Term&& other);
+	Term(Term&& other) noexcept;
 	Term(Term const& other);
 	Term(List other);
 	Term(Stri other);
@@ -218,7 +219,7 @@ public:
 	uint32_t line() const;
 	uint32_t column() const;
 	Term& operator=(Term const& other);
-	Term& operator=(Term&& other);
+	Term& operator=(Term&& other) noexcept;
 	size_t hash() const;
 	~Term();
 private:
@@ -235,7 +236,7 @@ struct TyperError:public TermposeError{
 	std::string waht; //can't generate on demand, because what() is a const method. Needs to be created on construction. It needs to be stored in the body so that it's still available after what() returns.
 	TyperError(Term const& t, std::string msg): TyperError(t.l.line,t.l.column,msg){}
 	TyperError(unsigned line, unsigned column, std::string msg):TyperError({Error{line, column, msg}}) {}
-	TyperError(std::vector<Error> errors): errors(move(errors)), TermposeError("TyperError"){
+	TyperError(std::vector<Error> errors): TermposeError("TyperError"), errors(move(errors)) {
 		std::stringstream ss;
 		ss<<"TyperError ";
 		for(Error const& e : this->errors){ putErr(ss, e); } //`this->`, because if we refer to the parameter, it's empty, it was moved see
@@ -472,7 +473,7 @@ Term::Term(){
 	os->column = 0;
 	new (&os->l) std::vector<Term>();
 }
-Term::Term(Term&& other){
+Term::Term(Term&& other) noexcept {
 	if(other.isStr()){
 		Stri* fs = &other.s;
 		Stri* os = (Stri*)this;
@@ -509,21 +510,21 @@ Term::Term(Term const& other){
 Term::Term(char const* other, unsigned line, unsigned column){
 	new (this) Term(std::string(other), line, column);
 }
-Term::Term(std::vector<Term> const& ts, unsigned line, unsigned column):Term(std::move(std::vector<Term>(ts)), line, column){}
+Term::Term(std::vector<Term> const& ts, unsigned line, unsigned column):Term(std::vector<Term>(ts), line, column){}
 Term::Term(std::vector<Term>&& ts, unsigned line, unsigned column){
 	List* os = (List*)this;
 	os->tag = 0;
 	os->line = line;
 	os->column = column;
-	new (&os->l) std::vector<Term>(ts);
+	new (&os->l) std::vector<Term>(std::move(ts));
 }
-Term::Term(std::string const& ts, unsigned line, unsigned column):Term(std::move(std::string(ts)), line, column){}
+Term::Term(std::string const& ts, unsigned line, unsigned column):Term(std::string(ts), line, column){}
 Term::Term(std::string&& other, unsigned line, unsigned column){
 	Stri* os = (Stri*)this;
 	os->tag = 1;
 	os->line = 0;
 	os->column = 0;
-	new (&os->s) std::string(other);
+	new (&os->s) std::string(std::move(other));
 }
 Term::Term(List other){
 	List* ol = (List*)this;
@@ -555,7 +556,7 @@ Term& Term::operator=(Term const& other){
 	new (this) Term(other);
 	return *this;
 }
-Term& Term::operator=(Term&& other){
+Term& Term::operator=(Term&& other) noexcept {
 	this->~Term();
 	new (this) Term(std::move(other));
 	return *this;
@@ -862,10 +863,10 @@ namespace parsingDSL{
 			throw TyperError(v, "expected a bool here");
 		}
 	}
-	struct BoolTermer : Termer<bool>{ virtual Term termify(bool& b){
+	struct BoolTermer : Termer<bool>{ virtual Term termify(bool const& b){
 		return termifyBool(b);
 	}};
-	struct BoolChecker : Checker<bool>{ virtual bool check(Term& v){
+	struct BoolChecker : Checker<bool>{ virtual bool check(Term const& v){
 		return checkBool(v);
 	}};
 	struct BoolTranslator : Translator<bool> {
@@ -936,7 +937,7 @@ namespace parsingDSL{
 		uint32_t check(Term const& v) override {
 			std::string const& sv = v.strContentsConst();
 			errno = 0;
-			uint ret = ::strtoul(sv.c_str(), nullptr, 10);
+			unsigned long ret = ::strtoul(sv.c_str(), nullptr, 10);
 			if(errno || ret > std::numeric_limits<uint32_t>::max()){
 				uint errnooo = errno;
 				errno = 0;
@@ -959,12 +960,18 @@ namespace parsingDSL{
 	float checkFloat(Term const& v){
 		if(v.isStr()){
 			std::string const& st = v.s.s;
-			try{
-				return stof(st);
-			}catch(std::invalid_argument e){
-				throw TyperError(v, "expected a float here (can't be parsed to an float)");
-			}catch(std::out_of_range e){
-				throw TyperError(v, "expected a float here (is not in the allowable range)");
+			if(st == "inf"){ //this isn't usually necessary, but, apparently whatever C++ on android is using doesn't support inf. "INF" will still except here, but whatever.
+				return INFINITY;
+			}else if (st == "-inf"){
+				return -INFINITY;
+			}else{
+				try{
+					return stof(st);
+				}catch(std::invalid_argument e){
+					throw TyperError(v, "expected a float here (can't be parsed to an float)");
+				}catch(std::out_of_range e){
+					throw TyperError(v, "expected a float here (is not in the allowable range)");
+				}
 			}
 		}else{
 			throw TyperError(v, "expected a float here (is a list)");
@@ -1910,29 +1917,54 @@ namespace parsingDSL{
 		return std::static_pointer_cast<Termer<T>>(tt); }
 	
 	
-	template<typename T>
-	T checkTermOrDefault(Term const& v, std::string const& key, std::shared_ptr<Checker<T>> checker, T def){
-		for(Term const& t : v.listContentsConst()){
-			if(t.initialString() == key){
-				return checker->check(t);
-			}
-		}
-		return def;
-	}
-	template<typename T>
-	T checkSubTermOrDefault(Term const& v, std::string const& key, std::shared_ptr<Checker<T>> checker, T def){
-		for(Term const& t : v.listContentsConst()){
-			if(t.initialString() == key){
-				if(!t.isList()){ throw TyperError(t, "expected a pair here, but it is just a string"); }
-				std::vector<Term> const& tl = t.listContentsConst();
-				if(tl.size() != 2){ throw TyperError(t, "expected a pair here, but the list is not the right length"); }
-				return checker->check(tl[1]);
-			}
-		}
-		return def;
-	}
 	
 }//namespace parsingDSL
+
+template<typename T>
+T checkTermOrDefault(Term const& v, std::string const& key, std::shared_ptr<parsingDSL::Checker<T>> checker, T def){
+	for(Term const& t : v.listContentsConst()){
+		if(t.initialString() == key){
+			return checker->check(t);
+		}
+	}
+	return def;
+}
+template<typename T>
+T checkSubTermOrDefault(Term const& v, std::string const& key, std::shared_ptr<parsingDSL::Checker<T>> checker, T def){
+	for(Term const& t : v.listContentsConst()){
+		if(t.initialString() == key){
+			if(!t.isList()){ throw TyperError(t, "expected a pair here, but it is just a string"); }
+			std::vector<Term> const& tl = t.listContentsConst();
+			if(tl.size() != 2){ throw TyperError(t, "expected a pair here, but the list is not the right length"); }
+			return checker->check(tl[1]);
+		}
+	}
+	return def;
+}
+template<typename T>
+T checkSubTerm(Term const& v, std::string const& key, std::shared_ptr<parsingDSL::Checker<T>> checker){
+	auto ret = v.seekSubTermConst(key);
+	if(ret){
+		return checker->check(*ret);
+	}else{
+		std::string ero = "item ";
+		ero += key;
+		ero += " not found in term";
+		throw TyperError(v, move(ero));
+	}
+}
+template<typename T>
+T checkTerm(Term const& v, std::string const& key, std::shared_ptr<parsingDSL::Checker<T>> checker){
+	auto ret = v.seekTermConst(key);
+	if(ret){
+		return checker->check(*ret);
+	}else{
+		std::string ero = "item ";
+		ero += key;
+		ero += " not found in term";
+		throw TyperError(v, move(ero));
+	}
+}
 
 template<typename T>
 struct Serialization{ Term serialize(T const& v) = 0; };
@@ -1961,19 +1993,23 @@ template<>
 struct Serialization<double>{ Term serialize(double const& v){
 	return parsingDSL::termifyDouble(v);
 }};
+template<>
+struct Serialization<Term>{ Term serialize(Term const& v){
+	return v;
+}};
 template<typename T>
 struct Serialization<std::vector<T>>{ Term serialize(std::vector<T> const& v){
 	std::vector<Term> ret;
 	ret.reserve(v.size());
 	for(T const& vv : v){
-		ret.emplace_back(Serialization<T>::serialize(vv));
+		ret.emplace_back(Serialization<T>().serialize(vv));
 	}
 	return ret;
 }};
 
 
 template<typename T>
-struct Deserialization{ T deserialize(Term const& v) = 0; };
+struct Deserialization{  };
 
 template<>
 struct Deserialization<std::string>{ std::string deserialize(Term const& v){
@@ -1999,21 +2035,36 @@ template<>
 struct Deserialization<double>{ double deserialize(Term const& v){
 	return parsingDSL::checkDouble(v);
 }};
+template<>
+struct Deserialization<Term>{ Term deserialize(Term const& v){
+	return v;
+}};
 template<typename T>
 struct Deserialization<std::vector<T>>{ std::vector<T> deserialize(Term const& v){
 	std::vector<T> ret;
 	std::vector<Term> const& out = v.listContentsConst();
 	ret.reserve(out.size());
 	for(T const& vv : out){
-		ret.emplace_back(Deserialization<T>::deserialize(vv));
+		ret.emplace_back(Deserialization<T>().deserialize(vv));
 	}
 	return ret;
 }};
 
+template<typename T>
+struct AutoChecker:parsingDSL::Checker<T>{ T check(Term const& v) override { return Deserialization<T>().deserialize(v); }};
+template<typename T>
+struct AutoTermer:parsingDSL::Termer<T>{ Term termify(T const& v) override { return Serialization<T>().serialize(v); }};
+
 
 template<typename T>
-Term serialize(T const& v){ return Serialization<T>::serialize(v); }
+Term serialize(T const& v){ return Serialization<T>().serialize(v); }
 template<typename T>
-T deserialize(Term const& v){ return Deserialization<T>::deserialize(v); }
+T deserialize(Term const& v){ return Deserialization<T>().deserialize(v); }
+
+template<typename T>
+std::shared_ptr<parsingDSL::Translator<T>> translatorFor(){ return std::make_shared<parsingDSL::BuiltTranslator<T>>(
+	std::make_shared<AutoChecker<T>>(),
+	std::make_shared<AutoTermer<T>>()
+); }
 
 }//namespace termpose

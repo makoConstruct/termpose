@@ -28,7 +28,7 @@ a **:list** is a sequence type containing any number of :terms
 
 :line = an **:indentation**, optional *:linecontent*, then a *:newline* or the end of the file
 
-:newline = any combination of `\n` and `\r`
+:newline = any number of `\n` and `\r`
 
 :indentation = any number of `space` or `tab`
 
@@ -46,7 +46,9 @@ a **:list** is a sequence type containing any number of :terms
 
 :pair = a non-:pair :item followed by a `:`, followed by an :item
 
-:quoted = `"` followed by any number of :letters other than a :newline or an `EOF`. Can end with a `"`
+:quoted = `"` followed by any number of :letters other than a :newline or end of file. Can end with a `"`, OR (in the case of a **:multiline** string) any amount of :whitespace, followed by :newline, followed by any number of **:multilines**.
+
+:multiline = the **:indent** of the containing line, then any :letters, :whitespace, then a :newline or end of file.
 
 :invocation = an :item followed immediately by a :slist
 
