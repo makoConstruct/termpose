@@ -1,6 +1,6 @@
 # nakedlist
 
-Nakedlist is a relatively simple whitespace-sensitive list format.
+Nakedlist is a relatively simple indent-sensitive format for expressing structured data.
 
 example:
 
@@ -34,6 +34,6 @@ who big and mean.")
 
 ```
 
-Each section parses to the same sort of data. Nakedlist is a Termpose langauge, meaning it parses into Terms and can be worked with using the same APIs as other termpose formats.
+Nakedlist is a [Termpose](https://github.com/makoConstruct/termpose) language, meaning it parses into Terms and can be worked with using the same APIs as other termpose formats.
 
 It is formally defined [here](https://github.com/makoConstruct/termpose/blob/master/nakedlist_spec.md).
