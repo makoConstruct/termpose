@@ -1,7 +1,6 @@
 
 
 use super::*;
-use std::intrinsics::unreachable;
 
 struct SexpParserState<'a>{
 	root:Vec<Term>,
@@ -14,29 +13,10 @@ struct SexpParserState<'a>{
 }
 
 
-//This is supposed to invoke unreachable (UB) in release and panic in debug. The point is, it's a *strong* assertion to the optimizer that one of the two branches isn't supposed to be reachable, and that whatever conditionals lead to it do not need to be evaluated. See below for benchmarks demonstrating that this doesn't much occur.
 #[inline(always)]
-unsafe fn seriously_unreach(s:&str)-> ! {
-	if cfg!(debug_assertions) { panic!("{}", s) }
-	// else{ unreachable() }
-	else{ unreachable!() }
-}
-
-#[inline(always)]
-unsafe fn serious_get_back_mut<T>(v:&mut Vec<T>)-> &mut T {
+fn get_back_mut<T>(v:&mut Vec<T>)-> &mut T {
 	if let Some(v) = v.last_mut() { v }
-	else{ seriously_unreach("this vec should never be empty"); }
-}
-
-#[inline(always)]
-unsafe fn seriously_unwrap<T>(v:Option<T>)-> T {
-	if let Some(va) = v { va }
-	else{ seriously_unreach("this option should have been some"); }
-}
-
-#[inline(always)]
-unsafe fn seriously_pop<T>(v: &mut Vec<T>)-> T {
-	seriously_unwrap(v.pop())
+	else{ panic!("this vec should never be empty"); }
 }
 
 #[derive(Debug)]
@@ -84,7 +64,7 @@ impl<'a> SexpParserState<'a> {
 	}
 	fn last_list<'b>(&'b mut self)-> &'b mut Vec<Term> where 'a:'b {
 		let ret = if self.stack.len() > 0 {
-			unsafe{ *serious_get_back_mut(&mut self.stack) }
+			*get_back_mut(&mut self.stack)
 		}else{
 			&mut self.root
 		};
@@ -102,7 +82,7 @@ impl<'a> SexpParserState<'a> {
 		}
 	}
 	unsafe fn close_scope<'b>(&'b mut self) where 'a:'b {
-		seriously_pop(&mut self.stack);
+		self.stack.pop();
 	}
 	fn new_scope<'b>(&'b mut self) where 'a:'b {
 		let line = self.line;
@@ -113,16 +93,13 @@ impl<'a> SexpParserState<'a> {
 			v:Vec::new()
 		}));
 		//potential unnecessary indexing in last_mut, `push` already knows the index. Could be mitigated with a place_back
-		unsafe{
-			let flp = 
-				if let Listv(ref mut final_list_ref) = *seriously_unwrap(self.last_list().last_mut()) {
-					(&mut final_list_ref.v) as *mut _
-				}else{
-					seriously_unreach("last_list should always be a list")
-					// panic!("critical parser error at {}:{}. last_list should always be a list", self.line, self.column)
-				};
-			self.stack.push(flp);
-		}
+		let flp: *mut Vec<Term> =
+			if let Listv(ref mut l) = * get_back_mut(self.last_list()) {
+				&mut l.v
+			}else{
+				panic!("but I thought we just inserted a list");
+			};
+		self.stack.push(flp);
 	}
 	fn parse_sexp(mut self)-> Result<Term, PositionedError> {
 		loop {
@@ -199,60 +176,32 @@ pub fn parse_nakedlist<'a>(v:&'a str)-> Result<Term, PositionedError> {
 
 //this has been written in the style of a C++ programmer who doesn't want to waste a single cycle. However: Every use of unsafe has been justified with a comment
 
-unsafe fn seriously_get_first_mut<T>(v:&mut Vec<T>)-> &mut T {
-	if v.len() > 0 {
-		v.get_unchecked_mut(0)
-	}else{
-		seriously_unreach("vec was supposed to have something in it")
-	}
-}
 #[inline(always)]
-unsafe fn seriously_list_mut(v:&mut Term)-> &mut List {
+fn assume_list_mut(v:&mut Term)-> &mut List {
 	match *v {
 		Listv(ref mut ls)=> ls,
-		Atomv(_)=> seriously_unreach("this Term is supposed to be a list"),
+		Atomv(_)=> panic!("this Term is supposed to be a list"),
 	}
 }
 #[inline(always)]
-unsafe fn seriously_atom_mut(v:&mut Term)-> &mut Atom {
+fn assume_atom_mut(v:&mut Term)-> &mut Atom {
 	match *v {
-		Listv(_)=> seriously_unreach("this Term is supposed to be an atom"),
+		Listv(_)=> panic!("this Term is supposed to be an atom"),
 		Atomv(ref mut ar)=> ar,
 	}
 }
-// #[inline(always)]
-// unsafe fn seriously_list_ref(v:&Term)-> &List {
-// 	match *v {
-// 		Listv(ref ls)=> ls,
-// 		Atomv(_)=> seriously_unreach("this Term is supposed to be a list"),
-// 	}
-// }
-// #[inline(always)]
-// unsafe fn seriously_atom_ref(v:&Term)-> &Atom {
-// 	match *v {
-// 		Listv(_)=> seriously_unreach("this Term is supposed to be an atom"),
-// 		Atomv(ref ar)=> ar,
-// 	}
-// }
 #[inline(always)]
-unsafe fn seriously_list(v:Term)-> List {
+fn assume_list(v:Term)-> List {
 	match v {
 		Listv(ls)=> ls,
-		Atomv(_)=> seriously_unreach("this Term is supposed to be a list"),
+		Atomv(_)=> panic!("this Term is supposed to be a list"),
 	}
 }
-// #[inline(always)]
-// unsafe fn seriously_atom(v:Term)-> Atom {
-// 	match v {
-// 		Listv(_)=> seriously_unreach("this Term is supposed to be an atom"),
-// 		Atomv(ar)=> ar,
-// 	}
-// }
 
-unsafe fn seriously_yank_first<T>(v:Vec<T>)-> T { //you must ensure that the v contains at least one item
+fn yank_first<T>(v:Vec<T>)-> T { //you must ensure that the v contains at least one item
 	match v.into_iter().next() {
 		Some(a)=> a,
-		None=> seriously_unreach("tried to yank the first thing from a vec that contained no things"),
+		None=> panic!("tried to yank the first thing from a vec that contained no things"),
 	}
 }
 
@@ -310,24 +259,24 @@ impl<'a> ParserState<'a> {
 	fn mklist(&self)-> Term { Listv(List{ line:self.line, column:self.column, v:Vec::new() }) }
 	
 	fn start_line(&mut self, c:char)-> Result<(), PositionedError> {
+		let bin:*mut Vec<Term> = *get_back_mut(&mut self.indent_list_stack); //there is always at least root in the indent_list_stack
 		unsafe{
-			let bin:*mut Vec<Term> = *serious_get_back_mut(&mut self.indent_list_stack); //safe: there is always at least root in the indent_list_stack
 			(*bin).push(self.mklist());
-			self.line_paren_stack.clear();
-			self.line_paren_stack.push(serious_get_back_mut(&mut *bin)); //safe: just made that
-			self.start_reading_thing(c)
 		}
+		self.line_paren_stack.clear();
+		self.line_paren_stack.push(get_back_mut(unsafe{ &mut *bin }));
+		self.start_reading_thing(c)
 	}
 	
 	fn consider_collapsing_outer_list_of_previous_line(&mut self){
-		unsafe{
-			let line_term: *mut Term = *seriously_get_first_mut(&mut self.line_paren_stack);
-			let line_list_length:usize = seriously_list_mut(&mut*line_term).v.len(); //safe: line_term is always a list
-			if line_list_length == 1 {
+		let line_term: *mut Term = self.line_paren_stack[0];
+		let line_list_length:usize = assume_list_mut(unsafe{ &mut*line_term }).v.len(); //line_term is always a list
+		if line_list_length == 1 {
+			unsafe{
 				replace_self(&mut*line_term, |l|{
-					let List{ v, .. } = seriously_list(l);
-					seriously_yank_first(v)
-				}) //safe: this_line always starts out a list, until we make it not one here. We have proven that it contains something. seriously_list can panic but only in debug mode, and it will not because we know it really is a list
+					let List{ v, .. } = assume_list(l);
+					yank_first(v)
+				}) //safe: this_line has been proven to be a list in assume_list_mut, so assume_list cannot panic
 			}
 		}
 	}
@@ -336,7 +285,7 @@ impl<'a> ParserState<'a> {
 		if self.colon_receptacle != null_mut() {
 			replace(&mut self.colon_receptacle, null_mut())
 		}else{
-			&mut unsafe{seriously_list_mut(&mut**serious_get_back_mut(&mut self.line_paren_stack))}.v //safe; always something in parenstack, and it's always a list
+			&mut unsafe{assume_list_mut(&mut**get_back_mut(&mut self.line_paren_stack))}.v //safe; always something in parenstack, and it's always a list
 		}
 	}
 	fn take_hanging_list_for_new_line(&mut self)-> *mut Vec<Term> {
@@ -344,14 +293,14 @@ impl<'a> ParserState<'a> {
 			replace(&mut self.colon_receptacle, null_mut())
 		}else{
 			if self.line_paren_stack.len() > 1 { //then there's an open paren
-				&mut unsafe{seriously_list_mut(&mut**serious_get_back_mut(&mut self.line_paren_stack))}.v //safe; always something in parenstack, and it's always a list
+				&mut unsafe{assume_list_mut(&mut**get_back_mut(&mut self.line_paren_stack))}.v //safe; always something in parenstack, and it's always a list
 			}else{ //it's the root line paren stack. A modification may need to be made.
-				let rpl = unsafe{&mut**seriously_get_first_mut(&mut self.line_paren_stack)};
-				let root_pl_len = unsafe{seriously_list_mut(rpl)}.v.len();
+				let rpl = unsafe{&mut*self.line_paren_stack[0]};
+				let root_pl_len = assume_list_mut(rpl).v.len();
 				if root_pl_len > 1 { //then it needs to be its own list
 					accrete_list(rpl);
 				}
-				&mut unsafe{seriously_list_mut(rpl)}.v
+				&mut assume_list_mut(rpl).v
 			}
 		}
 	}
@@ -367,13 +316,13 @@ impl<'a> ParserState<'a> {
 		let lti = self.mklist();
 		let list_for_insert = self.take_hanging_list_for_insert();
 		unsafe{(*list_for_insert).push(lti)};
-		self.line_paren_stack.push(unsafe{serious_get_back_mut(&mut*list_for_insert)} as *mut _); //safe: just made that
+		self.line_paren_stack.push(unsafe{&mut *get_back_mut(&mut*list_for_insert)});
 	}
 	fn close_paren(&mut self)-> Result<(), PositionedError> {
 		self.colon_receptacle = null_mut();
 		if self.line_paren_stack.len() > 1 {
-			self.last_completed_term_on_line = unsafe{ &mut **serious_get_back_mut(&mut self.line_paren_stack)};
-			unsafe{seriously_pop(&mut self.line_paren_stack)}; //safe: we just checked and confirmed there's something there
+			self.last_completed_term_on_line = unsafe{ &mut **get_back_mut(&mut self.line_paren_stack)};
+			self.line_paren_stack.pop(); //safe: we just checked and confirmed there's something there
 			Ok(())
 		}else{
 			self.a_fail("unmatched paren".into())
@@ -384,14 +333,14 @@ impl<'a> ParserState<'a> {
 		unsafe{
 			self.colon_receptacle =
 				if self.last_completed_term_on_line != null_mut() {
-					accrete_list(unsafe{&mut *self.last_completed_term_on_line})
+					accrete_list(&mut *self.last_completed_term_on_line)
 				}else{
 					let rl = self.take_hanging_list_for_insert();
 					if (*rl).len() > 0 {
-						accrete_list(serious_get_back_mut(&mut*rl)) //safe: just verified something was there
+						accrete_list(get_back_mut(&mut*rl)) //safe: just verified something was there
 					}else{
 						(*rl).push(self.mklist());
-						&mut seriously_list_mut(serious_get_back_mut(&mut*rl)).v //safe: just put it there
+						&mut assume_list_mut(get_back_mut(&mut*rl)).v //safe: just put it there
 					}
 				}
 		}
@@ -399,14 +348,14 @@ impl<'a> ParserState<'a> {
 	fn begin_atom(&mut self, list_for_insert:*mut Vec<Term>) {
 		let to_push = Atomv(Atom{line:self.line, column:self.column, v:String::new()});
 		unsafe{(*list_for_insert).push(to_push)};
-		self.last_completed_term_on_line = unsafe{serious_get_back_mut(&mut *list_for_insert)};
-		self.atom_being_read_into = &mut unsafe{seriously_atom_mut(serious_get_back_mut(&mut *list_for_insert))}.v;
+		self.last_completed_term_on_line = unsafe{get_back_mut(&mut *list_for_insert)};
+		self.atom_being_read_into = &mut unsafe{assume_atom_mut(get_back_mut(&mut *list_for_insert))}.v;
 	}
 	fn begin_atom_with_char(&mut self, list_for_insert:*mut Vec<Term>, c:char)-> Result<(), PositionedError> {
 		let to_push = Atomv(Atom{line:self.line, column:self.column, v:String::new()});
 		unsafe{(*list_for_insert).push(to_push)};
-		self.last_completed_term_on_line = unsafe{serious_get_back_mut(&mut *list_for_insert)};
-		self.atom_being_read_into = &mut unsafe{seriously_atom_mut(serious_get_back_mut(&mut *list_for_insert))}.v;
+		self.last_completed_term_on_line = unsafe{get_back_mut(&mut *list_for_insert)};
+		self.atom_being_read_into = &mut unsafe{assume_atom_mut(get_back_mut(&mut *list_for_insert))}.v;
 		if c == '\\' {
 			try!(self.read_escaped_char());
 		}else{
@@ -446,7 +395,7 @@ impl<'a> ParserState<'a> {
 	
 	fn pop_indent_stack_down(&mut self, this_indent:&'a str)-> Result<(), PositionedError> {
 		loop{
-			let containing_indent = *unsafe{serious_get_back_mut(&mut self.indent_stack)}; //safe: we can be assured that there is always something at back, because a str can't be smaller than the root indent "" and not be a prefix of it
+			let containing_indent = *get_back_mut(&mut self.indent_stack); //we can be assured that there is always something at back, because a str can't be smaller than the root indent "" and not be a prefix of it
 			if this_indent.len() == containing_indent.len() {
 				if this_indent == containing_indent {
 					//found it
@@ -475,7 +424,7 @@ impl<'a> ParserState<'a> {
 	{
 		//there's definitely a thing here, ending indentation
 		let this_indent = unsafe{str_from_bounds(self.stretch_reading_start, self.cur_char_ptr)};
-		let containing_indent = *unsafe{serious_get_back_mut(&mut self.indent_stack)}; //safe: indent function always has something in it
+		let containing_indent = *get_back_mut(&mut self.indent_stack); //safe: indent function always has something in it
 		if containing_indent.len() == this_indent.len() {
 			if containing_indent != this_indent {
 				return self.a_fail("inconsistent indentation".into());
@@ -679,7 +628,7 @@ impl<'a> ParserState<'a> {
 	}
 	
 	fn back_term(&mut self)-> &mut Term {
-		unsafe{serious_get_back_mut(&mut seriously_list_mut(&mut **serious_get_back_mut(&mut self.line_paren_stack)).v)}
+		unsafe{get_back_mut(&mut assume_list_mut(&mut **get_back_mut(&mut self.line_paren_stack)).v)}
 	}
 	
 	fn notice_paren_immediately_after_thing(&mut self){
@@ -696,16 +645,14 @@ impl<'a> ParserState<'a> {
 	}
 	
 	fn notice_quote_immediately_after_thing(&mut self){
-		unsafe{
-			let lt: *mut Vec<Term> = &mut seriously_list_mut(&mut **serious_get_back_mut(&mut self.line_paren_stack)).v;
-			if (*lt).len() == 0 {
-				seriously_unreach("begin_seeking_immediately_after_thing should not be called after entering an empty paren");
-			}
-			let bt = serious_get_back_mut(&mut*lt);
-			let nl = accrete_list(&mut*bt);
-			nl.push(Atomv(Atom{line:self.line, column:self.column, v:String::new()}));
-			self.atom_being_read_into = &mut seriously_atom_mut(serious_get_back_mut(nl)).v; //safe: just made that
+		let lt: *mut Vec<Term> = unsafe{ &mut assume_list_mut(&mut **get_back_mut(&mut self.line_paren_stack)).v };
+		if unsafe{(*lt).len()} == 0 {
+			panic!("begin_seeking_immediately_after_thing should not be called after entering an empty paren");
 		}
+		let bt = get_back_mut(unsafe{ &mut*lt });
+		let nl = accrete_list(bt);
+		nl.push(Atomv(Atom{line:self.line, column:self.column, v:String::new()}));
+		self.atom_being_read_into = &mut assume_atom_mut(get_back_mut(nl)).v; //safe: just made that
 		self.mode = Self::eating_quoted_string;
 		self.next_col();
 	}
@@ -853,8 +800,8 @@ fn accrete_list(v:&mut Term)-> &mut Vec<Term> {
 			let (line, col) = vv.line_and_col();
 			Listv(List{line:line, column:col, v:vec!(vv)})
 		}); //safe: list creation doesn't panic
-		&mut seriously_list_mut(v).v
 	}
+	&mut assume_list_mut(v).v
 }
 
 
@@ -876,7 +823,7 @@ pub fn parse_multiline_style<'a>(s:&'a str, style:TermposeStyle)-> Result<Term, 
 		mode: ParserState::<'a>::seeking_beginning,
 		chosen_style: style,
 	};
-	state.indent_list_stack = vec!(unsafe{&mut seriously_list_mut(&mut state.root).v}); //safe: just amde thath
+	state.indent_list_stack = vec!(&mut assume_list_mut(&mut state.root).v);
 	
 	
 	loop {
@@ -894,9 +841,9 @@ pub fn parse_multiline<'a>(s:&'a str)-> Result<Term, PositionedError> {
 
 pub fn parse<'a>(s:&'a str)-> Result<Term, PositionedError> {
 	parse_multiline(s).map(|t|{
-		let l = unsafe{seriously_list(t)}; //safe: parse_multiline only returns lists
+		let l = assume_list(t); //parse_multiline only returns lists
 		if l.v.len() == 1 {
-			unsafe{seriously_yank_first(l.v)} //safe: just confirmed it's there
+			yank_first(l.v) //just confirmed it's there
 		}else{
 			//then the caller was wrong, it wasn't a single root term, so I guess, they get the whole List? Maybe this should be a PositionedError... I dunno about that
 			Listv(l)
@@ -973,125 +920,5 @@ mod tests {
 			parse(data.as_ref())
 		});
 	}
-	
-	//results: dynamic style makes no difference to performance. The files have different structures under different styles, so a masking effect could be going on (dynamic may have an advantage), but meh
-	// #[bench]
-	// fn bench_long_long_term_with_dynamic_style(b: &mut Bencher) {
-	// 	let data = read_file_from_root("longterm.term");
-	// 	b.iter(||{
-	// 		parse_multiline_style(
-	// 			data.as_str(),
-	// 			test::black_box(DEFAULT_STYLE.clone())
-	// 		)
-	// 	})
-	// }
-	
-	
-	
-	//the following tests are for testing the performance effects of the seriously_assume methods. Results: They are small. seriously_unwrap is significant, but methods about assuming vecs contain something don't seem to do much at all. Around 3% speedup.
-	
-	#[inline(always)]
-	fn array_some_predicate(i:usize)-> bool { (((i & (i >> 1)) ^ (i/3)) & 1) != 0 } //an odd condition so that the optimizer wont just infer all of this
-	
-	// #[inline(always)]
-	// fn option_array_test<F>(b: &mut Bencher, f:F) where F : Fn(usize, &Option<usize>)-> usize {
-	// 	let mut subject = Vec::new();
-	// 	for i in 0..30000 {
-	// 		if array_some_predicate(i) {
-	// 			subject.push(Some(i));
-	// 		}else{
-	// 			subject.push(None);
-	// 		}
-	// 	}
-		
-	// 	b.iter(||{
-	// 		let mut total = 0;
-	// 		for (i, o) in subject.iter().enumerate() {
-	// 			total += f(i, o)
-	// 		}
-	// 		total
-	// 	})
-	// }
-	
-	// #[bench]
-	// fn test_array_seriously_unwrap(b: &mut Bencher){
-	// 	option_array_test(b, |i:usize, o:&Option<usize>|{
-	// 		if array_some_predicate(i) {
-	// 			unsafe{ seriously_unwrap(*o) }
-	// 		}else{
-	// 			0
-	// 		}
-	// 	})
-	// }
-	
-	// #[bench]
-	// fn test_array_control(b: &mut Bencher){
-	// 	option_array_test(b, |i:usize, o:&Option<usize>|{
-	// 		if array_some_predicate(i) {
-	// 			match *o {
-	// 				Some(i)=> i,
-	// 				None=> panic!("bahh!"),
-	// 			}
-	// 		}else{
-	// 			0
-	// 		}
-	// 	})
-	// }
-	
-	
-	
-	
-	// #[inline(always)]
-	// fn vec_array_test<F>(b: &mut Bencher, f:F) where F : Fn(usize, &Vec<usize>)-> usize {
-	// 	let mut subject = Vec::new();
-	// 	for i in 0..30000 {
-	// 		if array_some_predicate(i) {
-	// 			subject.push(vec!(i));
-	// 			// println!("on");
-	// 		}else{
-	// 			subject.push(vec!());
-	// 			// println!("off");
-	// 		}
-	// 	}
-		
-	// 	b.iter(||{
-	// 		let mut total = 0;
-	// 		for (i, o) in subject.iter().enumerate() {
-	// 			total += f(i, o)
-	// 		}
-	// 		total
-	// 	})
-	// }
-	
-	// #[inline(always)]
-	// unsafe fn serious_get_back<T>(v:&Vec<T>)-> &T {
-	// 	if v.len() != 0 { v.get_unchecked(v.len() - 1) }
-	// 	else{ seriously_unreach("this vec should never be empty"); }
-	// }
-	
-	// #[bench]
-	// fn test_vec_array_seriously(b: &mut Bencher){
-	// 	vec_array_test(b, |i:usize, o:&Vec<usize>|{
-	// 		if array_some_predicate(i) {
-	// 			unsafe{ *o.get_unchecked(0) }
-	// 		}else{
-	// 			0
-	// 		}
-	// 	})
-	// }
-	
-	// #[bench]
-	// fn test_vec_array_control(b: &mut Bencher){
-	// 	vec_array_test(b, |i:usize, o:&Vec<usize>|{
-	// 		if array_some_predicate(i) {
-	// 			match o.last() {
-	// 				Some(i)=> *i,
-	// 				None=> panic!("bahh!"),
-	// 			}
-	// 		}else{
-	// 			0
-	// 		}
-	// 	})
-	// }
 	
 }
