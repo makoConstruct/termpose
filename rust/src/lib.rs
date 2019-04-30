@@ -1,12 +1,12 @@
 #![feature(test)]
 // #![feature(nll)]
-#![feature(unreachable)]
+#![feature(core_intrinsics)]
 
 //termpose. A library you can do sexpy things with
 
 // extern crate string_cache;
 // use string_cache::DefaultAtom as Strin;
-use std::mem::{forget, replace, uninitialized, unreachable};
+use std::mem::{forget, replace, uninitialized};
 use std::cmp::{PartialEq};
 use std::result::Result;
 use std::error::Error;
@@ -69,10 +69,10 @@ pub enum Term {
 pub use Term::*;
 
 
-#[macro_export]
-macro_rules! list {
-	($(e),*) => ( Term::Listv(List{line:-1, column:-1, v:vec!($(($e).into()),*)}) )
-}
+// #[macro_export]
+// macro_rules! list {
+// 	($(e),*) => ( Term::Listv(List{line:-1, column:-1, v:vec!($(($e).into()),*)}) )
+// }
 
 impl<'a> Into<Term> for &'a str {
 	fn into(self) -> Term { Atomv(Atom{ line:-1, column:-1, v:self.to_string() }) }

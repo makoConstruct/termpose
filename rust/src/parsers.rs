@@ -1,7 +1,7 @@
 
 
 use super::*;
-
+use std::intrinsics::unreachable;
 
 struct SexpParserState<'a>{
 	root:Vec<Term>,
@@ -18,7 +18,8 @@ struct SexpParserState<'a>{
 #[inline(always)]
 unsafe fn seriously_unreach(s:&str)-> ! {
 	if cfg!(debug_assertions) { panic!("{}", s) }
-	else{ unreachable() }
+	// else{ unreachable() }
+	else{ unreachable!() }
 }
 
 #[inline(always)]
@@ -92,7 +93,7 @@ impl<'a> SexpParserState<'a> {
 	fn pinch_off_string_if_eating<'b>(&'b mut self, ending:&'a str) where 'a:'b {
 		if self.eating_str_mode {
 			let len = ending.as_ptr() as usize - self.started_eating.as_ptr() as usize;
-			let s = unsafe{ self.started_eating.slice_unchecked(0, len) };
+			let s = unsafe{ self.started_eating.get_unchecked(0..len) };
 			let line = self.line;
 			let column = self.column;
 			self.last_list().push(Atomv(Atom{line, column, v:s.to_string()}));
@@ -117,7 +118,8 @@ impl<'a> SexpParserState<'a> {
 				if let Listv(ref mut final_list_ref) = *seriously_unwrap(self.last_list().last_mut()) {
 					(&mut final_list_ref.v) as *mut _
 				}else{
-					seriously_unreach("this should never happen")
+					seriously_unreach("last_list should always be a list")
+					// panic!("critical parser error at {}:{}. last_list should always be a list", self.line, self.column)
 				};
 			self.stack.push(flp);
 		}
@@ -175,6 +177,18 @@ impl<'a> SexpParserState<'a> {
 pub fn parse_sexp<'a>(v:&'a str)-> Result<Term, PositionedError> {
 	SexpParserState::<'a>::begin(v).parse_sexp()
 }
+
+
+
+
+// pub fn parse_nakedlist<'a>(v:&'a str)-> Result<Term, PositionedError> {
+// 	NakedlistParserState::<'a>::begin(v).parse()
+// }
+
+pub fn parse_nakedlist<'a>(v:&'a str)-> Result<Term, PositionedError> {
+	Err(PositionedError{line:-1, column:-1, msg:"not implemented :p".into()})
+}
+
 
 
 
@@ -264,6 +278,7 @@ struct ParserState<'a>{
 	stretch_reading_start: *const u8, //used when taking an indent
 	atom_being_read_into: *mut String,
 	colon_receptacle: *mut Vec<Term>,
+	last_completed_term_on_line: *mut Term, //for attaching the next pairing
 	multilines_indent: &'a str,
 	// previous_line_hanging_term: *mut Term, //this is the term things will be inserted into if there's an indent.
 	iter: std::str::Chars<'a>,
@@ -324,6 +339,22 @@ impl<'a> ParserState<'a> {
 			&mut unsafe{seriously_list_mut(&mut**serious_get_back_mut(&mut self.line_paren_stack))}.v //safe; always something in parenstack, and it's always a list
 		}
 	}
+	fn take_hanging_list_for_new_line(&mut self)-> *mut Vec<Term> {
+		if self.colon_receptacle != null_mut() {
+			replace(&mut self.colon_receptacle, null_mut())
+		}else{
+			if self.line_paren_stack.len() > 1 { //then there's an open paren
+				&mut unsafe{seriously_list_mut(&mut**serious_get_back_mut(&mut self.line_paren_stack))}.v //safe; always something in parenstack, and it's always a list
+			}else{ //it's the root line paren stack. A modification may need to be made.
+				let rpl = unsafe{&mut**seriously_get_first_mut(&mut self.line_paren_stack)};
+				let root_pl_len = unsafe{seriously_list_mut(rpl)}.v.len();
+				if root_pl_len > 1 { //then it needs to be its own list
+					accrete_list(rpl);
+				}
+				&mut unsafe{seriously_list_mut(rpl)}.v
+			}
+		}
+	}
 	fn iterate_char_iter(&mut self)-> Option<char> {
 		self.cur_char_ptr = self.iter.as_str().as_ptr();
 		self.iter.next()
@@ -341,6 +372,7 @@ impl<'a> ParserState<'a> {
 	fn close_paren(&mut self)-> Result<(), PositionedError> {
 		self.colon_receptacle = null_mut();
 		if self.line_paren_stack.len() > 1 {
+			self.last_completed_term_on_line = unsafe{ &mut **serious_get_back_mut(&mut self.line_paren_stack)};
 			unsafe{seriously_pop(&mut self.line_paren_stack)}; //safe: we just checked and confirmed there's something there
 			Ok(())
 		}else{
@@ -350,23 +382,30 @@ impl<'a> ParserState<'a> {
 	fn open_colon(&mut self) {
 		//seek the back term and accrete over it. If there isn't one, create an empty list
 		unsafe{
-			let rl = self.take_hanging_list_for_insert();
-			self.colon_receptacle = if (*rl).len() > 0 {
-				accrete_list(serious_get_back_mut(&mut*rl)) //safe: just verified something was there
-			}else{
-				(*rl).push(self.mklist());
-				&mut seriously_list_mut(serious_get_back_mut(&mut*rl)).v //safe: just put it there
-			}
+			self.colon_receptacle =
+				if self.last_completed_term_on_line != null_mut() {
+					accrete_list(unsafe{&mut *self.last_completed_term_on_line})
+				}else{
+					let rl = self.take_hanging_list_for_insert();
+					if (*rl).len() > 0 {
+						accrete_list(serious_get_back_mut(&mut*rl)) //safe: just verified something was there
+					}else{
+						(*rl).push(self.mklist());
+						&mut seriously_list_mut(serious_get_back_mut(&mut*rl)).v //safe: just put it there
+					}
+				}
 		}
 	}	
 	fn begin_atom(&mut self, list_for_insert:*mut Vec<Term>) {
 		let to_push = Atomv(Atom{line:self.line, column:self.column, v:String::new()});
 		unsafe{(*list_for_insert).push(to_push)};
+		self.last_completed_term_on_line = unsafe{serious_get_back_mut(&mut *list_for_insert)};
 		self.atom_being_read_into = &mut unsafe{seriously_atom_mut(serious_get_back_mut(&mut *list_for_insert))}.v;
 	}
 	fn begin_atom_with_char(&mut self, list_for_insert:*mut Vec<Term>, c:char)-> Result<(), PositionedError> {
 		let to_push = Atomv(Atom{line:self.line, column:self.column, v:String::new()});
 		unsafe{(*list_for_insert).push(to_push)};
+		self.last_completed_term_on_line = unsafe{serious_get_back_mut(&mut *list_for_insert)};
 		self.atom_being_read_into = &mut unsafe{seriously_atom_mut(serious_get_back_mut(&mut *list_for_insert))}.v;
 		if c == '\\' {
 			try!(self.read_escaped_char());
@@ -501,7 +540,7 @@ impl<'a> ParserState<'a> {
 						|_  :&mut Self|{ Ok(()) },
 						|_  :&mut Self|{ Ok(()) },
 						|slf:&mut Self, this_indent:&'a str|{
-							let plhl = slf.take_hanging_list_for_insert();
+							let plhl = slf.take_hanging_list_for_new_line();
 							slf.indent_stack.push(this_indent);
 							slf.indent_list_stack.push(plhl as *mut _);
 							Ok(())
@@ -612,6 +651,9 @@ impl<'a> ParserState<'a> {
 				'\\'=> {
 					try!(self.read_escaped_char());
 				},
+				'"'=> {
+					self.notice_quote_immediately_after_thing();
+				},
 				c if c == self.style().pairing=> {
 					self.open_colon();
 					self.mode = Self::seeking_term;
@@ -641,10 +683,30 @@ impl<'a> ParserState<'a> {
 	}
 	
 	fn notice_paren_immediately_after_thing(&mut self){
-		let bl = self.back_term() as *mut _;
+		let bl: *mut Term =
+			if self.last_completed_term_on_line != null_mut() {
+				self.last_completed_term_on_line
+			}else{
+				&mut *self.back_term()
+			};
 		accrete_list(unsafe{&mut *bl});
 		self.line_paren_stack.push(bl);
 		self.mode = Self::seeking_term;
+		self.next_col();
+	}
+	
+	fn notice_quote_immediately_after_thing(&mut self){
+		unsafe{
+			let lt: *mut Vec<Term> = &mut seriously_list_mut(&mut **serious_get_back_mut(&mut self.line_paren_stack)).v;
+			if (*lt).len() == 0 {
+				seriously_unreach("begin_seeking_immediately_after_thing should not be called after entering an empty paren");
+			}
+			let bt = serious_get_back_mut(&mut*lt);
+			let nl = accrete_list(&mut*bt);
+			nl.push(Atomv(Atom{line:self.line, column:self.column, v:String::new()}));
+			self.atom_being_read_into = &mut seriously_atom_mut(serious_get_back_mut(nl)).v; //safe: just made that
+		}
+		self.mode = Self::eating_quoted_string;
 		self.next_col();
 	}
 
@@ -652,18 +714,7 @@ impl<'a> ParserState<'a> {
 		if let Some(c) = co {
 			match c {
 				'"'=> {
-					unsafe{
-						let lt: *mut Vec<Term> = *serious_get_back_mut(&mut self.line_paren_stack) as *mut _;
-						if (*lt).len() == 0 {
-							seriously_unreach("begin_seeking_immediately_after_thing should not be called after entering an empty paren");
-						}
-						let bt = serious_get_back_mut(&mut*lt);
-						let nl = accrete_list(&mut*bt);
-						nl.push(Atomv(Atom{line:self.line, column:self.column, v:String::new()}));
-						self.atom_being_read_into = &mut seriously_atom_mut(serious_get_back_mut(nl)).v; //safe: just made that
-					}
-					self.mode = Self::eating_quoted_string;
-					self.next_col();
+					self.notice_quote_immediately_after_thing();
 				},
 				c if c == self.style().close=> {
 					try!(self.close_paren());
@@ -814,6 +865,7 @@ pub fn parse_multiline_style<'a>(s:&'a str, style:TermposeStyle)-> Result<Term, 
 		stretch_reading_start: s.as_ptr(),
 		cur_char_ptr: s.as_ptr(),
 		colon_receptacle: null_mut(),
+		last_completed_term_on_line: null_mut(),
 		atom_being_read_into: null_mut(),
 		iter: s.chars(),
 		line: 0,
@@ -846,7 +898,7 @@ pub fn parse<'a>(s:&'a str)-> Result<Term, PositionedError> {
 		if l.v.len() == 1 {
 			unsafe{seriously_yank_first(l.v)} //safe: just confirmed it's there
 		}else{
-			//then you were wrong, it wasn't a single root term :< what do you expect
+			//then the caller was wrong, it wasn't a single root term, so I guess, they get the whole List? Maybe this should be a PositionedError... I dunno about that
 			Listv(l)
 		}
 	})
