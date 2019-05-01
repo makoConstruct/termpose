@@ -162,7 +162,7 @@ pub fn parse_sexp<'a>(v:&'a str)-> Result<Term, PositionedError> {
 // 	NakedlistParserState::<'a>::begin(v).parse()
 // }
 
-pub fn parse_nakedlist<'a>(v:&'a str)-> Result<Term, PositionedError> {
+pub fn parse_nakedlist<'a>(_v:&'a str)-> Result<Term, PositionedError> {
 	Err(PositionedError{line:-1, column:-1, msg:"not implemented :p".into()})
 }
 
@@ -625,10 +625,6 @@ impl<'a> ParserState<'a> {
 			self.end_unindented_line();
 		}
 		Ok(())
-	}
-	
-	fn back_term(&mut self)-> &mut Term {
-		unsafe{get_back_mut(&mut assume_list_mut(&mut **get_back_mut(&mut self.line_paren_stack)).v)}
 	}
 	
 	fn notice_paren_immediately_after_thing(&mut self){

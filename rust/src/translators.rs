@@ -37,7 +37,6 @@ impl Error for UntermifyError {
 
 pub trait Bitermer<T> : Termer<T> + Untermer<T> {} //bidirectional termer and untermer
 
-
 pub trait Termable {
 	fn termify(&self)-> Term;
 }
@@ -45,6 +44,10 @@ pub trait Untermable {
 	fn untermify(&Term)-> Result<Self, UntermifyError> where Self:Sized;
 }
 
+#[derive(Clone)]
+pub struct DefaultTermer();
+#[derive(Clone)]
+pub struct DefaultUntermer();
 #[derive(Clone)]
 pub struct DefaultBitermer();
 impl<T> Bitermer<T> for DefaultBitermer where T:Termable + Untermable {}
@@ -54,6 +57,38 @@ impl<T> Termer<T> for DefaultBitermer where T:Termable {
 impl<T> Untermer<T> for DefaultBitermer where T:Untermable {
 	fn untermify(&self, v:&Term) -> Result<T, UntermifyError> { T::untermify(v) }
 }
+impl<T> Termer<T> for DefaultTermer where T:Termable {
+	fn termify(&self, v:&T) -> Term { v.termify() }
+}
+impl<T> Untermer<T> for DefaultUntermer where T:Untermable {
+	fn untermify(&self, v:&Term) -> Result<T, UntermifyError> { T::untermify(v) }
+}
+
+
+
+pub fn termify<T>(v:&T)-> Term where T: Termable {
+	v.termify()
+}
+pub fn untermify<T>(v:&Term)-> Result<T, UntermifyError> where T: Untermable {
+	T::untermify(v)
+}
+
+#[derive(Debug)]
+pub enum TermposeError{
+	ParserError(PositionedError),
+	UntermifyError(UntermifyError),
+}
+
+pub fn deserialize<T>(v:&str)-> Result<T, TermposeError> where T : Untermable {
+	match parse(v) {
+		Ok(t)=> untermify(&t).map_err(|e| TermposeError::UntermifyError(e)),
+		Err(e)=> Err(TermposeError::ParserError(e)),
+	}
+}
+pub fn serialize<T>(v:&T)-> String where T: Termable {
+	termify(v).to_string()
+}
+
 
 
 #[derive(Copy, Clone)]
@@ -107,20 +142,21 @@ impl Untermer<bool> for BoolBi {
 }
 
 
-#[derive(Copy, Clone)]
-pub struct StringBi();
-impl<'a> Bitermer<String> for StringBi {}
-impl<'a> Termer<String> for StringBi {
-	fn termify(&self, v:&String) -> Term { v.as_str().into() }
+impl Termable for String {
+	fn termify(&self)-> Term {
+		self.as_str().into()
+	}
 }
-impl<'a> Untermer<String> for StringBi {
-	fn untermify(&self, v:&Term) -> Result<String, UntermifyError> {
+impl Untermable for String {
+	fn untermify(v:&Term)-> Result<Self, UntermifyError> {
 		match *v {
 			Atomv(ref a)=> Ok(a.v.clone()),
 			Listv(_)=> Err(mk_untermify_error(v, "sought string, found list".into(), None)),
 		}
 	}
 }
+
+
 
 fn termify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<Term>)
 	where InnerTran: Termer<T>, I:Iterator<Item=&'a T>, T:'a
@@ -270,6 +306,28 @@ fn untermify_map<'a, K, V, KeyTran, ValTran, I>(ktr:&KeyTran, vtr:&ValTran, i:I,
 	Ok(())
 }
 
+impl<K, V> Termable for HashMap<K, V> where
+	K: Eq + Hash + Termable,
+	V: Eq + Hash + Termable,
+{
+	fn termify(&self)-> Term {
+		let mut ret = Vec::new();
+		termify_map(&DefaultTermer(), &DefaultTermer(), self.iter(), &mut ret);
+		ret.into()
+	}
+}
+impl<K, V> Untermable for HashMap<K, V>
+	where
+		K: Eq + Hash + Untermable,
+		V: Eq + Hash + Untermable,
+{
+	fn untermify(v:&Term) -> Result<HashMap<K,V>, UntermifyError> {
+		let mut ret = Vec::new();
+		untermify_map(&DefaultUntermer(), &DefaultUntermer(), v.contents(), &mut ret)?;
+		Ok(HashMap::from_iter(ret.into_iter()))
+	}
+}
+
 #[derive(Clone)]
 pub struct HashMapBi<KeyTran, ValTran>(KeyTran, ValTran);
 impl<K, V, KeyTran, ValTran> Bitermer<HashMap<K, V>> for HashMapBi<KeyTran, ValTran>
@@ -351,7 +409,7 @@ mod tests {
 	#[test]
 	fn tricky_list_parse() {
 		let listo = list!(list!("tricky", "list"), list!("parse"));
-		let tranner:SequenceTran<SequenceTran<StringBi>> = SequenceTran(SequenceTran(StringBi()));
+		let tranner:SequenceTran<SequenceTran<DefaultBitermer>> = SequenceTran(SequenceTran(DefaultBitermer()));
 		let lv:Vec<Vec<String>> = tranner.untermify(&listo).unwrap();
 		assert!(lv.len() == 2);
 		assert!(lv[0].len() == 2);
@@ -362,10 +420,42 @@ mod tests {
 	#[test]
 	fn do_hash_map() {
 		let t = parse("a:b c:d d:e e:f").unwrap();
-		assert!(TaggedHashMapBi("ob", StringBi(), StringBi()).untermify(&t).is_err());
+		let bt = TaggedHashMapBi("ob", DefaultBitermer(), DefaultBitermer());
+		let utr: Result<HashMap<String, String>, UntermifyError> = bt.untermify(&t);
+		assert!(utr.is_err());
 		let tt = parse("ob a:b c:d d:e e:f").unwrap();
-		let hm = TaggedHashMapBi("ob", StringBi(), StringBi()).untermify(&tt).unwrap();
+		let hm:HashMap<String, String> = TaggedHashMapBi("ob", DefaultBitermer(), DefaultBitermer()).untermify(&tt).unwrap();
 		assert!(hm.get("a").unwrap() == "b");
 		assert!(hm.get("d").unwrap() == "e");
+	}
+	
+	fn give_hm()-> HashMap<String, String> {
+		[
+			("a".into(), "b".into()),
+			("c".into(), "d".into()),
+		].iter().cloned().collect()
+	}
+	
+	#[test]
+	fn implicit_bitermers() {
+		let t = parse("a:b c:d").unwrap();
+		let exh = give_hm();
+		
+		let exu:HashMap<String, String> = untermify(&t).unwrap();
+		
+		assert!(exu == exh)
+	}
+	
+	#[test]
+	fn automatic_deserialize() {
+		let hm:HashMap<String, String> = deserialize("a:b c:d").unwrap();
+		assert!(hm == give_hm());
+	}
+	
+	#[test]
+	fn automatic_serialize() {
+		let hm = give_hm();
+		let cln = deserialize(&serialize(&hm)).unwrap();
+		assert!(hm == cln);
 	}
 }
