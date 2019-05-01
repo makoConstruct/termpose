@@ -265,6 +265,7 @@ impl<'a> ParserState<'a> {
 		}
 		self.line_paren_stack.clear();
 		self.line_paren_stack.push(get_back_mut(unsafe{ &mut *bin }));
+		self.last_completed_term_on_line = null_mut();
 		self.start_reading_thing(c)
 	}
 	
@@ -317,6 +318,7 @@ impl<'a> ParserState<'a> {
 		let list_for_insert = self.take_hanging_list_for_insert();
 		unsafe{(*list_for_insert).push(lti)};
 		self.line_paren_stack.push(unsafe{&mut *get_back_mut(&mut*list_for_insert)});
+		self.last_completed_term_on_line = null_mut();
 	}
 	fn close_paren(&mut self)-> Result<(), PositionedError> {
 		self.colon_receptacle = null_mut();
@@ -328,23 +330,21 @@ impl<'a> ParserState<'a> {
 			self.a_fail("unmatched paren".into())
 		}
 	}
-	fn open_colon(&mut self) {
+	fn take_last_completed_term_on_line(&mut self)-> *mut Term {
+		replace(&mut self.last_completed_term_on_line, null_mut())
+	}
+	fn open_colon(&mut self)-> Result<(), PositionedError> {
 		//seek the back term and accrete over it. If there isn't one, create an empty list
-		unsafe{
-			self.colon_receptacle =
-				if self.last_completed_term_on_line != null_mut() {
-					accrete_list(&mut *self.last_completed_term_on_line)
-				}else{
-					let rl = self.take_hanging_list_for_insert();
-					if (*rl).len() > 0 {
-						accrete_list(get_back_mut(&mut*rl)) //safe: just verified something was there
-					}else{
-						(*rl).push(self.mklist());
-						&mut assume_list_mut(get_back_mut(&mut*rl)).v //safe: just put it there
-					}
-				}
-		}
-	}	
+		self.colon_receptacle = {
+			let lt = self.take_last_completed_term_on_line();
+			if lt != null_mut() {
+				unsafe{ accrete_list(&mut *lt) }
+			}else{
+				return Err(PositionedError{line: self.line, column: self.column, msg:"no previous term, cannot open a colon here".into()});
+			}
+		};
+		Ok(())
+	}
 	fn begin_atom(&mut self, list_for_insert:*mut Vec<Term>) {
 		let to_push = Atomv(Atom{line:self.line, column:self.column, v:String::new()});
 		unsafe{(*list_for_insert).push(to_push)};
@@ -380,7 +380,7 @@ impl<'a> ParserState<'a> {
 				self.mode = Self::eating_quoted_string;
 			},
 			c if c == self.style().pairing=> {
-				self.open_colon();
+				try!(self.open_colon());
 				self.mode = Self::seeking_term;
 			},
 			_=> {
@@ -515,8 +515,8 @@ impl<'a> ParserState<'a> {
 					self.mode = Self::eating_indentation;
 					self.next_col();
 				},
-				c if c == self.style().pairing=> {
-					self.open_colon();
+				c if c == self.style().pairing => {
+					try!(self.open_colon());
 					self.next_col();
 				},
 				_=> {
@@ -604,7 +604,7 @@ impl<'a> ParserState<'a> {
 					self.notice_quote_immediately_after_thing();
 				},
 				c if c == self.style().pairing=> {
-					self.open_colon();
+					try!(self.open_colon());
 					self.mode = Self::seeking_term;
 					self.next_col();
 				},
@@ -632,12 +632,10 @@ impl<'a> ParserState<'a> {
 	}
 	
 	fn notice_paren_immediately_after_thing(&mut self){
-		let bl: *mut Term =
-			if self.last_completed_term_on_line != null_mut() {
-				self.last_completed_term_on_line
-			}else{
-				&mut *self.back_term()
-			};
+		let bl: *mut Term = self.take_last_completed_term_on_line();
+		if bl == null_mut() {
+			panic!("notice_paren_immediately_after_thing was called with no previous thing");
+		}
 		accrete_list(unsafe{&mut *bl});
 		self.line_paren_stack.push(bl);
 		self.mode = Self::seeking_term;
@@ -647,7 +645,7 @@ impl<'a> ParserState<'a> {
 	fn notice_quote_immediately_after_thing(&mut self){
 		let lt: *mut Vec<Term> = unsafe{ &mut assume_list_mut(&mut **get_back_mut(&mut self.line_paren_stack)).v };
 		if unsafe{(*lt).len()} == 0 {
-			panic!("begin_seeking_immediately_after_thing should not be called after entering an empty paren");
+			panic!("notice_quote_immediately_after_thing should not be called after entering an empty paren");
 		}
 		let bt = get_back_mut(unsafe{ &mut*lt });
 		let nl = accrete_list(bt);
@@ -671,7 +669,7 @@ impl<'a> ParserState<'a> {
 					self.notice_paren_immediately_after_thing();
 				},
 				c if c == self.style().pairing=> {
-					self.open_colon();
+					try!(self.open_colon());
 					self.mode = Self::seeking_term;
 					self.next_col();
 				},
@@ -892,6 +890,7 @@ mod tests {
 		let teststr = read_file_from_root("tests.term");
 		let testt = parse_multiline(teststr.as_str()).unwrap();
 		let testb = testt.find("tests").unwrap();
+		
 		for tc in testb.tail() {
 			let test_name = tc.initial_string();
 			let mut ttests = tc.tail();
@@ -903,6 +902,18 @@ mod tests {
 				}
 			}
 		}
+		
+		let failts = testt.find("failing").unwrap();
+		for tc in failts.tail() {
+			let test_name = tc.initial_string();
+			for t in tc.tail() {
+				if let Ok(v) = parse_multiline(t.initial_string()) {
+					panic!("in \"{}\" case, this string should not have parsed successfully: {}\n. It parsed to {}", test_name, t.initial_string(), v.to_string());
+				}
+			}
+		}
+		
+		//failing tests
 	}
 	
 	
