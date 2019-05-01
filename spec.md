@@ -76,7 +76,7 @@ data(:slist) → a list with the data of each contained :item. If :interrupted, 
 
 data(:word) → a string
 
-data(:pair) → a :list containing the data of each of the two :items. If :interrupted after the `:` (if there is no second term), the resultant :list will contain the :indental
+data(:pair) → a :list containing the data of both of the :items. The :list of a :pair interrupted by a `)` will close with just one :term. The :list of the :pair left open and :interrupted by the line end will contain the :indental.
 
 data(:quoted) → a string. If :interrupted, and the string contains non-:whitespace content, then the string will end normally at the end of the line. If there is nothing, or if there is only whitespace, the whitespace will be stripped out and if the line has :indental, it will be parsed as a **:multilinestring**
 

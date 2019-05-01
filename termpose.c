@@ -997,7 +997,6 @@ void takingEscape(Parser* p, bool fileEnd, Rune c){
 		lodgeError(p, "invalid escape sequence, no one can escape the end of the file");
 	}else{
 		switch(c){
-			// case 'h': addRune(&p->stringBuffer, '☃'); break; //TODO, properly implement snowman escaping to bring in line with the spec
 			case 'n': addRune(&p->stringBuffer, '\n'); break;
 			case 'r': addRune(&p->stringBuffer, '\r'); break;
 			case 't': addRune(&p->stringBuffer, '\t'); break;

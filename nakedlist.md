@@ -24,12 +24,11 @@ agent
 (agent (name Crouo) (role Pigeon) (inventory feathers straw) (description "Just a darn pigeon"))
 
 (agent
-  (name Wuo) (role Pigeon) (description "A more prominent pigeon
+  (name Wuo) (role Pigeon) (inventory dominance (gut (contents crumbs poop))) (description "A more prominent pigeon
 Wuo is bobbing flamboyantly next to the females, and no one is stopping him.
 Wuo isn't taking any shit from anyone.
 Except for the seagulls,
 who are big and mean.")
-  (inventory dominance (gut (contents crumbs poop)))
 )
 
 ```

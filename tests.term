@@ -7,9 +7,6 @@ tests
 		let life(happen)
 		let (life happen)
 		let life:happen
-	"colons alone in list
-		(:)
-		(())
 	"treat colons as colons even if there's a space
 		ne ne : ne
 		(ne (ne ne))
@@ -23,6 +20,11 @@ tests
 			then
 			else
 		((if cond) then else)
+	"a closed list will not take on more entries
+		(only)
+			then
+			else
+		((only) then else)
 	"invoked string
 		a b"s
 		(a (b s))
@@ -51,12 +53,24 @@ tests
 			
 			something
 			
-		(m "something\nsomething\n")
+		(m "something\n\nsomething\n")
+	"false initial multiline
+		a
+			m "
+			n o
+			l
+		(a (m "") (n o) l)
+	"function after colon
+		a b:c(d) d
+		(a (b (c d)) d)
 	"many open parens
 		-
 			A(B(C(D(E
 			N(M(E
 		- (A (B (C (D E)))) (N (M E))
+	"colon interrupted by closing paren
+		(a b:)
+		(a (b))
 	"trailing colon
 		a b:
 			c
@@ -89,7 +103,19 @@ tests
 		a b c
 
 failing
-	"double colon
+	"double colon" "
 		a:: c
-	"colon before paren
-		a(b:)
+	"colon at beginning of scope"
+		"
+			:b
+		"
+			b(: c)
+		"
+			:
+				a
+				d
+		"
+			a
+			bios ()
+			:
+			so

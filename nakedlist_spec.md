@@ -12,11 +12,11 @@ We will name the elements of the syntax, then explain how those elements are map
 
 ### data
 
-the process of parsing a :file produces a **:term**
+the process of parsing a **:file** produces a :term
 
 a :term is either either a **:list** or a string. In a Rust API, for instance, it is defined as `enum Term { Listv(List), Atomv(Atom) }`. In the C API, it is a tagged union
 
-a **:list** is a sequence type containing any number of :terms
+a :list is a sequence type containing any number of :terms
 
 
 
@@ -24,17 +24,17 @@ a **:list** is a sequence type containing any number of :terms
 
 ### elements of syntax
 
-:file = some **:lines**
+:file = any number of **:lines**
 
-:line = an **:indentation**, optional *:linecontent*, then a *:newline* or the end of the file
+:line = an **:indentation**, optional **:linecontent**, then a **:newline** or `EOF`
 
-:newline = any number of `\n` and `\r`
+:newline = a `\n` and an optional `\r`
 
 :indentation = any number of `space` or `tab`
 
-:linecontent = some **:items** separated by *:whitespace*
+:linecontent = some **:items** separated by **:whitespace**
 
-:whitespace = a sequence of `space` or `tab`
+:whitespace = some `space` or `tab`
 
 :item = one of **:slist** **:word** **:quoted**
 
@@ -55,15 +55,15 @@ a **:list** is a sequence type containing any number of :terms
 
 ### misc requirements/exceptions
 
-each :indentation must be either prefixed by the :indentation of the previous :line, or be the prefix of the :indentation of the next :line. This allows common deviations in indenting without allowing any inconsistent or misleading :indentation patterns
+each :indentation must be either prefixed by the :indentation of the previous :line, or itself prefix the :indentation of the next :line. This allows common deviations in indenting without allowing any inconsistent or misleading :indentation patterns
 
 
 
 ### term data defined as a function of syntactical elements
 
-data(:file) → parsing will return a :list containing data(:linecontent) at root level (that is, it maps each :line having an indent of zero length)
+data(:file) → parsing will return a :list containing data(:linecontent) at root level (that is, it maps over the :lines that have an indent of zero length)
 
-data(:linecontent) → the content of the :linecontent is the sequence of :items contained in it, and the data of each :indental, if there are any. If this content contains multiple items, the result is a :list of the data of those items. If it contains just one item, it will result in just the data of that item without an encompassing list
+data(:linecontent) → the content of the :linecontent is the sequence of the data of the :items contained in it, and the data of each :indental, if there are any. If this content contains multiple items, the result is a :list of the data of those items. If it contains just one item, it will result in just the data of that item without an encompassing list
 
 data(:item) → see the following :item types
 
