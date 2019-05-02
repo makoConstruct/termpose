@@ -69,11 +69,6 @@ pub enum Term {
 pub use Term::*;
 
 
-// #[macro_export]
-// macro_rules! list {
-// 	($(e),*) => ( Term::Listv(List{line:-1, column:-1, v:vec!($(($e).into()),*)}) )
-// }
-
 impl<'a> Into<Term> for &'a str {
 	fn into(self) -> Term { Atomv(Atom{ line:-1, column:-1, v:self.to_string() }) }
 }
@@ -175,8 +170,8 @@ impl Term {
 
 #[macro_export]
 macro_rules! list {
-	($($inner:expr),*)=> {{
-		Listv(List{line:-1, column:-1, v:vec!($($inner.into()),*)})
+	($($inner:expr),* $(,)*)=> {{
+		$crate::Listv($crate::List{line:-1, column:-1, v:vec!($($inner.into()),*)})
 	}};
 }
 
