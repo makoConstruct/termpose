@@ -2,39 +2,45 @@
 extern crate termpose;
 extern crate termpose_derive;
 
+use std::fmt::Debug;
 use termpose::Termable;
+use termpose::Untermable;
 use termpose_derive::Termable;
+use termpose_derive::Untermable;
 
 
-#[derive(Termable)]
-struct Thing {
+#[derive(Termable, Untermable, PartialEq, Eq, Debug)]
+struct StructThing {
 	a: String,
 	b: String,
 }
 
-#[derive(Termable)]
-enum Uh{
-	Varian(String),
-	Bobo{thing:String},
-	Noune,
+#[derive(Termable, Untermable, PartialEq, Eq, Debug)]
+struct TupleStructThing(String, String);
+
+#[derive(Termable, Untermable, PartialEq, Eq, Debug)]
+struct UnitStructThing;
+
+#[derive(Termable, Untermable, PartialEq, Eq, Debug)]
+enum EnumThing {
+	TupleVariant(String),
+	StructVariant{a:String},
+	UnitVariant,
 }
 
 
-fn prin<T:Termable>(v:&T){ println!("it's {}", v.termify().to_string()); }
+
+fn check<T:Termable + Untermable + PartialEq + Debug>(v:&T){
+	let termifiedstr = v.termify().to_string();
+	println!("it's {}", termifiedstr.as_str());
+	assert_eq!(v, &T::untermify(&termpose::parse(termifiedstr.as_str()).unwrap()).unwrap());
+}
 
 fn main() {
-	
-	println!("{}", 0usize.to_string());
-	
-	let u = Uh::Varian("n".into());
-	// if let Uh::Varian(nn,) = u {
-		
-	// }
-	
-	prin(&Thing{a: "yes".into(), b: "huuu".into()});
-	
-	prin(&u);
-	prin(&Uh::Noune);
-	prin(&Uh::Bobo{thing: "hamnure".into()});
-	
+	check(&StructThing{a: "aa".into(), b: "bb".into()});
+	check(&TupleStructThing("aao".into(), "bbo".into()));
+	check(&UnitStructThing);
+	check(&EnumThing::StructVariant{a: "aa".into()});
+	check(&EnumThing::TupleVariant("aa".into()));
+	check(&EnumThing::UnitVariant);
 }

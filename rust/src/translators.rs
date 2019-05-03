@@ -25,6 +25,12 @@ impl Display for UntermifyError {
 		Debug::fmt(self, f)
 	}
 }
+impl UntermifyError {
+	pub fn new(source: &Term, msg:String)-> Self {
+		let (line, column) = source.line_and_col();
+		Self{ line, column, msg, cause:None }
+	}
+}
 fn mk_untermify_error(problem:&Term, msg:String, cause:Option<Box<Error>>)-> UntermifyError {
 	let (line, column) = problem.line_and_col();
 	UntermifyError{ line, column, msg, cause }
@@ -43,6 +49,36 @@ pub trait Termable {
 pub trait Untermable {
 	fn untermify(&Term)-> Result<Self, UntermifyError> where Self:Sized;
 }
+
+
+//for scanning over structs with named pairs where the order is usually the same. Guesses that each queried field will be after the last, and only does a full scanaround when it finds that's not the case. Extremely efficient, if order is maintained.
+pub struct FieldScanning<'a>{
+	pub v:&'a Term,
+	pub li:&'a [Term],
+	pub eye:usize,
+}
+impl<'a> FieldScanning<'a>{
+	pub fn new(v:&'a Term)-> Self {
+		FieldScanning{ v:v, li:v.tail().as_slice(), eye:0, }
+	}
+	pub fn seek(&mut self, key:&str)-> Result<&Term, UntermifyError> {
+		for _ in 0..self.li.len() {
+			let c = &self.li[self.eye];
+			if c.initial_str() == key {
+				return
+					if let Some(s) = c.tail().next() {
+						Ok(s)
+					}else{
+						Err(UntermifyError::new(c, format!("expected a subterm, but the term has no tail")))
+					}
+			}
+			self.eye += 1;
+			if self.eye >= self.li.len() { self.eye = 0; }
+		}
+		Err(UntermifyError::new(self.v, format!("could not find key \"{}\"", key)))
+	}
+}
+
 
 #[derive(Clone)]
 pub struct DefaultTermer();
@@ -99,7 +135,7 @@ impl Termer<isize> for IsizeBi {
 }
 impl Untermer<isize> for IsizeBi {
 	fn untermify(&self, v:&Term) -> Result<isize, UntermifyError> {
-		isize::from_str(v.initial_string()).map_err(|er|{
+		isize::from_str(v.initial_str()).map_err(|er|{
 			mk_untermify_error(v, "couldn't parse isize".into(), Some(Box::new(er)))
 		})
 	}
@@ -114,7 +150,7 @@ impl Termer<usize> for UsizeBi {
 }
 impl Untermer<usize> for UsizeBi {
 	fn untermify(&self, v:&Term) -> Result<usize, UntermifyError> {
-		usize::from_str(v.initial_string()).map_err(|er|{
+		usize::from_str(v.initial_str()).map_err(|er|{
 			mk_untermify_error(v, "couldn't parse usize".into(), Some(Box::new(er)))
 		})
 	}
@@ -129,7 +165,7 @@ impl Termer<bool> for BoolBi {
 }
 impl Untermer<bool> for BoolBi {
 	fn untermify(&self, v:&Term) -> Result<bool, UntermifyError> {
-		match v.initial_string() {
+		match v.initial_str() {
 			"true" | "⊤" | "yes" => {
 				Ok(true)
 			},

@@ -19,7 +19,7 @@ use ref_slice::ref_slice;
 
 
 // pub trait Term where Self:Sized {
-// 	fn initial_string(& self)-> &str;
+// 	fn initial_str(& self)-> &str;
 // 	fn contents<'a>(&'a self)-> std::slice::Iter<'a, Self>;
 // 	fn tail<'a>(&'a self)-> std::slice::Iter<'a, Self>;
 // }
@@ -111,11 +111,11 @@ impl Term {
 			Term::Atomv(ref a)=> (a.line, a.column),
 		}
 	}
-	pub fn initial_string(&self)-> &str { //if it bottoms out at an empty list, it returns the empty str
+	pub fn initial_str(&self)-> &str { //if it bottoms out at an empty list, it returns the empty str
 		match *self {
 			Listv(ref v)=> {
 				if let Some(ref ss) = v.v.first() {
-					ss.initial_string()
+					ss.initial_str()
 				}else{
 					""
 				}
@@ -164,7 +164,7 @@ impl Term {
 		}
 	}
 	pub fn find(&self, key:&str)-> Option<&Term> {
-		self.contents().find(|el| el.initial_string() == key)
+		self.contents().find(|el| el.initial_str() == key)
 	}
 }
 
