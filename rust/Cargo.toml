@@ -1,6 +1,6 @@
 [package]
 name = "termpose"
-description = "Deserialization for termpose and s-expressions"
+description = "Parsing, serialization and deserialization for termpose and s-expressions"
 version = "0.2.1"
 authors = ["mako <marcus.yass@gmail.com>"]
 

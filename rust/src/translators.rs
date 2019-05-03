@@ -9,45 +9,45 @@ use std::iter::FromIterator;
 pub trait Termer<T> : Clone {
 	fn termify(&self, v:&T) -> Term;
 }
-pub trait Untermer<T> : Clone {
-	fn untermify(&self, v:&Term) -> Result<T, UntermifyError>;
+pub trait Determer<T> : Clone {
+	fn determify(&self, v:&Term) -> Result<T, DetermifyError>;
 }
 
 #[derive(Debug)]
-pub struct UntermifyError{
+pub struct DetermifyError{
 	pub line:isize,
 	pub column:isize,
 	pub msg:String,
 	pub cause:Option<Box<Error>>,
 }
-impl Display for UntermifyError {
+impl Display for DetermifyError {
 	fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
 		Debug::fmt(self, f)
 	}
 }
-impl UntermifyError {
-	pub fn new(source: &Term, msg:String)-> Self {
+impl DetermifyError {
+	pub fn new(source: &Term, msg:String) -> Self {
 		let (line, column) = source.line_and_col();
 		Self{ line, column, msg, cause:None }
 	}
-}
-fn mk_untermify_error(problem:&Term, msg:String, cause:Option<Box<Error>>)-> UntermifyError {
-	let (line, column) = problem.line_and_col();
-	UntermifyError{ line, column, msg, cause }
+	pub fn new_with_cause(source:&Term, msg:String, cause:Option<Box<Error>>) -> Self {
+		let (line, column) = source.line_and_col();
+		DetermifyError{ line, column, msg, cause }
+	}
 }
 
-impl Error for UntermifyError {
+impl Error for DetermifyError {
 	fn description(&self) -> &str { self.msg.as_str() }
 	fn cause(&self) -> Option<&Error> { self.cause.as_ref().map(|e| e.as_ref()) }
 }
 
-pub trait Bitermer<T> : Termer<T> + Untermer<T> {} //bidirectional termer and untermer
+pub trait Bitermer<T> : Termer<T> + Determer<T> {} //bidirectional termer and determer
 
 pub trait Termable {
-	fn termify(&self)-> Term;
+	fn termify(&self) -> Term;
 }
-pub trait Untermable {
-	fn untermify(&Term)-> Result<Self, UntermifyError> where Self:Sized;
+pub trait Determable {
+	fn determify(&Term) -> Result<Self, DetermifyError> where Self:Sized;
 }
 
 
@@ -58,10 +58,10 @@ pub struct FieldScanning<'a>{
 	pub eye:usize,
 }
 impl<'a> FieldScanning<'a>{
-	pub fn new(v:&'a Term)-> Self {
+	pub fn new(v:&'a Term) -> Self {
 		FieldScanning{ v:v, li:v.tail().as_slice(), eye:0, }
 	}
-	pub fn seek(&mut self, key:&str)-> Result<&Term, UntermifyError> {
+	pub fn seek(&mut self, key:&str) -> Result<&Term, DetermifyError> {
 		for _ in 0..self.li.len() {
 			let c = &self.li[self.eye];
 			if c.initial_str() == key {
@@ -69,13 +69,13 @@ impl<'a> FieldScanning<'a>{
 					if let Some(s) = c.tail().next() {
 						Ok(s)
 					}else{
-						Err(UntermifyError::new(c, format!("expected a subterm, but the term has no tail")))
+						Err(DetermifyError::new(c, format!("expected a subterm, but the term has no tail")))
 					}
 			}
 			self.eye += 1;
 			if self.eye >= self.li.len() { self.eye = 0; }
 		}
-		Err(UntermifyError::new(self.v, format!("could not find key \"{}\"", key)))
+		Err(DetermifyError::new(self.v, format!("could not find key \"{}\"", key)))
 	}
 }
 
@@ -83,45 +83,45 @@ impl<'a> FieldScanning<'a>{
 #[derive(Clone)]
 pub struct DefaultTermer();
 #[derive(Clone)]
-pub struct DefaultUntermer();
+pub struct DefaultDetermer();
 #[derive(Clone)]
 pub struct DefaultBitermer();
-impl<T> Bitermer<T> for DefaultBitermer where T:Termable + Untermable {}
+impl<T> Bitermer<T> for DefaultBitermer where T:Termable + Determable {}
 impl<T> Termer<T> for DefaultBitermer where T:Termable {
 	fn termify(&self, v:&T) -> Term { v.termify() }
 }
-impl<T> Untermer<T> for DefaultBitermer where T:Untermable {
-	fn untermify(&self, v:&Term) -> Result<T, UntermifyError> { T::untermify(v) }
+impl<T> Determer<T> for DefaultBitermer where T:Determable {
+	fn determify(&self, v:&Term) -> Result<T, DetermifyError> { T::determify(v) }
 }
 impl<T> Termer<T> for DefaultTermer where T:Termable {
 	fn termify(&self, v:&T) -> Term { v.termify() }
 }
-impl<T> Untermer<T> for DefaultUntermer where T:Untermable {
-	fn untermify(&self, v:&Term) -> Result<T, UntermifyError> { T::untermify(v) }
+impl<T> Determer<T> for DefaultDetermer where T:Determable {
+	fn determify(&self, v:&Term) -> Result<T, DetermifyError> { T::determify(v) }
 }
 
 
 
-pub fn termify<T>(v:&T)-> Term where T: Termable {
+pub fn termify<T>(v:&T) -> Term where T: Termable {
 	v.termify()
 }
-pub fn untermify<T>(v:&Term)-> Result<T, UntermifyError> where T: Untermable {
-	T::untermify(v)
+pub fn determify<T>(v:&Term) -> Result<T, DetermifyError> where T: Determable {
+	T::determify(v)
 }
 
 #[derive(Debug)]
 pub enum TermposeError{
 	ParserError(PositionedError),
-	UntermifyError(UntermifyError),
+	DetermifyError(DetermifyError),
 }
 
-pub fn deserialize<T>(v:&str)-> Result<T, TermposeError> where T : Untermable {
+pub fn deserialize<T>(v:&str) -> Result<T, TermposeError> where T : Determable {
 	match parse(v) {
-		Ok(t)=> untermify(&t).map_err(|e| TermposeError::UntermifyError(e)),
+		Ok(t)=> determify(&t).map_err(|e| TermposeError::DetermifyError(e)),
 		Err(e)=> Err(TermposeError::ParserError(e)),
 	}
 }
-pub fn serialize<T>(v:&T)-> String where T: Termable {
+pub fn serialize<T>(v:&T) -> String where T: Termable {
 	termify(v).to_string()
 }
 
@@ -133,10 +133,10 @@ impl Bitermer<isize> for IsizeBi {}
 impl Termer<isize> for IsizeBi {
 	fn termify(&self, v:&isize) -> Term { v.to_string().as_str().into() }
 }
-impl Untermer<isize> for IsizeBi {
-	fn untermify(&self, v:&Term) -> Result<isize, UntermifyError> {
+impl Determer<isize> for IsizeBi {
+	fn determify(&self, v:&Term) -> Result<isize, DetermifyError> {
 		isize::from_str(v.initial_str()).map_err(|er|{
-			mk_untermify_error(v, "couldn't parse isize".into(), Some(Box::new(er)))
+			DetermifyError::new_with_cause(v, "couldn't parse isize".into(), Some(Box::new(er)))
 		})
 	}
 }
@@ -148,10 +148,10 @@ impl Bitermer<usize> for UsizeBi {}
 impl Termer<usize> for UsizeBi {
 	fn termify(&self, v:&usize) -> Term { v.to_string().as_str().into() }
 }
-impl Untermer<usize> for UsizeBi {
-	fn untermify(&self, v:&Term) -> Result<usize, UntermifyError> {
+impl Determer<usize> for UsizeBi {
+	fn determify(&self, v:&Term) -> Result<usize, DetermifyError> {
 		usize::from_str(v.initial_str()).map_err(|er|{
-			mk_untermify_error(v, "couldn't parse usize".into(), Some(Box::new(er)))
+			DetermifyError::new_with_cause(v, "couldn't parse usize".into(), Some(Box::new(er)))
 		})
 	}
 }
@@ -163,8 +163,8 @@ impl Bitermer<bool> for BoolBi {}
 impl Termer<bool> for BoolBi {
 	fn termify(&self, v:&bool) -> Term { v.to_string().as_str().into() }
 }
-impl Untermer<bool> for BoolBi {
-	fn untermify(&self, v:&Term) -> Result<bool, UntermifyError> {
+impl Determer<bool> for BoolBi {
+	fn determify(&self, v:&Term) -> Result<bool, DetermifyError> {
 		match v.initial_str() {
 			"true" | "⊤" | "yes" => {
 				Ok(true)
@@ -172,22 +172,22 @@ impl Untermer<bool> for BoolBi {
 			"false" | "⟂" | "no" => {
 				Ok(false)
 			},
-			_=> Err(mk_untermify_error(v, "expected a bool here".into(), None))
+			_=> Err(DetermifyError::new_with_cause(v, "expected a bool here".into(), None))
 		}
 	}
 }
 
 
 impl Termable for String {
-	fn termify(&self)-> Term {
+	fn termify(&self) -> Term {
 		self.as_str().into()
 	}
 }
-impl Untermable for String {
-	fn untermify(v:&Term)-> Result<Self, UntermifyError> {
+impl Determable for String {
+	fn determify(v:&Term) -> Result<Self, DetermifyError> {
 		match *v {
 			Atomv(ref a)=> Ok(a.v.clone()),
-			Listv(_)=> Err(mk_untermify_error(v, "sought string, found list".into(), None)),
+			Listv(_)=> Err(DetermifyError::new_with_cause(v, "sought string, found list".into(), None)),
 		}
 	}
 }
@@ -199,12 +199,12 @@ fn termify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<
 {
 	for vi in v { output.push(inner.termify(vi)); }
 }
-fn untermify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<T>)-> Result<(), UntermifyError>
-	where InnerTran: Untermer<T>, I:Iterator<Item=&'a Term>
+fn determify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<T>) -> Result<(), DetermifyError>
+	where InnerTran: Determer<T>, I:Iterator<Item=&'a Term>
 {
 	// let errors = Vec::new();
 	for vi in v {
-		match inner.untermify(vi) {
+		match inner.determify(vi) {
 			Ok(vii)=> output.push(vii),
 			Err(e)=> return Err(e),
 		}
@@ -229,10 +229,10 @@ impl<T, SubTran> Termer<Vec<T>> for SequenceTran<SubTran> where SubTran:Termer<T
 		ret.into()
 	}
 }
-impl<T, SubTran> Untermer<Vec<T>> for SequenceTran<SubTran> where SubTran:Untermer<T> {
-	fn untermify(&self, v:&Term) -> Result<Vec<T>, UntermifyError> {
+impl<T, SubTran> Determer<Vec<T>> for SequenceTran<SubTran> where SubTran:Determer<T> {
+	fn determify(&self, v:&Term) -> Result<Vec<T>, DetermifyError> {
 		let mut ret = Vec::new();
-		try!(untermify_seq_into(&self.0, v.contents(), &mut ret));
+		try!(determify_seq_into(&self.0, v.contents(), &mut ret));
 		Ok(ret)
 	}
 }
@@ -249,7 +249,7 @@ impl<'a, T, SubTran> Termer<Vec<T>> for TaggedSequenceTran<'a, SubTran> where Su
 	}
 }
 
-fn ensure_tag<'b>(v:&'b Term, tag:&str)-> Result<std::slice::Iter<'b, Term>, UntermifyError> {
+fn ensure_tag<'b>(v:&'b Term, tag:&str) -> Result<std::slice::Iter<'b, Term>, DetermifyError> {
 	let mut i = v.contents();
 	if let Some(name_term) = i.next() {
 		match *name_term {
@@ -258,45 +258,45 @@ fn ensure_tag<'b>(v:&'b Term, tag:&str)-> Result<std::slice::Iter<'b, Term>, Unt
 				if name == tag {
 					Ok(i)
 				}else{
-					Err(mk_untermify_error(name_term, format!("expected \"{}\" here, but instead there was \"{}\"", tag, name), None))
+					Err(DetermifyError::new_with_cause(name_term, format!("expected \"{}\" here, but instead there was \"{}\"", tag, name), None))
 				}
 			},
 			_=> {
-				Err(mk_untermify_error(name_term, format!("expected \"{}\" here, but instead there was a list term", tag), None))
+				Err(DetermifyError::new_with_cause(name_term, format!("expected \"{}\" here, but instead there was a list term", tag), None))
 			}
 		}
 	}else{
-		Err(mk_untermify_error(v, format!("expected \"{}\" at beginning, but the term was empty", tag), None))
+		Err(DetermifyError::new_with_cause(v, format!("expected \"{}\" at beginning, but the term was empty", tag), None))
 	}
 }
 
-impl<'a, T, SubTran> Untermer<Vec<T>> for TaggedSequenceTran<'a, SubTran> where SubTran:Untermer<T> {
-	fn untermify(&self, v:&Term) -> Result<Vec<T>, UntermifyError> {
+impl<'a, T, SubTran> Determer<Vec<T>> for TaggedSequenceTran<'a, SubTran> where SubTran:Determer<T> {
+	fn determify(&self, v:&Term) -> Result<Vec<T>, DetermifyError> {
 		let mut ret = Vec::new();
 		let it = ensure_tag(v, &self.0)?;
-		untermify_seq_into(&self.1, it, &mut ret)?;
+		determify_seq_into(&self.1, it, &mut ret)?;
 		Ok(ret)
 	}
 }
 
 
-fn untermify_pair<K, V, KeyTran, ValTran>(kt:&KeyTran, vt:&ValTran, v:&Term) -> Result<(K,V), UntermifyError>
-	where KeyTran:Untermer<K>, ValTran:Untermer<V>
+fn determify_pair<K, V, KeyTran, ValTran>(kt:&KeyTran, vt:&ValTran, v:&Term) -> Result<(K,V), DetermifyError>
+	where KeyTran:Determer<K>, ValTran:Determer<V>
 {
 	match *v {
 		Listv(ref lc)=> {
 			if lc.v.len() == 2 {
 				unsafe{
-					let k = kt.untermify(lc.v.get_unchecked(0))?; // safe: we just checked the length
-					let v = vt.untermify(lc.v.get_unchecked(1))?; //
+					let k = kt.determify(lc.v.get_unchecked(0))?; // safe: we just checked the length
+					let v = vt.determify(lc.v.get_unchecked(1))?; //
 					Ok((k, v))
 				}
 			}else{
-				Err(mk_untermify_error(v, format!("expected a pair, two elements, but the list here has {}", lc.v.len()), None))
+				Err(DetermifyError::new_with_cause(v, format!("expected a pair, two elements, but the list here has {}", lc.v.len()), None))
 			}
 		}
 		Atomv(_)=> {
-			Err(mk_untermify_error(v, "expected a pair, but the term here is an atom".into(), None))
+			Err(DetermifyError::new_with_cause(v, "expected a pair, but the term here is an atom".into(), None))
 		}
 	}
 }
@@ -311,9 +311,9 @@ impl<K, V, KeyTran, ValTran> Termer<(K, V)> for PairBi<KeyTran, ValTran> where K
 		list!(kt, vt).into()
 	}
 }
-impl<K, V, KeyTran, ValTran> Untermer<(K, V)> for PairBi<KeyTran, ValTran> where KeyTran:Untermer<K>, ValTran:Untermer<V> {
-	fn untermify(&self, v:&Term) -> Result<(K,V), UntermifyError> {
-		untermify_pair(&self.0, &self.1, v)
+impl<K, V, KeyTran, ValTran> Determer<(K, V)> for PairBi<KeyTran, ValTran> where KeyTran:Determer<K>, ValTran:Determer<V> {
+	fn determify(&self, v:&Term) -> Result<(K,V), DetermifyError> {
+		determify_pair(&self.0, &self.1, v)
 	}
 }
 
@@ -330,14 +330,14 @@ fn termify_map<'a, K, V, KeyTermer, ValTermer, I>(ktr:&KeyTermer, vtr:&ValTermer
 	}
 }
 
-fn untermify_map<'a, K, V, KeyTran, ValTran, I>(ktr:&KeyTran, vtr:&ValTran, i:I, o:&mut Vec<(K, V)>)-> Result<(), UntermifyError>
+fn determify_map<'a, K, V, KeyTran, ValTran, I>(ktr:&KeyTran, vtr:&ValTran, i:I, o:&mut Vec<(K, V)>) -> Result<(), DetermifyError>
 	where
-		KeyTran: Untermer<K>,
-		ValTran: Untermer<V>,
+		KeyTran: Determer<K>,
+		ValTran: Determer<V>,
 		I: Iterator<Item=&'a Term>,
 {
 	for v in i {
-		o.push(untermify_pair(ktr, vtr, v)?);
+		o.push(determify_pair(ktr, vtr, v)?);
 	}
 	Ok(())
 }
@@ -346,20 +346,20 @@ impl<K, V> Termable for HashMap<K, V> where
 	K: Eq + Hash + Termable,
 	V: Eq + Hash + Termable,
 {
-	fn termify(&self)-> Term {
+	fn termify(&self) -> Term {
 		let mut ret = Vec::new();
 		termify_map(&DefaultTermer(), &DefaultTermer(), self.iter(), &mut ret);
 		ret.into()
 	}
 }
-impl<K, V> Untermable for HashMap<K, V>
+impl<K, V> Determable for HashMap<K, V>
 	where
-		K: Eq + Hash + Untermable,
-		V: Eq + Hash + Untermable,
+		K: Eq + Hash + Determable,
+		V: Eq + Hash + Determable,
 {
-	fn untermify(v:&Term) -> Result<HashMap<K,V>, UntermifyError> {
+	fn determify(v:&Term) -> Result<HashMap<K,V>, DetermifyError> {
 		let mut ret = Vec::new();
-		untermify_map(&DefaultUntermer(), &DefaultUntermer(), v.contents(), &mut ret)?;
+		determify_map(&DefaultDetermer(), &DefaultDetermer(), v.contents(), &mut ret)?;
 		Ok(HashMap::from_iter(ret.into_iter()))
 	}
 }
@@ -378,21 +378,21 @@ impl<K, V, KeyTran, ValTran> Termer<HashMap<K, V>> for HashMapBi<KeyTran, ValTra
 		K: Eq + Hash,
 		V: Eq + Hash,
 {
-	fn termify(&self, v:&HashMap<K, V>)-> Term {
+	fn termify(&self, v:&HashMap<K, V>) -> Term {
 		let mut ret = Vec::new();
 		termify_map(&self.0, &self.1, v.iter(), &mut ret);
 		ret.into()
 	}
 }
-impl<K, V, KeyTran, ValTran> Untermer<HashMap<K, V>> for HashMapBi<KeyTran, ValTran>
+impl<K, V, KeyTran, ValTran> Determer<HashMap<K, V>> for HashMapBi<KeyTran, ValTran>
 	where
-		KeyTran:Untermer<K>, ValTran:Untermer<V>,
+		KeyTran:Determer<K>, ValTran:Determer<V>,
 		K: Eq + Hash,
 		V: Eq + Hash,
 {
-	fn untermify(&self, v:&Term) -> Result<HashMap<K,V>, UntermifyError> {
+	fn determify(&self, v:&Term) -> Result<HashMap<K,V>, DetermifyError> {
 		let mut ret = Vec::new();
-		untermify_map(&self.0, &self.1, v.contents(), &mut ret)?;
+		determify_map(&self.0, &self.1, v.contents(), &mut ret)?;
 		Ok(HashMap::from_iter(ret.into_iter()))
 	}
 }
@@ -411,23 +411,23 @@ impl<'a, K, V, KeyTran, ValTran> Termer<HashMap<K, V>> for TaggedHashMapBi<'a, K
 		K: Eq + Hash,
 		V: Eq + Hash,
 {
-	fn termify(&self, v:&HashMap<K, V>)-> Term {
+	fn termify(&self, v:&HashMap<K, V>) -> Term {
 		let mut ret = Vec::new();
 		ret.push(self.0.into());
 		termify_map(&self.1, &self.2, v.iter(), &mut ret);
 		ret.into()
 	}
 }
-impl<'a, K, V, KeyTran, ValTran> Untermer<HashMap<K, V>> for TaggedHashMapBi<'a, KeyTran, ValTran>
+impl<'a, K, V, KeyTran, ValTran> Determer<HashMap<K, V>> for TaggedHashMapBi<'a, KeyTran, ValTran>
 	where
-		KeyTran:Untermer<K>, ValTran:Untermer<V>,
+		KeyTran:Determer<K>, ValTran:Determer<V>,
 		K: Eq + Hash,
 		V: Eq + Hash,
 {
-	fn untermify(&self, v:&Term) -> Result<HashMap<K,V>, UntermifyError> {
+	fn determify(&self, v:&Term) -> Result<HashMap<K,V>, DetermifyError> {
 		let mut ret = Vec::new();
 		let it = ensure_tag(v, self.0)?;
-		untermify_map(&self.1, &self.2, it, &mut ret)?;
+		determify_map(&self.1, &self.2, it, &mut ret)?;
 		Ok(HashMap::from_iter(ret.into_iter()))
 	}
 }
@@ -439,14 +439,14 @@ mod tests {
 	
 	#[test]
 	fn idempotent_int() {
-		assert!(90isize == IsizeBi().untermify(&IsizeBi().termify(&90isize)).unwrap());
+		assert!(90isize == IsizeBi().determify(&IsizeBi().termify(&90isize)).unwrap());
 	}
 	
 	#[test]
 	fn tricky_list_parse() {
 		let listo = list!(list!("tricky", "list"), list!("parse"));
 		let tranner:SequenceTran<SequenceTran<DefaultBitermer>> = SequenceTran(SequenceTran(DefaultBitermer()));
-		let lv:Vec<Vec<String>> = tranner.untermify(&listo).unwrap();
+		let lv:Vec<Vec<String>> = tranner.determify(&listo).unwrap();
 		assert!(lv.len() == 2);
 		assert!(lv[0].len() == 2);
 		assert!(lv[0][0].len() == 6);
@@ -457,15 +457,15 @@ mod tests {
 	fn do_hash_map() {
 		let t = parse("a:b c:d d:e e:f").unwrap();
 		let bt = TaggedHashMapBi("ob", DefaultBitermer(), DefaultBitermer());
-		let utr: Result<HashMap<String, String>, UntermifyError> = bt.untermify(&t);
+		let utr: Result<HashMap<String, String>, DetermifyError> = bt.determify(&t);
 		assert!(utr.is_err());
 		let tt = parse("ob a:b c:d d:e e:f").unwrap();
-		let hm:HashMap<String, String> = TaggedHashMapBi("ob", DefaultBitermer(), DefaultBitermer()).untermify(&tt).unwrap();
+		let hm:HashMap<String, String> = TaggedHashMapBi("ob", DefaultBitermer(), DefaultBitermer()).determify(&tt).unwrap();
 		assert!(hm.get("a").unwrap() == "b");
 		assert!(hm.get("d").unwrap() == "e");
 	}
 	
-	fn give_hm()-> HashMap<String, String> {
+	fn give_hm() -> HashMap<String, String> {
 		[
 			("a".into(), "b".into()),
 			("c".into(), "d".into()),
@@ -477,7 +477,7 @@ mod tests {
 		let t = parse("a:b c:d").unwrap();
 		let exh = give_hm();
 		
-		let exu:HashMap<String, String> = untermify(&t).unwrap();
+		let exu:HashMap<String, String> = determify(&t).unwrap();
 		
 		assert!(exu == exh)
 	}

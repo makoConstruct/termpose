@@ -135,8 +135,8 @@ pub fn termable_derive(input: TokenStream) -> TokenStream {
 
 
 
-#[proc_macro_derive(Untermable)]
-pub fn untermable_derive(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(Determable)]
+pub fn determable_derive(input: TokenStream) -> TokenStream {
 	let ast: syn::DeriveInput = syn::parse(input).unwrap();
 
 	let name = &ast.ident;
@@ -147,8 +147,8 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 			let with_body = |method_body|-> PM2TS {
 				//it seeks over the contents of the term list in such way where if the items are in order it will find each one immediately
 				quote! {
-					impl termpose::Untermable for #name {
-						fn untermify(v:&termpose::Term)-> Result<Self, termpose::UntermifyError> {
+					impl termpose::Determable for #name {
+						fn determify(v:&termpose::Term)-> Result<Self, termpose::DetermifyError> {
 							#method_body
 						}
 					}
@@ -166,7 +166,7 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 							let var_ident = &m.ident.as_ref().unwrap();
 							let var_type = &m.ty;
 							quote!{
-								#var_ident: #var_type::untermify(scanning.seek(stringify!(#var_ident))?)?
+								#var_ident: #var_type::determify(scanning.seek(stringify!(#var_ident))?)?
 							}
 						}).collect();
 						
@@ -175,10 +175,10 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 						with_body(quote!{
 							let mut scanning = termpose::FieldScanning::new(v);
 							if scanning.li.len() != #number_of_fields {
-								return Err(termpose::UntermifyError::new(v, format!("{} expected the term to have {} elements, but it has {}", stringify!(#name), #number_of_fields, scanning.li.len())));
+								return Err(termpose::DetermifyError::new(v, format!("{} expected the term to have {} elements, but it has {}", stringify!(#name), #number_of_fields, scanning.li.len())));
 							}
 							
-							// let mut check_for = |key:&str|-> Result<&termpose::Term, termpose::UntermifyError> {
+							// let mut check_for = |key:&str|-> Result<&termpose::Term, termpose::DetermifyError> {
 							// 	for i in 0..li.len() {
 							// 		let c = &li[current_eye];
 							// 		if c.initial_str() == key {
@@ -186,13 +186,13 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 							// 				if let Some(s) = c.tail().next() {
 							// 					Ok(s)
 							// 				}else{
-							// 					Err(termpose::UntermifyError::new(c, format!("expected a subterm, but the term has no tail")))
+							// 					Err(termpose::DetermifyError::new(c, format!("expected a subterm, but the term has no tail")))
 							// 				}
 							// 		}
 							// 		current_eye += 1;
 							// 		if current_eye >= li.len() { current_eye = 0; }
 							// 	}
-							// 	Err(termpose::UntermifyError::new(v, format!("could not find key \"{}\"", key)))
+							// 	Err(termpose::DetermifyError::new(v, format!("could not find key \"{}\"", key)))
 							// };
 							
 							Ok(Self{
@@ -208,7 +208,7 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 					
 					let each_field = n.unnamed.iter().enumerate().map(|(i, m)|{
 						let ty = &m.ty;
-						quote!{#ty::untermify(&li[#i])?}
+						quote!{#ty::determify(&li[#i])?}
 					});
 					
 					with_body(quote!{
@@ -216,7 +216,7 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 						if li.len() == #number_of_fields {
 							Ok(Self(#(#each_field),*))
 						}else{
-							Err(termpose::UntermifyError::new(v, format!("{} expected the term to have {} fields, but it has {}", stringify!(#name), #number_of_fields, li.len())))
+							Err(termpose::DetermifyError::new(v, format!("{} expected the term to have {} fields, but it has {}", stringify!(#name), #number_of_fields, li.len())))
 						}
 					})
 				},
@@ -239,7 +239,7 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 						let each_feild:Vec<PM2TS> = n.named.iter().map(|f:&syn::Field|{
 							let id = &f.ident;
 							let ty = &f.ty;
-							quote!{ #id: #ty::untermify(scanning.seek(stringify!(#id))?)? }
+							quote!{ #id: #ty::determify(scanning.seek(stringify!(#id))?)? }
 						}).collect();
 						
 						let number_of_fields = each_feild.len();
@@ -247,7 +247,7 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 						quote!{
 							let mut scanning = termpose::FieldScanning::new(v);
 							if scanning.li.len() != #number_of_fields {
-								return Err(termpose::UntermifyError::new(v, format!("variant {} expected {} elements, found {}", stringify!(#variant_name), #number_of_fields, scanning.li.len())));
+								return Err(termpose::DetermifyError::new(v, format!("variant {} expected {} elements, found {}", stringify!(#variant_name), #number_of_fields, scanning.li.len())));
 							}
 							Ok(#name::#variant_name {
 								#(#each_feild),*
@@ -258,7 +258,7 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 						
 						let each_feild = n.unnamed.iter().enumerate().map(|(i,m)|{
 							let ty = &m.ty;
-							quote!{ #ty::untermify(&li[#i])? }
+							quote!{ #ty::determify(&li[#i])? }
 						});
 						
 						let number_of_fields = each_feild.len();
@@ -267,7 +267,7 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 							let li = v.tail().as_slice();
 							
 							if li.len() != #number_of_fields {
-								return Err(termpose::UntermifyError::new(v, format!("variant {} expected {} elements, found {}", stringify!(#variant_name), #number_of_fields, li.len())));
+								return Err(termpose::DetermifyError::new(v, format!("variant {} expected {} elements, found {}", stringify!(#variant_name), #number_of_fields, li.len())));
 							}
 							
 							Ok(#name::#variant_name(
@@ -288,11 +288,11 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 			}).collect();
 			
 			quote!{
-				impl Untermable for #name {
-					fn untermify(v:&termpose::Term)-> Result<Self, termpose::UntermifyError> {
+				impl Determable for #name {
+					fn determify(v:&termpose::Term)-> Result<Self, termpose::DetermifyError> {
 						match v.initial_str() {
 							#(#variant_cases,)*
-							erc => Err(termpose::UntermifyError::new(v, format!("expected a {}, but no variant of {} is called {}", stringify!(#name), stringify!(#name), erc))),
+							erc => Err(termpose::DetermifyError::new(v, format!("expected a {}, but no variant of {} is called {}", stringify!(#name), stringify!(#name), erc))),
 						}
 					}
 				}
@@ -301,7 +301,7 @@ pub fn untermable_derive(input: TokenStream) -> TokenStream {
 		
 		
 		Union(_)=> {
-			panic!("derive(Untermable) doesn't yet support unions")
+			panic!("derive(Determable) doesn't yet support unions")
 		}
 	});
 	

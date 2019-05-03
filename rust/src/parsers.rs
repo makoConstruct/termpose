@@ -1,5 +1,7 @@
 
 
+//people who read this code often remark about how horrible it is. The truth is, it's the format that's horrible. By horrible, of course, you mean "complicated". I think the word you're really looking for might be "flexible". There is probably no way to write a parser for a format as sensitive as termpose that isn't "horrible". (I would love to find out about it, if there is)
+
 use super::*;
 
 struct SexpParserState<'a>{
