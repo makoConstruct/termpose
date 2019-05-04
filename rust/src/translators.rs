@@ -6,62 +6,62 @@ use std::cmp::Eq;
 use std::hash::Hash;
 use std::iter::FromIterator;
 
-pub trait Termer<T> : Clone {
-	fn termify(&self, v:&T) -> Term;
+pub trait Wooder<T> : Clone {
+	fn woodify(&self, v:&T) -> Wood;
 }
-pub trait Determer<T> : Clone {
-	fn determify(&self, v:&Term) -> Result<T, DetermifyError>;
+pub trait Dewooder<T> : Clone {
+	fn dewoodify(&self, v:&Wood) -> Result<T, DewoodifyError>;
 }
 
 #[derive(Debug)]
-pub struct DetermifyError{
+pub struct DewoodifyError{
 	pub line:isize,
 	pub column:isize,
 	pub msg:String,
 	pub cause:Option<Box<Error>>,
 }
-impl Display for DetermifyError {
+impl Display for DewoodifyError {
 	fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
 		Debug::fmt(self, f)
 	}
 }
-impl DetermifyError {
-	pub fn new(source: &Term, msg:String) -> Self {
+impl DewoodifyError {
+	pub fn new(source: &Wood, msg:String) -> Self {
 		let (line, column) = source.line_and_col();
 		Self{ line, column, msg, cause:None }
 	}
-	pub fn new_with_cause(source:&Term, msg:String, cause:Option<Box<Error>>) -> Self {
+	pub fn new_with_cause(source:&Wood, msg:String, cause:Option<Box<Error>>) -> Self {
 		let (line, column) = source.line_and_col();
-		DetermifyError{ line, column, msg, cause }
+		DewoodifyError{ line, column, msg, cause }
 	}
 }
 
-impl Error for DetermifyError {
+impl Error for DewoodifyError {
 	fn description(&self) -> &str { self.msg.as_str() }
 	fn cause(&self) -> Option<&Error> { self.cause.as_ref().map(|e| e.as_ref()) }
 }
 
-pub trait Bitermer<T> : Termer<T> + Determer<T> {} //bidirectional termer and determer
+pub trait Biwooder<T> : Wooder<T> + Dewooder<T> {} //bidirectional wooder and dewooder
 
-pub trait Termable {
-	fn termify(&self) -> Term;
+pub trait Woodable {
+	fn woodify(&self) -> Wood;
 }
-pub trait Determable {
-	fn determify(&Term) -> Result<Self, DetermifyError> where Self:Sized;
+pub trait Dewoodable {
+	fn dewoodify(&Wood) -> Result<Self, DewoodifyError> where Self:Sized;
 }
 
 
 //for scanning over structs with named pairs where the order is usually the same. Guesses that each queried field will be after the last, and only does a full scanaround when it finds that's not the case. Extremely efficient, if order is maintained.
 pub struct FieldScanning<'a>{
-	pub v:&'a Term,
-	pub li:&'a [Term],
+	pub v:&'a Wood,
+	pub li:&'a [Wood],
 	pub eye:usize,
 }
 impl<'a> FieldScanning<'a>{
-	pub fn new(v:&'a Term) -> Self {
+	pub fn new(v:&'a Wood) -> Self {
 		FieldScanning{ v:v, li:v.tail().as_slice(), eye:0, }
 	}
-	pub fn seek(&mut self, key:&str) -> Result<&Term, DetermifyError> {
+	pub fn seek(&mut self, key:&str) -> Result<&Wood, DewoodifyError> {
 		for _ in 0..self.li.len() {
 			let c = &self.li[self.eye];
 			if c.initial_str() == key {
@@ -69,74 +69,74 @@ impl<'a> FieldScanning<'a>{
 					if let Some(s) = c.tail().next() {
 						Ok(s)
 					}else{
-						Err(DetermifyError::new(c, format!("expected a subterm, but the term has no tail")))
+						Err(DewoodifyError::new(c, format!("expected a subwood, but the wood has no tail")))
 					}
 			}
 			self.eye += 1;
 			if self.eye >= self.li.len() { self.eye = 0; }
 		}
-		Err(DetermifyError::new(self.v, format!("could not find key \"{}\"", key)))
+		Err(DewoodifyError::new(self.v, format!("could not find key \"{}\"", key)))
 	}
 }
 
 
 #[derive(Clone)]
-pub struct DefaultTermer();
+pub struct DefaultWooder();
 #[derive(Clone)]
-pub struct DefaultDetermer();
+pub struct DefaultDewooder();
 #[derive(Clone)]
-pub struct DefaultBitermer();
-impl<T> Bitermer<T> for DefaultBitermer where T:Termable + Determable {}
-impl<T> Termer<T> for DefaultBitermer where T:Termable {
-	fn termify(&self, v:&T) -> Term { v.termify() }
+pub struct DefaultBiwooder();
+impl<T> Biwooder<T> for DefaultBiwooder where T:Woodable + Dewoodable {}
+impl<T> Wooder<T> for DefaultBiwooder where T:Woodable {
+	fn woodify(&self, v:&T) -> Wood { v.woodify() }
 }
-impl<T> Determer<T> for DefaultBitermer where T:Determable {
-	fn determify(&self, v:&Term) -> Result<T, DetermifyError> { T::determify(v) }
+impl<T> Dewooder<T> for DefaultBiwooder where T:Dewoodable {
+	fn dewoodify(&self, v:&Wood) -> Result<T, DewoodifyError> { T::dewoodify(v) }
 }
-impl<T> Termer<T> for DefaultTermer where T:Termable {
-	fn termify(&self, v:&T) -> Term { v.termify() }
+impl<T> Wooder<T> for DefaultWooder where T:Woodable {
+	fn woodify(&self, v:&T) -> Wood { v.woodify() }
 }
-impl<T> Determer<T> for DefaultDetermer where T:Determable {
-	fn determify(&self, v:&Term) -> Result<T, DetermifyError> { T::determify(v) }
+impl<T> Dewooder<T> for DefaultDewooder where T:Dewoodable {
+	fn dewoodify(&self, v:&Wood) -> Result<T, DewoodifyError> { T::dewoodify(v) }
 }
 
 
 
-pub fn termify<T>(v:&T) -> Term where T: Termable {
-	v.termify()
+pub fn woodify<T>(v:&T) -> Wood where T: Woodable {
+	v.woodify()
 }
-pub fn determify<T>(v:&Term) -> Result<T, DetermifyError> where T: Determable {
-	T::determify(v)
+pub fn dewoodify<T>(v:&Wood) -> Result<T, DewoodifyError> where T: Dewoodable {
+	T::dewoodify(v)
 }
 
 #[derive(Debug)]
-pub enum TermposeError{
+pub enum WoodposeError{
 	ParserError(PositionedError),
-	DetermifyError(DetermifyError),
+	DewoodifyError(DewoodifyError),
 }
 
-pub fn deserialize<T>(v:&str) -> Result<T, TermposeError> where T : Determable {
+pub fn deserialize<T>(v:&str) -> Result<T, WoodposeError> where T : Dewoodable {
 	match parse(v) {
-		Ok(t)=> determify(&t).map_err(|e| TermposeError::DetermifyError(e)),
-		Err(e)=> Err(TermposeError::ParserError(e)),
+		Ok(t)=> dewoodify(&t).map_err(|e| WoodposeError::DewoodifyError(e)),
+		Err(e)=> Err(WoodposeError::ParserError(e)),
 	}
 }
-pub fn serialize<T>(v:&T) -> String where T: Termable {
-	termify(v).to_string()
+pub fn serialize<T>(v:&T) -> String where T: Woodable {
+	woodify(v).to_string()
 }
 
 
 
 #[derive(Copy, Clone)]
 pub struct IsizeBi();
-impl Bitermer<isize> for IsizeBi {}
-impl Termer<isize> for IsizeBi {
-	fn termify(&self, v:&isize) -> Term { v.to_string().as_str().into() }
+impl Biwooder<isize> for IsizeBi {}
+impl Wooder<isize> for IsizeBi {
+	fn woodify(&self, v:&isize) -> Wood { v.to_string().as_str().into() }
 }
-impl Determer<isize> for IsizeBi {
-	fn determify(&self, v:&Term) -> Result<isize, DetermifyError> {
+impl Dewooder<isize> for IsizeBi {
+	fn dewoodify(&self, v:&Wood) -> Result<isize, DewoodifyError> {
 		isize::from_str(v.initial_str()).map_err(|er|{
-			DetermifyError::new_with_cause(v, "couldn't parse isize".into(), Some(Box::new(er)))
+			DewoodifyError::new_with_cause(v, "couldn't parse isize".into(), Some(Box::new(er)))
 		})
 	}
 }
@@ -144,14 +144,14 @@ impl Determer<isize> for IsizeBi {
 
 #[derive(Copy, Clone)]
 pub struct UsizeBi();
-impl Bitermer<usize> for UsizeBi {}
-impl Termer<usize> for UsizeBi {
-	fn termify(&self, v:&usize) -> Term { v.to_string().as_str().into() }
+impl Biwooder<usize> for UsizeBi {}
+impl Wooder<usize> for UsizeBi {
+	fn woodify(&self, v:&usize) -> Wood { v.to_string().as_str().into() }
 }
-impl Determer<usize> for UsizeBi {
-	fn determify(&self, v:&Term) -> Result<usize, DetermifyError> {
+impl Dewooder<usize> for UsizeBi {
+	fn dewoodify(&self, v:&Wood) -> Result<usize, DewoodifyError> {
 		usize::from_str(v.initial_str()).map_err(|er|{
-			DetermifyError::new_with_cause(v, "couldn't parse usize".into(), Some(Box::new(er)))
+			DewoodifyError::new_with_cause(v, "couldn't parse usize".into(), Some(Box::new(er)))
 		})
 	}
 }
@@ -159,12 +159,12 @@ impl Determer<usize> for UsizeBi {
 
 #[derive(Copy, Clone)]
 pub struct BoolBi();
-impl Bitermer<bool> for BoolBi {}
-impl Termer<bool> for BoolBi {
-	fn termify(&self, v:&bool) -> Term { v.to_string().as_str().into() }
+impl Biwooder<bool> for BoolBi {}
+impl Wooder<bool> for BoolBi {
+	fn woodify(&self, v:&bool) -> Wood { v.to_string().as_str().into() }
 }
-impl Determer<bool> for BoolBi {
-	fn determify(&self, v:&Term) -> Result<bool, DetermifyError> {
+impl Dewooder<bool> for BoolBi {
+	fn dewoodify(&self, v:&Wood) -> Result<bool, DewoodifyError> {
 		match v.initial_str() {
 			"true" | "⊤" | "yes" => {
 				Ok(true)
@@ -172,39 +172,39 @@ impl Determer<bool> for BoolBi {
 			"false" | "⟂" | "no" => {
 				Ok(false)
 			},
-			_=> Err(DetermifyError::new_with_cause(v, "expected a bool here".into(), None))
+			_=> Err(DewoodifyError::new_with_cause(v, "expected a bool here".into(), None))
 		}
 	}
 }
 
 
-impl Termable for String {
-	fn termify(&self) -> Term {
+impl Woodable for String {
+	fn woodify(&self) -> Wood {
 		self.as_str().into()
 	}
 }
-impl Determable for String {
-	fn determify(v:&Term) -> Result<Self, DetermifyError> {
+impl Dewoodable for String {
+	fn dewoodify(v:&Wood) -> Result<Self, DewoodifyError> {
 		match *v {
-			Atomv(ref a)=> Ok(a.v.clone()),
-			Listv(_)=> Err(DetermifyError::new_with_cause(v, "sought string, found list".into(), None)),
+			Leafv(ref a)=> Ok(a.v.clone()),
+			Branchv(_)=> Err(DewoodifyError::new_with_cause(v, "sought string, found branch".into(), None)),
 		}
 	}
 }
 
 
 
-fn termify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<Term>)
-	where InnerTran: Termer<T>, I:Iterator<Item=&'a T>, T:'a
+fn woodify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<Wood>)
+	where InnerTran: Wooder<T>, I:Iterator<Item=&'a T>, T:'a
 {
-	for vi in v { output.push(inner.termify(vi)); }
+	for vi in v { output.push(inner.woodify(vi)); }
 }
-fn determify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<T>) -> Result<(), DetermifyError>
-	where InnerTran: Determer<T>, I:Iterator<Item=&'a Term>
+fn dewoodify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<T>) -> Result<(), DewoodifyError>
+	where InnerTran: Dewooder<T>, I:Iterator<Item=&'a Wood>
 {
 	// let errors = Vec::new();
 	for vi in v {
-		match inner.determify(vi) {
+		match inner.dewoodify(vi) {
 			Ok(vii)=> output.push(vii),
 			Err(e)=> return Err(e),
 		}
@@ -221,213 +221,213 @@ fn determify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Ve
 
 #[derive(Copy, Clone)]
 pub struct SequenceTran<SubTran>(SubTran);
-impl<T, SubTran> Bitermer<Vec<T>> for SequenceTran<SubTran> where SubTran:Bitermer<T> {}
-impl<T, SubTran> Termer<Vec<T>> for SequenceTran<SubTran> where SubTran:Termer<T> {
-	fn termify(&self, v:&Vec<T>) -> Term {
+impl<T, SubTran> Biwooder<Vec<T>> for SequenceTran<SubTran> where SubTran:Biwooder<T> {}
+impl<T, SubTran> Wooder<Vec<T>> for SequenceTran<SubTran> where SubTran:Wooder<T> {
+	fn woodify(&self, v:&Vec<T>) -> Wood {
 		let mut ret = Vec::new();
-		termify_seq_into(&self.0, v.iter(), &mut ret);
+		woodify_seq_into(&self.0, v.iter(), &mut ret);
 		ret.into()
 	}
 }
-impl<T, SubTran> Determer<Vec<T>> for SequenceTran<SubTran> where SubTran:Determer<T> {
-	fn determify(&self, v:&Term) -> Result<Vec<T>, DetermifyError> {
+impl<T, SubTran> Dewooder<Vec<T>> for SequenceTran<SubTran> where SubTran:Dewooder<T> {
+	fn dewoodify(&self, v:&Wood) -> Result<Vec<T>, DewoodifyError> {
 		let mut ret = Vec::new();
-		try!(determify_seq_into(&self.0, v.contents(), &mut ret));
+		try!(dewoodify_seq_into(&self.0, v.contents(), &mut ret));
 		Ok(ret)
 	}
 }
 
 #[derive(Copy, Clone)]
 pub struct TaggedSequenceTran<'a, SubTran>(&'a str, SubTran);
-impl<'a, T, SubTran> Bitermer<Vec<T>> for TaggedSequenceTran<'a, SubTran> where SubTran:Bitermer<T> {}
-impl<'a, T, SubTran> Termer<Vec<T>> for TaggedSequenceTran<'a, SubTran> where SubTran:Termer<T> {
-	fn termify(&self, v:&Vec<T>) -> Term {
+impl<'a, T, SubTran> Biwooder<Vec<T>> for TaggedSequenceTran<'a, SubTran> where SubTran:Biwooder<T> {}
+impl<'a, T, SubTran> Wooder<Vec<T>> for TaggedSequenceTran<'a, SubTran> where SubTran:Wooder<T> {
+	fn woodify(&self, v:&Vec<T>) -> Wood {
 		let mut ret = Vec::new();
 		ret.push(self.0.into());
-		termify_seq_into(&self.1, v.iter(), &mut ret);
+		woodify_seq_into(&self.1, v.iter(), &mut ret);
 		ret.into()
 	}
 }
 
-fn ensure_tag<'b>(v:&'b Term, tag:&str) -> Result<std::slice::Iter<'b, Term>, DetermifyError> {
+fn ensure_tag<'b>(v:&'b Wood, tag:&str) -> Result<std::slice::Iter<'b, Wood>, DewoodifyError> {
 	let mut i = v.contents();
-	if let Some(name_term) = i.next() {
-		match *name_term {
-			Atomv(ref at)=>{
+	if let Some(name_wood) = i.next() {
+		match *name_wood {
+			Leafv(ref at)=>{
 				let name = at.v.as_str();
 				if name == tag {
 					Ok(i)
 				}else{
-					Err(DetermifyError::new_with_cause(name_term, format!("expected \"{}\" here, but instead there was \"{}\"", tag, name), None))
+					Err(DewoodifyError::new_with_cause(name_wood, format!("expected \"{}\" here, but instead there was \"{}\"", tag, name), None))
 				}
 			},
 			_=> {
-				Err(DetermifyError::new_with_cause(name_term, format!("expected \"{}\" here, but instead there was a list term", tag), None))
+				Err(DewoodifyError::new_with_cause(name_wood, format!("expected \"{}\" here, but instead there was a branch wood", tag), None))
 			}
 		}
 	}else{
-		Err(DetermifyError::new_with_cause(v, format!("expected \"{}\" at beginning, but the term was empty", tag), None))
+		Err(DewoodifyError::new_with_cause(v, format!("expected \"{}\" at beginning, but the wood was empty", tag), None))
 	}
 }
 
-impl<'a, T, SubTran> Determer<Vec<T>> for TaggedSequenceTran<'a, SubTran> where SubTran:Determer<T> {
-	fn determify(&self, v:&Term) -> Result<Vec<T>, DetermifyError> {
+impl<'a, T, SubTran> Dewooder<Vec<T>> for TaggedSequenceTran<'a, SubTran> where SubTran:Dewooder<T> {
+	fn dewoodify(&self, v:&Wood) -> Result<Vec<T>, DewoodifyError> {
 		let mut ret = Vec::new();
 		let it = ensure_tag(v, &self.0)?;
-		determify_seq_into(&self.1, it, &mut ret)?;
+		dewoodify_seq_into(&self.1, it, &mut ret)?;
 		Ok(ret)
 	}
 }
 
 
-fn determify_pair<K, V, KeyTran, ValTran>(kt:&KeyTran, vt:&ValTran, v:&Term) -> Result<(K,V), DetermifyError>
-	where KeyTran:Determer<K>, ValTran:Determer<V>
+fn dewoodify_pair<K, V, KeyTran, ValTran>(kt:&KeyTran, vt:&ValTran, v:&Wood) -> Result<(K,V), DewoodifyError>
+	where KeyTran:Dewooder<K>, ValTran:Dewooder<V>
 {
 	match *v {
-		Listv(ref lc)=> {
+		Branchv(ref lc)=> {
 			if lc.v.len() == 2 {
 				unsafe{
-					let k = kt.determify(lc.v.get_unchecked(0))?; // safe: we just checked the length
-					let v = vt.determify(lc.v.get_unchecked(1))?; //
+					let k = kt.dewoodify(lc.v.get_unchecked(0))?; // safe: we just checked the length
+					let v = vt.dewoodify(lc.v.get_unchecked(1))?; //
 					Ok((k, v))
 				}
 			}else{
-				Err(DetermifyError::new_with_cause(v, format!("expected a pair, two elements, but the list here has {}", lc.v.len()), None))
+				Err(DewoodifyError::new_with_cause(v, format!("expected a pair, two elements, but the branch here has {}", lc.v.len()), None))
 			}
 		}
-		Atomv(_)=> {
-			Err(DetermifyError::new_with_cause(v, "expected a pair, but the term here is an atom".into(), None))
+		Leafv(_)=> {
+			Err(DewoodifyError::new_with_cause(v, "expected a pair, but the wood here is an leaf".into(), None))
 		}
 	}
 }
 
 #[derive(Copy, Clone)]
 pub struct PairBi<KeyTran, ValTran>(KeyTran, ValTran);
-impl<K, V, KeyTran, ValTran> Bitermer<(K, V)> for PairBi<KeyTran, ValTran> where KeyTran:Bitermer<K>, ValTran:Bitermer<V> {}
-impl<K, V, KeyTran, ValTran> Termer<(K, V)> for PairBi<KeyTran, ValTran> where KeyTran:Termer<K>, ValTran:Termer<V> {
-	fn termify(&self, v:&(K,V)) -> Term {
-		let kt = self.0.termify(&v.0);
-		let vt = self.1.termify(&v.1);
-		list!(kt, vt).into()
+impl<K, V, KeyTran, ValTran> Biwooder<(K, V)> for PairBi<KeyTran, ValTran> where KeyTran:Biwooder<K>, ValTran:Biwooder<V> {}
+impl<K, V, KeyTran, ValTran> Wooder<(K, V)> for PairBi<KeyTran, ValTran> where KeyTran:Wooder<K>, ValTran:Wooder<V> {
+	fn woodify(&self, v:&(K,V)) -> Wood {
+		let kt = self.0.woodify(&v.0);
+		let vt = self.1.woodify(&v.1);
+		branch!(kt, vt).into()
 	}
 }
-impl<K, V, KeyTran, ValTran> Determer<(K, V)> for PairBi<KeyTran, ValTran> where KeyTran:Determer<K>, ValTran:Determer<V> {
-	fn determify(&self, v:&Term) -> Result<(K,V), DetermifyError> {
-		determify_pair(&self.0, &self.1, v)
+impl<K, V, KeyTran, ValTran> Dewooder<(K, V)> for PairBi<KeyTran, ValTran> where KeyTran:Dewooder<K>, ValTran:Dewooder<V> {
+	fn dewoodify(&self, v:&Wood) -> Result<(K,V), DewoodifyError> {
+		dewoodify_pair(&self.0, &self.1, v)
 	}
 }
 
-fn termify_map<'a, K, V, KeyTermer, ValTermer, I>(ktr:&KeyTermer, vtr:&ValTermer, i:I, o:&mut Vec<Term>)
+fn woodify_map<'a, K, V, KeyWooder, ValWooder, I>(ktr:&KeyWooder, vtr:&ValWooder, i:I, o:&mut Vec<Wood>)
 	where
-		KeyTermer: Termer<K>,
-		ValTermer: Termer<V>,
+		KeyWooder: Wooder<K>,
+		ValWooder: Wooder<V>,
 		I: Iterator<Item=(&'a K, &'a V)>,
 		K: 'a,
 		V: 'a,
 {
 	for (kr, vr) in i {
-		o.push(list!(ktr.termify(kr), vtr.termify(vr)).into())
+		o.push(branch!(ktr.woodify(kr), vtr.woodify(vr)).into())
 	}
 }
 
-fn determify_map<'a, K, V, KeyTran, ValTran, I>(ktr:&KeyTran, vtr:&ValTran, i:I, o:&mut Vec<(K, V)>) -> Result<(), DetermifyError>
+fn dewoodify_map<'a, K, V, KeyTran, ValTran, I>(ktr:&KeyTran, vtr:&ValTran, i:I, o:&mut Vec<(K, V)>) -> Result<(), DewoodifyError>
 	where
-		KeyTran: Determer<K>,
-		ValTran: Determer<V>,
-		I: Iterator<Item=&'a Term>,
+		KeyTran: Dewooder<K>,
+		ValTran: Dewooder<V>,
+		I: Iterator<Item=&'a Wood>,
 {
 	for v in i {
-		o.push(determify_pair(ktr, vtr, v)?);
+		o.push(dewoodify_pair(ktr, vtr, v)?);
 	}
 	Ok(())
 }
 
-impl<K, V> Termable for HashMap<K, V> where
-	K: Eq + Hash + Termable,
-	V: Eq + Hash + Termable,
+impl<K, V> Woodable for HashMap<K, V> where
+	K: Eq + Hash + Woodable,
+	V: Eq + Hash + Woodable,
 {
-	fn termify(&self) -> Term {
+	fn woodify(&self) -> Wood {
 		let mut ret = Vec::new();
-		termify_map(&DefaultTermer(), &DefaultTermer(), self.iter(), &mut ret);
+		woodify_map(&DefaultWooder(), &DefaultWooder(), self.iter(), &mut ret);
 		ret.into()
 	}
 }
-impl<K, V> Determable for HashMap<K, V>
+impl<K, V> Dewoodable for HashMap<K, V>
 	where
-		K: Eq + Hash + Determable,
-		V: Eq + Hash + Determable,
+		K: Eq + Hash + Dewoodable,
+		V: Eq + Hash + Dewoodable,
 {
-	fn determify(v:&Term) -> Result<HashMap<K,V>, DetermifyError> {
+	fn dewoodify(v:&Wood) -> Result<HashMap<K,V>, DewoodifyError> {
 		let mut ret = Vec::new();
-		determify_map(&DefaultDetermer(), &DefaultDetermer(), v.contents(), &mut ret)?;
+		dewoodify_map(&DefaultDewooder(), &DefaultDewooder(), v.contents(), &mut ret)?;
 		Ok(HashMap::from_iter(ret.into_iter()))
 	}
 }
 
 #[derive(Clone)]
 pub struct HashMapBi<KeyTran, ValTran>(KeyTran, ValTran);
-impl<K, V, KeyTran, ValTran> Bitermer<HashMap<K, V>> for HashMapBi<KeyTran, ValTran>
+impl<K, V, KeyTran, ValTran> Biwooder<HashMap<K, V>> for HashMapBi<KeyTran, ValTran>
 	where
-		KeyTran:Bitermer<K>, ValTran:Bitermer<V>,
+		KeyTran:Biwooder<K>, ValTran:Biwooder<V>,
 		K: Eq + Hash,
 		V: Eq + Hash,
 {}
-impl<K, V, KeyTran, ValTran> Termer<HashMap<K, V>> for HashMapBi<KeyTran, ValTran>
+impl<K, V, KeyTran, ValTran> Wooder<HashMap<K, V>> for HashMapBi<KeyTran, ValTran>
 	where
-		KeyTran:Termer<K>, ValTran:Termer<V>,
+		KeyTran:Wooder<K>, ValTran:Wooder<V>,
 		K: Eq + Hash,
 		V: Eq + Hash,
 {
-	fn termify(&self, v:&HashMap<K, V>) -> Term {
+	fn woodify(&self, v:&HashMap<K, V>) -> Wood {
 		let mut ret = Vec::new();
-		termify_map(&self.0, &self.1, v.iter(), &mut ret);
+		woodify_map(&self.0, &self.1, v.iter(), &mut ret);
 		ret.into()
 	}
 }
-impl<K, V, KeyTran, ValTran> Determer<HashMap<K, V>> for HashMapBi<KeyTran, ValTran>
+impl<K, V, KeyTran, ValTran> Dewooder<HashMap<K, V>> for HashMapBi<KeyTran, ValTran>
 	where
-		KeyTran:Determer<K>, ValTran:Determer<V>,
+		KeyTran:Dewooder<K>, ValTran:Dewooder<V>,
 		K: Eq + Hash,
 		V: Eq + Hash,
 {
-	fn determify(&self, v:&Term) -> Result<HashMap<K,V>, DetermifyError> {
+	fn dewoodify(&self, v:&Wood) -> Result<HashMap<K,V>, DewoodifyError> {
 		let mut ret = Vec::new();
-		determify_map(&self.0, &self.1, v.contents(), &mut ret)?;
+		dewoodify_map(&self.0, &self.1, v.contents(), &mut ret)?;
 		Ok(HashMap::from_iter(ret.into_iter()))
 	}
 }
 
 #[derive(Clone)]
 pub struct TaggedHashMapBi<'a, KeyTran, ValTran>(&'a str, KeyTran, ValTran);
-impl<'a, K, V, KeyTran, ValTran> Bitermer<HashMap<K, V>> for TaggedHashMapBi<'a, KeyTran, ValTran>
+impl<'a, K, V, KeyTran, ValTran> Biwooder<HashMap<K, V>> for TaggedHashMapBi<'a, KeyTran, ValTran>
 	where
-		KeyTran:Bitermer<K>, ValTran:Bitermer<V>,
+		KeyTran:Biwooder<K>, ValTran:Biwooder<V>,
 		K: Eq + Hash,
 		V: Eq + Hash,
 {}
-impl<'a, K, V, KeyTran, ValTran> Termer<HashMap<K, V>> for TaggedHashMapBi<'a, KeyTran, ValTran>
+impl<'a, K, V, KeyTran, ValTran> Wooder<HashMap<K, V>> for TaggedHashMapBi<'a, KeyTran, ValTran>
 	where
-		KeyTran:Termer<K>, ValTran:Termer<V>,
+		KeyTran:Wooder<K>, ValTran:Wooder<V>,
 		K: Eq + Hash,
 		V: Eq + Hash,
 {
-	fn termify(&self, v:&HashMap<K, V>) -> Term {
+	fn woodify(&self, v:&HashMap<K, V>) -> Wood {
 		let mut ret = Vec::new();
 		ret.push(self.0.into());
-		termify_map(&self.1, &self.2, v.iter(), &mut ret);
+		woodify_map(&self.1, &self.2, v.iter(), &mut ret);
 		ret.into()
 	}
 }
-impl<'a, K, V, KeyTran, ValTran> Determer<HashMap<K, V>> for TaggedHashMapBi<'a, KeyTran, ValTran>
+impl<'a, K, V, KeyTran, ValTran> Dewooder<HashMap<K, V>> for TaggedHashMapBi<'a, KeyTran, ValTran>
 	where
-		KeyTran:Determer<K>, ValTran:Determer<V>,
+		KeyTran:Dewooder<K>, ValTran:Dewooder<V>,
 		K: Eq + Hash,
 		V: Eq + Hash,
 {
-	fn determify(&self, v:&Term) -> Result<HashMap<K,V>, DetermifyError> {
+	fn dewoodify(&self, v:&Wood) -> Result<HashMap<K,V>, DewoodifyError> {
 		let mut ret = Vec::new();
 		let it = ensure_tag(v, self.0)?;
-		determify_map(&self.1, &self.2, it, &mut ret)?;
+		dewoodify_map(&self.1, &self.2, it, &mut ret)?;
 		Ok(HashMap::from_iter(ret.into_iter()))
 	}
 }
@@ -439,28 +439,28 @@ mod tests {
 	
 	#[test]
 	fn idempotent_int() {
-		assert!(90isize == IsizeBi().determify(&IsizeBi().termify(&90isize)).unwrap());
+		assert!(90isize == IsizeBi().dewoodify(&IsizeBi().woodify(&90isize)).unwrap());
 	}
 	
 	#[test]
-	fn tricky_list_parse() {
-		let listo = list!(list!("tricky", "list"), list!("parse"));
-		let tranner:SequenceTran<SequenceTran<DefaultBitermer>> = SequenceTran(SequenceTran(DefaultBitermer()));
-		let lv:Vec<Vec<String>> = tranner.determify(&listo).unwrap();
+	fn tricky_branch_parse() {
+		let brancho = branch!(branch!("tricky", "branch"), branch!("parse"));
+		let tranner:SequenceTran<SequenceTran<DefaultBiwooder>> = SequenceTran(SequenceTran(DefaultBiwooder()));
+		let lv:Vec<Vec<String>> = tranner.dewoodify(&brancho).unwrap();
 		assert!(lv.len() == 2);
 		assert!(lv[0].len() == 2);
 		assert!(lv[0][0].len() == 6);
-		assert!(tranner.termify(&lv).to_string() == "((tricky list) (parse))");
+		assert!(tranner.woodify(&lv).to_string() == "((tricky branch) (parse))");
 	}
 	
 	#[test]
 	fn do_hash_map() {
 		let t = parse("a:b c:d d:e e:f").unwrap();
-		let bt = TaggedHashMapBi("ob", DefaultBitermer(), DefaultBitermer());
-		let utr: Result<HashMap<String, String>, DetermifyError> = bt.determify(&t);
+		let bt = TaggedHashMapBi("ob", DefaultBiwooder(), DefaultBiwooder());
+		let utr: Result<HashMap<String, String>, DewoodifyError> = bt.dewoodify(&t);
 		assert!(utr.is_err());
 		let tt = parse("ob a:b c:d d:e e:f").unwrap();
-		let hm:HashMap<String, String> = TaggedHashMapBi("ob", DefaultBitermer(), DefaultBitermer()).determify(&tt).unwrap();
+		let hm:HashMap<String, String> = TaggedHashMapBi("ob", DefaultBiwooder(), DefaultBiwooder()).dewoodify(&tt).unwrap();
 		assert!(hm.get("a").unwrap() == "b");
 		assert!(hm.get("d").unwrap() == "e");
 	}
@@ -473,11 +473,11 @@ mod tests {
 	}
 	
 	#[test]
-	fn implicit_bitermers() {
+	fn implicit_biwooders() {
 		let t = parse("a:b c:d").unwrap();
 		let exh = give_hm();
 		
-		let exu:HashMap<String, String> = determify(&t).unwrap();
+		let exu:HashMap<String, String> = dewoodify(&t).unwrap();
 		
 		assert!(exu == exh)
 	}

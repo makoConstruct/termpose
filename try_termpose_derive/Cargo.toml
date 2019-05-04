@@ -1,9 +1,0 @@
-[package]
-name = "try_termpose_derive"
-version = "0.1.0"
-authors = ["mako <marcus.yass@gmail.com>"]
-edition = "2018"
-
-[dependencies]
-termpose = { path = "../rust" }
-termpose_derive = { path = "../rust/termpose_derive" }

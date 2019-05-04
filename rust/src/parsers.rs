@@ -5,8 +5,8 @@
 use super::*;
 
 struct SexpParserState<'a>{
-	root:Vec<Term>,
-	stack:Vec<*mut Vec<Term>>,
+	root:Vec<Wood>,
+	stack:Vec<*mut Vec<Wood>>,
 	iter:std::str::Chars<'a>,
 	started_eating: &'a str,
 	eating_str_mode:bool,
@@ -38,12 +38,12 @@ impl Display for PositionedError {
 	}
 }
 
-// fn find_ptr<'a>(vl:&Vec<Terms<'a>>, p:*const Vec<Terms<'a>>)-> bool {
+// fn find_ptr<'a>(vl:&Vec<Woods<'a>>, p:*const Vec<Woods<'a>>)-> bool {
 // 	if vl as *const _ == p {
 // 		true
 // 	}else{
-// 		vl.iter().any(|v:&Terms<'a>|{
-// 			if let List(ref lr) = *v {
+// 		vl.iter().any(|v:&Woods<'a>|{
+// 			if let Branch(ref lr) = *v {
 // 				find_ptr(lr, p)
 // 			}else{
 // 				false
@@ -64,7 +64,7 @@ impl<'a> SexpParserState<'a> {
 			column: 0,
 		}
 	}
-	fn last_list<'b>(&'b mut self)-> &'b mut Vec<Term> where 'a:'b {
+	fn last_branch<'b>(&'b mut self)-> &'b mut Vec<Wood> where 'a:'b {
 		let ret = if self.stack.len() > 0 {
 			*get_back_mut(&mut self.stack)
 		}else{
@@ -78,7 +78,7 @@ impl<'a> SexpParserState<'a> {
 			let s = unsafe{ self.started_eating.get_unchecked(0..len) };
 			let line = self.line;
 			let column = self.column;
-			self.last_list().push(Atomv(Atom{line, column, v:s.to_string()}));
+			self.last_branch().push(Leafv(Leaf{line, column, v:s.to_string()}));
 			self.started_eating = "";
 			self.eating_str_mode = false;
 		}
@@ -89,21 +89,21 @@ impl<'a> SexpParserState<'a> {
 	fn new_scope<'b>(&'b mut self) where 'a:'b {
 		let line = self.line;
 		let column = self.column;
-		self.last_list().push(Listv(List{
+		self.last_branch().push(Branchv(Branch{
 			line:line,
 			column:column,
 			v:Vec::new()
 		}));
 		//potential unnecessary indexing in last_mut, `push` already knows the index. Could be mitigated with a place_back
-		let flp: *mut Vec<Term> =
-			if let Listv(ref mut l) = * get_back_mut(self.last_list()) {
+		let flp: *mut Vec<Wood> =
+			if let Branchv(ref mut l) = * get_back_mut(self.last_branch()) {
 				&mut l.v
 			}else{
-				panic!("but I thought we just inserted a list");
+				panic!("but I thought we just inserted a branch");
 			};
 		self.stack.push(flp);
 	}
-	fn parse_sexp(mut self)-> Result<Term, PositionedError> {
+	fn parse_sexp(mut self)-> Result<Wood, PositionedError> {
 		loop {
 			let str_starting_here = self.iter.as_str();
 			if let Some(c) = self.iter.next() {
@@ -149,22 +149,22 @@ impl<'a> SexpParserState<'a> {
 			}
 		}
 		
-		Ok(Listv(List{line:-1, column:-1, v:self.root.into()}))
+		Ok(Branchv(Branch{line:-1, column:-1, v:self.root.into()}))
 	}
 }
 
-pub fn parse_sexp<'a>(v:&'a str)-> Result<Term, PositionedError> {
+pub fn parse_sexp<'a>(v:&'a str)-> Result<Wood, PositionedError> {
 	SexpParserState::<'a>::begin(v).parse_sexp()
 }
 
 
 
 
-// pub fn parse_nakedlist<'a>(v:&'a str)-> Result<Term, PositionedError> {
-// 	NakedlistParserState::<'a>::begin(v).parse()
+// pub fn parse_nakedbranch<'a>(v:&'a str)-> Result<Wood, PositionedError> {
+// 	NakedbranchParserState::<'a>::begin(v).parse()
 // }
 
-pub fn parse_nakedlist<'a>(_v:&'a str)-> Result<Term, PositionedError> {
+pub fn parse_nakedbranch<'a>(_v:&'a str)-> Result<Wood, PositionedError> {
 	Err(PositionedError{line:-1, column:-1, msg:"not implemented :p".into()})
 }
 
@@ -179,24 +179,24 @@ pub fn parse_nakedlist<'a>(_v:&'a str)-> Result<Term, PositionedError> {
 //this has been written in the style of a C++ programmer who doesn't want to waste a single cycle. However: Every use of unsafe has been justified with a comment
 
 #[inline(always)]
-fn assume_list_mut(v:&mut Term)-> &mut List {
+fn assume_branch_mut(v:&mut Wood)-> &mut Branch {
 	match *v {
-		Listv(ref mut ls)=> ls,
-		Atomv(_)=> panic!("this Term is supposed to be a list"),
+		Branchv(ref mut ls)=> ls,
+		Leafv(_)=> panic!("this Wood is supposed to be a branch"),
 	}
 }
 #[inline(always)]
-fn assume_atom_mut(v:&mut Term)-> &mut Atom {
+fn assume_leaf_mut(v:&mut Wood)-> &mut Leaf {
 	match *v {
-		Listv(_)=> panic!("this Term is supposed to be an atom"),
-		Atomv(ref mut ar)=> ar,
+		Branchv(_)=> panic!("this Wood is supposed to be an leaf"),
+		Leafv(ref mut ar)=> ar,
 	}
 }
 #[inline(always)]
-fn assume_list(v:Term)-> List {
+fn assume_branch(v:Wood)-> Branch {
 	match v {
-		Listv(ls)=> ls,
-		Atomv(_)=> panic!("this Term is supposed to be a list"),
+		Branchv(ls)=> ls,
+		Leafv(_)=> panic!("this Wood is supposed to be a branch"),
 	}
 }
 
@@ -220,37 +220,37 @@ unsafe fn str_from_bounds<'a>(o:*const u8, f:*const u8)-> &'a str {
 fn is_whitespace(c:char)-> bool { c == ' ' || c == '\t' }
 
 struct ParserState<'a>{
-	root: Term,
+	root: Wood,
 	indent_stack: Vec<&'a str>,
-	indent_list_stack: Vec<*mut Vec<Term>>, //the lists corresponding to each indent level, into which new lines on that level are inserted
-	line_paren_stack: Vec<*mut Term>,
+	indent_branch_stack: Vec<*mut Vec<Wood>>, //the branchs corresponding to each indent level, into which new lines on that level are inserted
+	line_paren_stack: Vec<*mut Wood>,
 	cur_char_ptr: *const u8,
 	//optimization: Consider making these three an untagged union, since only one is used at a time?:
 	stretch_reading_start: *const u8, //used when taking an indent
-	atom_being_read_into: *mut String,
-	colon_receptacle: *mut Vec<Term>,
-	last_completed_term_on_line: *mut Term, //for attaching the next pairing
+	leaf_being_read_into: *mut String,
+	colon_receptacle: *mut Vec<Wood>,
+	last_completed_term_on_line: *mut Wood, //for attaching the next pairing
 	multilines_indent: &'a str,
-	// previous_line_hanging_term: *mut Term, //this is the term things will be inserted into if there's an indent.
+	// previous_line_hanging_term: *mut Wood, //this is the term things will be inserted into if there's an indent.
 	iter: std::str::Chars<'a>,
 	line: isize,
 	column: isize,
 	mode: fn(&mut ParserState<'a>, Option<char>)-> Result<(), PositionedError>,
-	chosen_style: TermposeStyle,
+	chosen_style: WoodStyle,
 }
 
 #[derive(Clone)]
-pub struct TermposeStyle {
+pub struct WoodStyle {
 	pub open:char,
 	pub close:char,
 	pub pairing:char,
 }
 
-static DEFAULT_STYLE:TermposeStyle = TermposeStyle{ open:'(', close:')', pairing:':' };
+static DEFAULT_STYLE:WoodStyle = WoodStyle{ open:'(', close:')', pairing:':' };
 
 impl<'a> ParserState<'a> {
 	
-	fn style(&self)-> &TermposeStyle { &self.chosen_style }
+	fn style(&self)-> &WoodStyle { &self.chosen_style }
 	
 	fn a_fail(&self, message:String)-> Result<(), PositionedError> { Err(PositionedError{
 		line: self.line,
@@ -258,12 +258,12 @@ impl<'a> ParserState<'a> {
 		msg: message,
 	}) }
 	
-	fn mklist(&self)-> Term { Listv(List{ line:self.line, column:self.column, v:Vec::new() }) }
+	fn mkbranch(&self)-> Wood { Branchv(Branch{ line:self.line, column:self.column, v:Vec::new() }) }
 	
 	fn start_line(&mut self, c:char)-> Result<(), PositionedError> {
-		let bin:*mut Vec<Term> = *get_back_mut(&mut self.indent_list_stack); //there is always at least root in the indent_list_stack
+		let bin:*mut Vec<Wood> = *get_back_mut(&mut self.indent_branch_stack); //there is always at least root in the indent_branch_stack
 		unsafe{
-			(*bin).push(self.mklist());
+			(*bin).push(self.mkbranch());
 		}
 		self.line_paren_stack.clear();
 		self.line_paren_stack.push(get_back_mut(unsafe{ &mut *bin }));
@@ -271,39 +271,39 @@ impl<'a> ParserState<'a> {
 		self.start_reading_thing(c)
 	}
 	
-	fn consider_collapsing_outer_list_of_previous_line(&mut self){
-		let line_term: *mut Term = self.line_paren_stack[0];
-		let line_list_length:usize = assume_list_mut(unsafe{ &mut*line_term }).v.len(); //line_term is always a list
-		if line_list_length == 1 {
+	fn consider_collapsing_outer_branch_of_previous_line(&mut self){
+		let line_term: *mut Wood = self.line_paren_stack[0];
+		let line_branch_length:usize = assume_branch_mut(unsafe{ &mut*line_term }).v.len(); //line_term is always a branch
+		if line_branch_length == 1 {
 			unsafe{
 				replace_self(&mut*line_term, |l|{
-					let List{ v, .. } = assume_list(l);
+					let Branch{ v, .. } = assume_branch(l);
 					yank_first(v)
-				}) //safe: this_line has been proven to be a list in assume_list_mut, so assume_list cannot panic
+				}) //safe: this_line has been proven to be a branch in assume_branch_mut, so assume_branch cannot panic
 			}
 		}
 	}
 	
-	fn take_hanging_list_for_insert(&mut self)-> *mut Vec<Term> {
+	fn take_hanging_branch_for_insert(&mut self)-> *mut Vec<Wood> {
 		if self.colon_receptacle != null_mut() {
 			replace(&mut self.colon_receptacle, null_mut())
 		}else{
-			&mut unsafe{assume_list_mut(&mut**get_back_mut(&mut self.line_paren_stack))}.v //safe; always something in parenstack, and it's always a list
+			&mut unsafe{assume_branch_mut(&mut**get_back_mut(&mut self.line_paren_stack))}.v //safe; always something in parenstack, and it's always a branch
 		}
 	}
-	fn take_hanging_list_for_new_line(&mut self)-> *mut Vec<Term> {
+	fn take_hanging_branch_for_new_line(&mut self)-> *mut Vec<Wood> {
 		if self.colon_receptacle != null_mut() {
 			replace(&mut self.colon_receptacle, null_mut())
 		}else{
 			if self.line_paren_stack.len() > 1 { //then there's an open paren
-				&mut unsafe{assume_list_mut(&mut**get_back_mut(&mut self.line_paren_stack))}.v //safe; always something in parenstack, and it's always a list
+				&mut unsafe{assume_branch_mut(&mut**get_back_mut(&mut self.line_paren_stack))}.v //safe; always something in parenstack, and it's always a branch
 			}else{ //it's the root line paren stack. A modification may need to be made.
 				let rpl = unsafe{&mut*self.line_paren_stack[0]};
-				let root_pl_len = assume_list_mut(rpl).v.len();
-				if root_pl_len > 1 { //then it needs to be its own list
-					accrete_list(rpl);
+				let root_pl_len = assume_branch_mut(rpl).v.len();
+				if root_pl_len > 1 { //then it needs to be its own branch
+					accrete_branch(rpl);
 				}
-				&mut assume_list_mut(rpl).v
+				&mut assume_branch_mut(rpl).v
 			}
 		}
 	}
@@ -316,10 +316,10 @@ impl<'a> ParserState<'a> {
 	fn next_line(&mut self){ self.line += 1; self.column = 0; }
 	
 	fn open_paren(&mut self) {
-		let lti = self.mklist();
-		let list_for_insert = self.take_hanging_list_for_insert();
-		unsafe{(*list_for_insert).push(lti)};
-		self.line_paren_stack.push(unsafe{&mut *get_back_mut(&mut*list_for_insert)});
+		let lti = self.mkbranch();
+		let branch_for_insert = self.take_hanging_branch_for_insert();
+		unsafe{(*branch_for_insert).push(lti)};
+		self.line_paren_stack.push(unsafe{&mut *get_back_mut(&mut*branch_for_insert)});
 		self.last_completed_term_on_line = null_mut();
 	}
 	fn close_paren(&mut self)-> Result<(), PositionedError> {
@@ -332,36 +332,36 @@ impl<'a> ParserState<'a> {
 			self.a_fail("unmatched paren".into())
 		}
 	}
-	fn take_last_completed_term_on_line(&mut self)-> *mut Term {
+	fn take_last_completed_term_on_line(&mut self)-> *mut Wood {
 		replace(&mut self.last_completed_term_on_line, null_mut())
 	}
 	fn open_colon(&mut self)-> Result<(), PositionedError> {
-		//seek the back term and accrete over it. If there isn't one, create an empty list
+		//seek the back term and accrete over it. If there isn't one, create an empty branch
 		self.colon_receptacle = {
 			let lt = self.take_last_completed_term_on_line();
 			if lt != null_mut() {
-				unsafe{ accrete_list(&mut *lt) }
+				unsafe{ accrete_branch(&mut *lt) }
 			}else{
 				return Err(PositionedError{line: self.line, column: self.column, msg:"no previous term, cannot open a colon here".into()});
 			}
 		};
 		Ok(())
 	}
-	fn begin_atom(&mut self, list_for_insert:*mut Vec<Term>) {
-		let to_push = Atomv(Atom{line:self.line, column:self.column, v:String::new()});
-		unsafe{(*list_for_insert).push(to_push)};
-		self.last_completed_term_on_line = unsafe{get_back_mut(&mut *list_for_insert)};
-		self.atom_being_read_into = &mut unsafe{assume_atom_mut(get_back_mut(&mut *list_for_insert))}.v;
+	fn begin_leaf(&mut self, branch_for_insert:*mut Vec<Wood>) {
+		let to_push = Leafv(Leaf{line:self.line, column:self.column, v:String::new()});
+		unsafe{(*branch_for_insert).push(to_push)};
+		self.last_completed_term_on_line = unsafe{get_back_mut(&mut *branch_for_insert)};
+		self.leaf_being_read_into = &mut unsafe{assume_leaf_mut(get_back_mut(&mut *branch_for_insert))}.v;
 	}
-	fn begin_atom_with_char(&mut self, list_for_insert:*mut Vec<Term>, c:char)-> Result<(), PositionedError> {
-		let to_push = Atomv(Atom{line:self.line, column:self.column, v:String::new()});
-		unsafe{(*list_for_insert).push(to_push)};
-		self.last_completed_term_on_line = unsafe{get_back_mut(&mut *list_for_insert)};
-		self.atom_being_read_into = &mut unsafe{assume_atom_mut(get_back_mut(&mut *list_for_insert))}.v;
+	fn begin_leaf_with_char(&mut self, branch_for_insert:*mut Vec<Wood>, c:char)-> Result<(), PositionedError> {
+		let to_push = Leafv(Leaf{line:self.line, column:self.column, v:String::new()});
+		unsafe{(*branch_for_insert).push(to_push)};
+		self.last_completed_term_on_line = unsafe{get_back_mut(&mut *branch_for_insert)};
+		self.leaf_being_read_into = &mut unsafe{assume_leaf_mut(get_back_mut(&mut *branch_for_insert))}.v;
 		if c == '\\' {
 			try!(self.read_escaped_char());
 		}else{
-			unsafe{(*self.atom_being_read_into).push(c)};
+			unsafe{(*self.leaf_being_read_into).push(c)};
 		};
 		Ok(())
 	}
@@ -377,8 +377,8 @@ impl<'a> ParserState<'a> {
 				self.mode = Self::seeking_term;
 			},
 			'"'=> {
-				let l = self.take_hanging_list_for_insert();
-				self.begin_atom(l);
+				let l = self.take_hanging_branch_for_insert();
+				self.begin_leaf(l);
 				self.mode = Self::eating_quoted_string;
 			},
 			c if c == self.style().pairing=> {
@@ -386,9 +386,9 @@ impl<'a> ParserState<'a> {
 				self.mode = Self::seeking_term;
 			},
 			_=> {
-				let l = self.take_hanging_list_for_insert();
-				try!(self.begin_atom_with_char(l, c));
-				self.mode = Self::eating_atom;
+				let l = self.take_hanging_branch_for_insert();
+				try!(self.begin_leaf_with_char(l, c));
+				self.mode = Self::eating_leaf;
 			},
 		}
 		self.next_col();
@@ -410,12 +410,12 @@ impl<'a> ParserState<'a> {
 				return self.a_fail("inconsistent indentation".into());
 			}
 			self.indent_stack.pop();
-			self.indent_list_stack.pop();
+			self.indent_branch_stack.pop();
 		}
 	}
 	
 	fn end_unindented_line(&mut self){
-		self.consider_collapsing_outer_list_of_previous_line();
+		self.consider_collapsing_outer_branch_of_previous_line();
 		self.colon_receptacle = null_mut();
 	}
 	
@@ -491,9 +491,9 @@ impl<'a> ParserState<'a> {
 						|_  :&mut Self|{ Ok(()) },
 						|_  :&mut Self|{ Ok(()) },
 						|slf:&mut Self, this_indent:&'a str|{
-							let plhl = slf.take_hanging_list_for_new_line();
+							let plhl = slf.take_hanging_branch_for_new_line();
 							slf.indent_stack.push(this_indent);
-							slf.indent_list_stack.push(plhl as *mut _);
+							slf.indent_branch_stack.push(plhl as *mut _);
 							Ok(())
 						},
 					));
@@ -532,7 +532,7 @@ impl<'a> ParserState<'a> {
 	}
 
 	fn read_escaped_char(&mut self)-> Result<(), PositionedError> {
-		let push = |slf:&mut Self, c:char| unsafe{((*slf.atom_being_read_into)).push(c)}; //safe: atom_being_read_into must have been validated before this mode could have been entered
+		let push = |slf:&mut Self, c:char| unsafe{((*slf.leaf_being_read_into)).push(c)}; //safe: leaf_being_read_into must have been validated before this mode could have been entered
 		let nco = self.iterate_char_iter();
 		let match_fail_message = "escape slash must be followed by a valid escape character code";
 		if let Some(nc) = nco {
@@ -553,12 +553,12 @@ impl<'a> ParserState<'a> {
 	}
 
 	fn eating_quoted_string(&mut self, co:Option<char>)-> Result<(), PositionedError> {
-		let push_char = |slf:&mut Self, c:char| unsafe{((*slf.atom_being_read_into)).push(c)}; //safe: atom_being_read_into must have been validated before this mode could have been entered
+		let push_char = |slf:&mut Self, c:char| unsafe{((*slf.leaf_being_read_into)).push(c)}; //safe: leaf_being_read_into must have been validated before this mode could have been entered
 		if let Some(c) = co {
 			match c {
 				'\n'=> {
 					self.stretch_reading_start = self.next_char_ptr();
-					let ar = unsafe{&mut *self.atom_being_read_into};
+					let ar = unsafe{&mut *self.leaf_being_read_into};
 					if ar.chars().all(is_whitespace) {
 						//begin multiline string
 						ar.clear();
@@ -586,8 +586,8 @@ impl<'a> ParserState<'a> {
 		Ok(())
 	}
 
-	fn eating_atom(&mut self, co:Option<char>)-> Result<(), PositionedError> {
-		let push_char = |slf:&mut Self, c:char| unsafe{((*slf.atom_being_read_into)).push(c)}; //safe: atom_being_read_into must have been validated before this mode could have been entered
+	fn eating_leaf(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+		let push_char = |slf:&mut Self, c:char| unsafe{((*slf.leaf_being_read_into)).push(c)}; //safe: leaf_being_read_into must have been validated before this mode could have been entered
 		if let Some(c) = co {
 			match c {
 				' ' | '\t' => {
@@ -630,25 +630,25 @@ impl<'a> ParserState<'a> {
 	}
 	
 	fn notice_paren_immediately_after_thing(&mut self){
-		let bl: *mut Term = self.take_last_completed_term_on_line();
+		let bl: *mut Wood = self.take_last_completed_term_on_line();
 		if bl == null_mut() {
 			panic!("notice_paren_immediately_after_thing was called with no previous thing");
 		}
-		accrete_list(unsafe{&mut *bl});
+		accrete_branch(unsafe{&mut *bl});
 		self.line_paren_stack.push(bl);
 		self.mode = Self::seeking_term;
 		self.next_col();
 	}
 	
 	fn notice_quote_immediately_after_thing(&mut self){
-		let lt: *mut Vec<Term> = unsafe{ &mut assume_list_mut(&mut **get_back_mut(&mut self.line_paren_stack)).v };
+		let lt: *mut Vec<Wood> = unsafe{ &mut assume_branch_mut(&mut **get_back_mut(&mut self.line_paren_stack)).v };
 		if unsafe{(*lt).len()} == 0 {
 			panic!("notice_quote_immediately_after_thing should not be called after entering an empty paren");
 		}
 		let bt = get_back_mut(unsafe{ &mut*lt });
-		let nl = accrete_list(bt);
-		nl.push(Atomv(Atom{line:self.line, column:self.column, v:String::new()}));
-		self.atom_being_read_into = &mut assume_atom_mut(get_back_mut(nl)).v; //safe: just made that
+		let nl = accrete_branch(bt);
+		nl.push(Leafv(Leaf{line:self.line, column:self.column, v:String::new()}));
+		self.leaf_being_read_into = &mut assume_leaf_mut(get_back_mut(nl)).v; //safe: just made that
 		self.mode = Self::eating_quoted_string;
 		self.next_col();
 	}
@@ -681,9 +681,9 @@ impl<'a> ParserState<'a> {
 					self.next_line();
 				},
 				_=> {
-					let il = self.take_hanging_list_for_insert();
-					try!(self.begin_atom_with_char(il, c));
-					self.mode = Self::eating_atom;
+					let il = self.take_hanging_branch_for_insert();
+					try!(self.begin_leaf_with_char(il, c));
+					self.mode = Self::eating_leaf;
 					self.next_col();
 				},
 			}
@@ -716,7 +716,7 @@ impl<'a> ParserState<'a> {
 						},
 						|slf:&mut Self, this_indent:&'a str|{
 							slf.multilines_indent = this_indent;
-							unsafe{(*slf.atom_being_read_into).push(c)};
+							unsafe{(*slf.leaf_being_read_into).push(c)};
 							slf.mode = Self::eating_multiline_content;
 							slf.next_col();
 							Ok(())
@@ -734,13 +734,13 @@ impl<'a> ParserState<'a> {
 		if let Some(c) = co {
 			match c {
 				'\n'=> {
-					// unsafe{(*self.atom_being_read_into).push(c)}; //actually, we'll only take the character once it's been confirmed that the indent goes all the way up
+					// unsafe{(*self.leaf_being_read_into).push(c)}; //actually, we'll only take the character once it's been confirmed that the indent goes all the way up
 					self.stretch_reading_start = self.next_char_ptr();
 					self.mode = Self::eating_multiline_later_indent;
 					self.next_line();
 				},
 				_=> {
-					unsafe{(*self.atom_being_read_into).push(c)};
+					unsafe{(*self.leaf_being_read_into).push(c)};
 					self.next_col();
 				}
 			}
@@ -759,7 +759,7 @@ impl<'a> ParserState<'a> {
 						if curstr != self.multilines_indent {
 							return self.a_fail("inconsistent indentation".into());
 						}
-						unsafe{(*self.atom_being_read_into).push('\n')}; //only now do we finalize the newline given
+						unsafe{(*self.leaf_being_read_into).push('\n')}; //only now do we finalize the newline given
 						self.mode = Self::eating_multiline_content;
 					}else{
 						if !self.multilines_indent.starts_with(curstr) {
@@ -778,7 +778,7 @@ impl<'a> ParserState<'a> {
 					//since the indentation hasn't ended already, this must be a shorter line than the multiline scope, so we'll pop
 					let this_indent = unsafe{str_from_bounds(self.stretch_reading_start, self.cur_char_ptr)};
 					try!(self.pop_indent_stack_down(this_indent));
-					self.consider_collapsing_outer_list_of_previous_line();
+					self.consider_collapsing_outer_branch_of_previous_line();
 					try!(self.start_line(c));
 				},
 			}
@@ -790,36 +790,36 @@ impl<'a> ParserState<'a> {
 
 } //ParserState
 
-fn accrete_list(v:&mut Term)-> &mut Vec<Term> {
+fn accrete_branch(v:&mut Wood)-> &mut Vec<Wood> {
 	unsafe{
 		replace_self(v, |vv|{
 			let (line, col) = vv.line_and_col();
-			Listv(List{line:line, column:col, v:vec!(vv)})
-		}); //safe: list creation doesn't panic
+			Branchv(Branch{line:line, column:col, v:vec!(vv)})
+		}); //safe: branch creation doesn't panic
 	}
-	&mut assume_list_mut(v).v
+	&mut assume_branch_mut(v).v
 }
 
 
-pub fn parse_multiline_style<'a>(s:&'a str, style:TermposeStyle)-> Result<Term, PositionedError> { //parses as if it's a file, and each term at root is a separate term. This is not what you want if you expect only a single line, and you want that line to be the root term, but its behaviour is more consistent if you are parsing files
+pub fn parse_multiline_style<'a>(s:&'a str, style:WoodStyle)-> Result<Wood, PositionedError> { //parses as if it's a file, and each term at root is a separate term. This is not what you want if you expect only a single line, and you want that line to be the root term, but its behaviour is more consistent if you are parsing files
 	let mut state = ParserState::<'a>{
-		root: list!(), //a yet empty line
+		root: branch!(), //a yet empty line
 		indent_stack: vec!(""),
 		stretch_reading_start: s.as_ptr(),
 		cur_char_ptr: s.as_ptr(),
 		colon_receptacle: null_mut(),
 		last_completed_term_on_line: null_mut(),
-		atom_being_read_into: null_mut(),
+		leaf_being_read_into: null_mut(),
 		iter: s.chars(),
 		line: 0,
 		column: 0,
 		multilines_indent: "",
 		line_paren_stack: vec!(),
-		indent_list_stack: vec!(),
+		indent_branch_stack: vec!(),
 		mode: ParserState::<'a>::seeking_beginning,
 		chosen_style: style,
 	};
-	state.indent_list_stack = vec!(&mut assume_list_mut(&mut state.root).v);
+	state.indent_branch_stack = vec!(&mut assume_branch_mut(&mut state.root).v);
 	
 	
 	loop {
@@ -831,18 +831,18 @@ pub fn parse_multiline_style<'a>(s:&'a str, style:TermposeStyle)-> Result<Term, 
 	Ok(state.root)
 }
 
-pub fn parse_multiline<'a>(s:&'a str)-> Result<Term, PositionedError> {
+pub fn parse_multiline<'a>(s:&'a str)-> Result<Wood, PositionedError> {
 	parse_multiline_style(s, DEFAULT_STYLE.clone())
 }
 
-pub fn parse<'a>(s:&'a str)-> Result<Term, PositionedError> {
+pub fn parse<'a>(s:&'a str)-> Result<Wood, PositionedError> {
 	parse_multiline(s).map(|t|{
-		let l = assume_list(t); //parse_multiline only returns lists
+		let l = assume_branch(t); //parse_multiline only returns branchs
 		if l.v.len() == 1 {
 			yank_first(l.v) //just confirmed it's there
 		}else{
-			//then the caller was wrong, it wasn't a single root term, so I guess, they get the whole List? Maybe this should be a PositionedError... I dunno about that
-			Listv(l)
+			//then the caller was wrong, it wasn't a single root term, so I guess, they get the whole Branch? Maybe this should be a PositionedError... I dunno about that
+			Branchv(l)
 		}
 	})
 }
@@ -877,8 +877,8 @@ mod tests {
 	
 	// #[test]
 	// fn it_work() {
-	// 	let ti = list!(list!("hue", list!("when", "you", "now"), "then", "else"));
-	// 	let to:Term<&'static str> = parse_sexp("hue (when you now) then else").unwrap();
+	// 	let ti = branch!(branch!("hue", branch!("when", "you", "now"), "then", "else"));
+	// 	let to:Wood<&'static str> = parse_sexp("hue (when you now) then else").unwrap();
 	// 	println!("the parsed is {}", to.to_string());
 	// 	assert!(ti == to);
 	// }
@@ -890,7 +890,7 @@ mod tests {
 		let testb = testt.find("tests").unwrap();
 		
 		for tc in testb.tail() {
-			let test_name = tc.initial_string();
+			let test_name = tc.initial_str();
 			let mut ttests = tc.tail();
 			if let Some(first_case) = ttests.next() {
 				for remaining_case in ttests {
@@ -903,10 +903,10 @@ mod tests {
 		
 		let failts = testt.find("failing").unwrap();
 		for tc in failts.tail() {
-			let test_name = tc.initial_string();
+			let test_name = tc.initial_str();
 			for t in tc.tail() {
-				if let Ok(v) = parse_multiline(t.initial_string()) {
-					panic!("in \"{}\" case, this string should not have parsed successfully: {}\n. It parsed to {}", test_name, t.initial_string(), v.to_string());
+				if let Ok(v) = parse_multiline(t.initial_str()) {
+					panic!("in \"{}\" case, this string should not have parsed successfully: {}\n. It parsed to {}", test_name, t.initial_str(), v.to_string());
 				}
 			}
 		}
@@ -917,7 +917,7 @@ mod tests {
 	
 	#[test]
 	fn idempotence() {
-		let term = list!("how", list!("about", "that"));
+		let term = branch!("how", branch!("about", "that"));
 		assert!(term == parse(parse(term.to_string().as_str()).unwrap().to_string().as_str()).unwrap())
 	}
 	

@@ -1,6 +1,6 @@
 [package]
-name = "termpose"
-description = "Parsing, serialization and deserialization for termpose and s-expressions"
+name = "wood"
+description = "A robust material that is simple to work: Parsing, serialization and deserialization for termpose and nakedlist"
 version = "0.2.1"
 authors = ["mako <marcus.yass@gmail.com>"]
 
