@@ -1,0 +1,14 @@
+[package]
+name = "wood_derive"
+version = "0.2.1"
+authors = ["mako <marcus.yass@gmail.com>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "0.15.33"
+quote = "0.6.12"
+proc-macro2 = "0.4.29"
+wood = { path = "../" }

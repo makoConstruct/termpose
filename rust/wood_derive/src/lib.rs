@@ -1,0 +1,314 @@
+
+#![recursion_limit="128"]
+
+extern crate proc_macro;
+extern crate proc_macro2;
+extern crate wood;
+
+use proc_macro::TokenStream;
+use proc_macro2::{Span, TokenStream as PM2TS};
+use quote::quote;
+use syn::{Ident, Data::{Struct, Enum, Union}, Fields::{Named, Unnamed, Unit}};
+
+
+
+#[proc_macro_derive(Woodable)]
+pub fn woodable_derive(input: TokenStream) -> TokenStream {
+	let ast: syn::DeriveInput = syn::parse(input).unwrap();
+
+	let name = &ast.ident;
+	
+	let ret: TokenStream = match ast.data {
+		Struct(ref s)=> {
+			let woodify_branch_contents:Vec<PM2TS> = match s.fields {
+				Named(ref n)=> {
+					n.named.iter().map(|m:&syn::Field|{
+						let mid = &m.ident.as_ref().unwrap();
+						quote!{
+							wood::branch!(
+								stringify!(#mid),
+								self.#mid.woodify(),
+							)
+						}
+					}).collect()
+				},
+				Unnamed(ref n)=> {
+					n.unnamed.iter().enumerate().map(|(i, _m)|{
+						let id = syn::Index::from(i);
+						quote!{ self.#id.woodify() }
+					}).collect()
+				},
+				Unit=> {
+					vec!(quote!{})
+				}
+			};
+			
+			let tit = woodify_branch_contents.into_iter();
+			
+			(quote! {
+				impl wood::Woodable for #name {
+					fn woodify(&self)-> wood::Wood {
+						wood::branch!(
+							stringify!(#name),
+							#(#tit),*
+						)
+					}
+				}
+			}).into()
+		},
+		
+		
+		Enum(ref e)=> {
+			let variant_cases:Vec<PM2TS> = e.variants.iter().map(|m:&syn::Variant|{
+				let variant_name = &m.ident;
+				
+				//left is just the name, right is the 
+				let has_fields = |bindings: PM2TS, woodifications:PM2TS|{
+					quote!{
+						#name::#variant_name #bindings => {
+							wood::branch!(
+								stringify!(#variant_name),
+								#woodifications
+							)
+						}
+					}
+				};
+				
+				
+				match m.fields {
+					Named(ref fs)=>{
+						let bindvec:Vec<PM2TS> = fs.named.iter().map(|m:&syn::Field|{
+							let id = &m.ident;
+							quote!{ ref #id }
+						}).collect();
+						let woodvec:Vec<PM2TS> = fs.named.iter().map(|m:&syn::Field|{
+							let fid = m.ident.as_ref().unwrap();
+							quote!{
+								wood::branch!(
+									stringify!(#fid),
+									#fid.woodify(),
+								)
+							}
+						}).collect();
+						
+						has_fields(
+							quote!{ { #(#bindvec),* } },
+							quote!{ #(#woodvec),* }
+						)
+					},
+					Unnamed(ref fs)=>{
+						let names:Vec<Ident> = (0..fs.unnamed.len()).map(|i|{
+							Ident::new(format!("v{}", i).as_str(), Span::call_site())
+						}).collect();
+						let nam = names.iter().map(|id| quote!{ ref #id });
+						let woodvec = names.iter().map(|s| quote!{ #s.woodify() });
+						has_fields(
+							quote!{ ( #(#nam),* ) },
+							quote!{ #(#woodvec),* },
+						)
+					},
+					Unit =>{
+						quote! {
+							#name::#variant_name => stringify!(#variant_name).into()
+						}
+					}
+				}
+			}).collect();
+			
+			(quote! {
+				impl wood::Woodable for #name {
+					fn woodify(&self)-> wood::Wood {
+					 	match *self {
+							#(#variant_cases),*
+						}
+					}
+				}
+			}).into()
+		},
+		Union(_)=> {
+			panic!("derive(Woodable) cannot support untagged unions. It would have no way of knowing which variant to read from")
+		}
+	};
+	
+	ret
+}
+
+
+
+#[proc_macro_derive(Dewoodable)]
+pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
+	let ast: syn::DeriveInput = syn::parse(input).unwrap();
+
+	let name = &ast.ident;
+	
+	let ret = TokenStream::from( match ast.data {
+		Struct(ref s)=> {
+			
+			let with_body = |method_body|-> PM2TS {
+				//it seeks over the contents of the wood branch in such way where if the items are in order it will find each one immediately
+				quote! {
+					impl wood::Dewoodable for #name {
+						fn dewoodify(v:&wood::Wood)-> Result<Self, wood::DewoodifyError> {
+							#method_body
+						}
+					}
+				}
+			};
+			
+			match s.fields {
+				Named(ref n)=> {
+					
+					if n.named.len() == 0 {
+						with_body(quote! { Self{} })
+					}else{
+					
+						let var_parsing:Vec<PM2TS> = n.named.iter().map(|m:&syn::Field|{
+							let var_ident = &m.ident.as_ref().unwrap();
+							let var_type = &m.ty;
+							quote!{
+								#var_ident: #var_type::dewoodify(scanning.seek(stringify!(#var_ident))?)?
+							}
+						}).collect();
+						
+						let number_of_fields = var_parsing.len();
+						
+						with_body(quote!{
+							let mut scanning = wood::FieldScanning::new(v);
+							if scanning.li.len() != #number_of_fields {
+								return Err(wood::DewoodifyError::new(v, format!("{} expected the wood to have {} elements, but it has {}", stringify!(#name), #number_of_fields, scanning.li.len())));
+							}
+							
+							// let mut check_for = |key:&str|-> Result<&wood::Wood, wood::DewoodifyError> {
+							// 	for i in 0..li.len() {
+							// 		let c = &li[current_eye];
+							// 		if c.initial_str() == key {
+							// 			return
+							// 				if let Some(s) = c.tail().next() {
+							// 					Ok(s)
+							// 				}else{
+							// 					Err(wood::DewoodifyError::new(c, format!("expected a subwood, but the wood has no tail")))
+							// 				}
+							// 		}
+							// 		current_eye += 1;
+							// 		if current_eye >= li.len() { current_eye = 0; }
+							// 	}
+							// 	Err(wood::DewoodifyError::new(v, format!("could not find key \"{}\"", key)))
+							// };
+							
+							Ok(Self{
+								#(#var_parsing),*
+							})
+						})
+					}
+				},
+				
+				Unnamed(ref n)=> {
+					
+					let number_of_fields = n.unnamed.len();
+					
+					let each_field = n.unnamed.iter().enumerate().map(|(i, m)|{
+						let ty = &m.ty;
+						quote!{#ty::dewoodify(&li[#i])?}
+					});
+					
+					with_body(quote!{
+						let li = v.tail().as_slice();
+						if li.len() == #number_of_fields {
+							Ok(Self(#(#each_field),*))
+						}else{
+							Err(wood::DewoodifyError::new(v, format!("{} expected the wood to have {} fields, but it has {}", stringify!(#name), #number_of_fields, li.len())))
+						}
+					})
+				},
+				Unit=> {
+					with_body(quote!{
+						Ok(#name)
+					})
+				}
+			}
+		},
+		
+		
+		Enum(ref e)=> {
+			
+			let variant_cases:Vec<PM2TS> = e.variants.iter().map(|m:&syn::Variant|{
+				let variant_name = &m.ident;
+				
+				let for_fields:PM2TS = match m.fields {
+					Named(ref n)=> {
+						let each_feild:Vec<PM2TS> = n.named.iter().map(|f:&syn::Field|{
+							let id = &f.ident;
+							let ty = &f.ty;
+							quote!{ #id: #ty::dewoodify(scanning.seek(stringify!(#id))?)? }
+						}).collect();
+						
+						let number_of_fields = each_feild.len();
+						
+						quote!{
+							let mut scanning = wood::FieldScanning::new(v);
+							if scanning.li.len() != #number_of_fields {
+								return Err(wood::DewoodifyError::new(v, format!("variant {} expected {} elements, found {}", stringify!(#variant_name), #number_of_fields, scanning.li.len())));
+							}
+							Ok(#name::#variant_name {
+								#(#each_feild),*
+							})
+						}
+					},
+					Unnamed(ref n)=> {
+						
+						let each_feild = n.unnamed.iter().enumerate().map(|(i,m)|{
+							let ty = &m.ty;
+							quote!{ #ty::dewoodify(&li[#i])? }
+						});
+						
+						let number_of_fields = each_feild.len();
+						
+						quote!{
+							let li = v.tail().as_slice();
+							
+							if li.len() != #number_of_fields {
+								return Err(wood::DewoodifyError::new(v, format!("variant {} expected {} elements, found {}", stringify!(#variant_name), #number_of_fields, li.len())));
+							}
+							
+							Ok(#name::#variant_name(
+								#(#each_feild),*
+							))
+						}
+					},
+					Unit=> {
+						quote!{ Ok(#name::#variant_name) }
+					}
+				};
+				
+				quote!{
+					stringify!(#variant_name)=> {
+						#for_fields
+					}
+				}
+			}).collect();
+			
+			quote!{
+				impl Dewoodable for #name {
+					fn dewoodify(v:&wood::Wood)-> Result<Self, wood::DewoodifyError> {
+						match v.initial_str() {
+							#(#variant_cases,)*
+							erc => Err(wood::DewoodifyError::new(v, format!("expected a {}, but no variant of {} is called {}", stringify!(#name), stringify!(#name), erc))),
+						}
+					}
+				}
+			}
+		},
+		
+		
+		Union(_)=> {
+			panic!("derive(Dewoodable) doesn't yet support unions")
+		}
+	});
+	
+	
+	// println!("{}", ret);
+	
+	ret
+}
+
+
