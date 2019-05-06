@@ -71,4 +71,4 @@ data(:slist) → a :list containing the data of each contained :item
 
 data(:word) → a string
 
-data(:quoted) → a string
+data(:quoted) → a string. If the string starts with a :newline, it drops the :newline (the reason is, this allows you to start a multiline string on the first column, instead of putting the first line out wherever the string starts, which looks weird)

@@ -6,10 +6,10 @@ use std::cmp::Eq;
 use std::hash::Hash;
 use std::iter::FromIterator;
 
-pub trait Wooder<T> : Clone {
+pub trait Wooder<T> {
 	fn woodify(&self, v:&T) -> Wood;
 }
-pub trait Dewooder<T> : Clone {
+pub trait Dewooder<T> {
 	fn dewoodify(&self, v:&Wood) -> Result<T, DewoodifyError>;
 }
 
@@ -43,6 +43,8 @@ impl Error for DewoodifyError {
 
 pub trait Biwooder<T> : Wooder<T> + Dewooder<T> {} //bidirectional wooder and dewooder
 
+impl<T, X> Biwooder<T> for X where X:Wooder<T> + Dewooder<T> {}
+
 pub trait Woodable {
 	fn woodify(&self) -> Wood;
 }
@@ -50,6 +52,24 @@ pub trait Dewoodable {
 	fn dewoodify(&Wood) -> Result<Self, DewoodifyError> where Self:Sized;
 }
 
+macro_rules! do_basic_stringifying_woodable_for {
+	($Type:ident) => (
+		impl Woodable for $Type {
+			fn woodify(&self) -> Wood { self.to_string().into() }
+		}
+	)
+}
+macro_rules! do_basic_destringifying_dewoodable_for {
+	($Type:ident) => (
+		impl Dewoodable for $Type {
+			fn dewoodify(v:&Wood) -> Result<$Type, DewoodifyError> {
+				$Type::from_str(v.initial_str()).map_err(|er|{
+					DewoodifyError::new_with_cause(v, format!("couldn't parse {}", stringify!($name)), Some(Box::new(er)))
+				})
+			}
+		}
+	)
+}
 
 //for scanning over structs with named pairs where the order is usually the same. Guesses that each queried field will be after the last, and only does a full scanaround when it finds that's not the case. Extremely efficient, if order is maintained.
 pub struct FieldScanning<'a>{
@@ -81,12 +101,11 @@ impl<'a> FieldScanning<'a>{
 
 
 #[derive(Clone)]
-pub struct DefaultWooder();
+pub struct DefaultWooder;
 #[derive(Clone)]
-pub struct DefaultDewooder();
+pub struct DefaultDewooder;
 #[derive(Clone)]
-pub struct DefaultBiwooder();
-impl<T> Biwooder<T> for DefaultBiwooder where T:Woodable + Dewoodable {}
+pub struct DefaultBiwooder;
 impl<T> Wooder<T> for DefaultBiwooder where T:Woodable {
 	fn woodify(&self, v:&T) -> Wood { v.woodify() }
 }
@@ -116,7 +135,7 @@ pub enum WoodposeError{
 }
 
 pub fn deserialize<T>(v:&str) -> Result<T, WoodposeError> where T : Dewoodable {
-	match parse(v) {
+	match parse_termpose(v) {
 		Ok(t)=> dewoodify(&t).map_err(|e| WoodposeError::DewoodifyError(e)),
 		Err(e)=> Err(WoodposeError::ParserError(e)),
 	}
@@ -125,46 +144,28 @@ pub fn serialize<T>(v:&T) -> String where T: Woodable {
 	woodify(v).to_string()
 }
 
+do_basic_stringifying_woodable_for!(char);
+do_basic_destringifying_dewoodable_for!(char);
+do_basic_stringifying_woodable_for!(u32);
+do_basic_destringifying_dewoodable_for!(u32);
+do_basic_stringifying_woodable_for!(u64);
+do_basic_destringifying_dewoodable_for!(u64);
+do_basic_stringifying_woodable_for!(i32);
+do_basic_destringifying_dewoodable_for!(i32);
+do_basic_stringifying_woodable_for!(i64);
+do_basic_destringifying_dewoodable_for!(i64);
+do_basic_stringifying_woodable_for!(f32);
+do_basic_destringifying_dewoodable_for!(f32);
+do_basic_stringifying_woodable_for!(f64);
+do_basic_destringifying_dewoodable_for!(f64);
+do_basic_stringifying_woodable_for!(isize);
+do_basic_destringifying_dewoodable_for!(isize);
+do_basic_stringifying_woodable_for!(usize);
+do_basic_destringifying_dewoodable_for!(usize);
 
-
-#[derive(Copy, Clone)]
-pub struct IsizeBi();
-impl Biwooder<isize> for IsizeBi {}
-impl Wooder<isize> for IsizeBi {
-	fn woodify(&self, v:&isize) -> Wood { v.to_string().as_str().into() }
-}
-impl Dewooder<isize> for IsizeBi {
-	fn dewoodify(&self, v:&Wood) -> Result<isize, DewoodifyError> {
-		isize::from_str(v.initial_str()).map_err(|er|{
-			DewoodifyError::new_with_cause(v, "couldn't parse isize".into(), Some(Box::new(er)))
-		})
-	}
-}
-
-
-#[derive(Copy, Clone)]
-pub struct UsizeBi();
-impl Biwooder<usize> for UsizeBi {}
-impl Wooder<usize> for UsizeBi {
-	fn woodify(&self, v:&usize) -> Wood { v.to_string().as_str().into() }
-}
-impl Dewooder<usize> for UsizeBi {
-	fn dewoodify(&self, v:&Wood) -> Result<usize, DewoodifyError> {
-		usize::from_str(v.initial_str()).map_err(|er|{
-			DewoodifyError::new_with_cause(v, "couldn't parse usize".into(), Some(Box::new(er)))
-		})
-	}
-}
-
-
-#[derive(Copy, Clone)]
-pub struct BoolBi();
-impl Biwooder<bool> for BoolBi {}
-impl Wooder<bool> for BoolBi {
-	fn woodify(&self, v:&bool) -> Wood { v.to_string().as_str().into() }
-}
-impl Dewooder<bool> for BoolBi {
-	fn dewoodify(&self, v:&Wood) -> Result<bool, DewoodifyError> {
+do_basic_stringifying_woodable_for!(bool);
+impl Dewoodable for bool {
+	fn dewoodify(v:&Wood) -> Result<Self, DewoodifyError> {
 		match v.initial_str() {
 			"true" | "⊤" | "yes" => {
 				Ok(true)
@@ -177,6 +178,9 @@ impl Dewooder<bool> for BoolBi {
 	}
 }
 
+// impl<I, T> Woodable for I where I: Iterator<Item=T>, T:Woodable {
+	
+// }
 
 impl Woodable for String {
 	fn woodify(&self) -> Wood {
@@ -194,12 +198,65 @@ impl Dewoodable for String {
 
 
 
-fn woodify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<Wood>)
+pub struct LambdaWooder<L>(L);
+impl<W, L> Wooder<W> for LambdaWooder<L> where L:Fn(&W)-> Wood {
+	fn woodify(&self, v:&W) -> Wood {
+		self.0(v)
+	}
+}
+pub struct LambdaDewooder<D>(D);
+impl<D, L> Dewooder<D> for LambdaDewooder<L> where L:Fn(&Wood)-> Result<D, DewoodifyError> {
+	fn dewoodify(&self, v:&Wood) -> Result<D, DewoodifyError> {
+		self.0(v)
+	}
+}
+
+pub struct CompositeBiwooder<W, D>(W, D);
+impl<T, W, D> Wooder<T> for CompositeBiwooder<W, D>
+	where W:Wooder<T>
+{
+	fn woodify(&self, v:&T) -> Wood { self.0.woodify(v) }
+}
+impl<T, W, D> Dewooder<T> for CompositeBiwooder<W, D>
+	where D:Dewooder<T>
+{
+	fn dewoodify(&self, v:&Wood) -> Result<T, DewoodifyError> {
+		Dewooder::dewoodify(&self.1, v)
+	}
+}
+
+
+/// you might want this for initializing biwooders that can't be constexprs
+pub struct OptionalBoxBiwooder<B:?Sized>(Option<Box<B>>);
+impl<T, B> Wooder<T> for OptionalBoxBiwooder<B>
+	where B:Wooder<T> + ?Sized
+{
+	fn woodify(&self, v:&T) -> Wood { self.0.as_ref().unwrap().woodify(v) }
+}
+impl<T, B> Dewooder<T> for OptionalBoxBiwooder<B>
+	where B:Dewooder<T> + ?Sized
+{
+	fn dewoodify(&self, v:&Wood) -> Result<T, DewoodifyError> {
+		Dewooder::dewoodify(&**self.0.as_ref().unwrap(), v)
+	}
+}
+impl<B> OptionalBoxBiwooder<B> where B:?Sized {
+	pub const fn new(b:Box<B>)-> Self { OptionalBoxBiwooder(Some(b)) }
+	pub const fn empty()-> Self { OptionalBoxBiwooder(None) }
+}
+
+
+pub const fn biwooder_from_fns<W, D>(wf:W, df:D)-> CompositeBiwooder<LambdaWooder<W>, LambdaDewooder<D>>{
+	CompositeBiwooder(LambdaWooder(wf), LambdaDewooder(df))
+}
+
+
+pub fn woodify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<Wood>)
 	where InnerTran: Wooder<T>, I:Iterator<Item=&'a T>, T:'a
 {
 	for vi in v { output.push(inner.woodify(vi)); }
 }
-fn dewoodify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<T>) -> Result<(), DewoodifyError>
+pub fn dewoodify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<T>) -> Result<(), DewoodifyError>
 	where InnerTran: Dewooder<T>, I:Iterator<Item=&'a Wood>
 {
 	// let errors = Vec::new();
@@ -219,9 +276,23 @@ fn dewoodify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Ve
 }
 
 
+impl<T> Woodable for Vec<T> where T:Woodable {
+	fn woodify(&self) -> Wood {
+		let mut ret = Vec::new();
+		woodify_seq_into(&DefaultBiwooder, self.iter(), &mut ret);
+		ret.into()
+	}
+}
+impl<T> Dewoodable for Vec<T> where T:Dewoodable {
+	fn dewoodify(v:&Wood) -> Result<Vec<T>, DewoodifyError> {
+		let mut ret = Vec::new();
+		try!(dewoodify_seq_into(&DefaultBiwooder, v.contents(), &mut ret));
+		Ok(ret)
+	}
+}
+
 #[derive(Copy, Clone)]
 pub struct SequenceTran<SubTran>(SubTran);
-impl<T, SubTran> Biwooder<Vec<T>> for SequenceTran<SubTran> where SubTran:Biwooder<T> {}
 impl<T, SubTran> Wooder<Vec<T>> for SequenceTran<SubTran> where SubTran:Wooder<T> {
 	fn woodify(&self, v:&Vec<T>) -> Wood {
 		let mut ret = Vec::new();
@@ -239,7 +310,6 @@ impl<T, SubTran> Dewooder<Vec<T>> for SequenceTran<SubTran> where SubTran:Dewood
 
 #[derive(Copy, Clone)]
 pub struct TaggedSequenceTran<'a, SubTran>(&'a str, SubTran);
-impl<'a, T, SubTran> Biwooder<Vec<T>> for TaggedSequenceTran<'a, SubTran> where SubTran:Biwooder<T> {}
 impl<'a, T, SubTran> Wooder<Vec<T>> for TaggedSequenceTran<'a, SubTran> where SubTran:Wooder<T> {
 	fn woodify(&self, v:&Vec<T>) -> Wood {
 		let mut ret = Vec::new();
@@ -280,6 +350,7 @@ impl<'a, T, SubTran> Dewooder<Vec<T>> for TaggedSequenceTran<'a, SubTran> where 
 }
 
 
+
 fn dewoodify_pair<K, V, KeyTran, ValTran>(kt:&KeyTran, vt:&ValTran, v:&Wood) -> Result<(K,V), DewoodifyError>
 	where KeyTran:Dewooder<K>, ValTran:Dewooder<V>
 {
@@ -303,7 +374,6 @@ fn dewoodify_pair<K, V, KeyTran, ValTran>(kt:&KeyTran, vt:&ValTran, v:&Wood) -> 
 
 #[derive(Copy, Clone)]
 pub struct PairBi<KeyTran, ValTran>(KeyTran, ValTran);
-impl<K, V, KeyTran, ValTran> Biwooder<(K, V)> for PairBi<KeyTran, ValTran> where KeyTran:Biwooder<K>, ValTran:Biwooder<V> {}
 impl<K, V, KeyTran, ValTran> Wooder<(K, V)> for PairBi<KeyTran, ValTran> where KeyTran:Wooder<K>, ValTran:Wooder<V> {
 	fn woodify(&self, v:&(K,V)) -> Wood {
 		let kt = self.0.woodify(&v.0);
@@ -316,6 +386,7 @@ impl<K, V, KeyTran, ValTran> Dewooder<(K, V)> for PairBi<KeyTran, ValTran> where
 		dewoodify_pair(&self.0, &self.1, v)
 	}
 }
+
 
 fn woodify_map<'a, K, V, KeyWooder, ValWooder, I>(ktr:&KeyWooder, vtr:&ValWooder, i:I, o:&mut Vec<Wood>)
 	where
@@ -348,7 +419,7 @@ impl<K, V> Woodable for HashMap<K, V> where
 {
 	fn woodify(&self) -> Wood {
 		let mut ret = Vec::new();
-		woodify_map(&DefaultWooder(), &DefaultWooder(), self.iter(), &mut ret);
+		woodify_map(&DefaultWooder, &DefaultWooder, self.iter(), &mut ret);
 		ret.into()
 	}
 }
@@ -359,19 +430,13 @@ impl<K, V> Dewoodable for HashMap<K, V>
 {
 	fn dewoodify(v:&Wood) -> Result<HashMap<K,V>, DewoodifyError> {
 		let mut ret = Vec::new();
-		dewoodify_map(&DefaultDewooder(), &DefaultDewooder(), v.contents(), &mut ret)?;
+		dewoodify_map(&DefaultDewooder, &DefaultDewooder, v.contents(), &mut ret)?;
 		Ok(HashMap::from_iter(ret.into_iter()))
 	}
 }
 
 #[derive(Clone)]
 pub struct HashMapBi<KeyTran, ValTran>(KeyTran, ValTran);
-impl<K, V, KeyTran, ValTran> Biwooder<HashMap<K, V>> for HashMapBi<KeyTran, ValTran>
-	where
-		KeyTran:Biwooder<K>, ValTran:Biwooder<V>,
-		K: Eq + Hash,
-		V: Eq + Hash,
-{}
 impl<K, V, KeyTran, ValTran> Wooder<HashMap<K, V>> for HashMapBi<KeyTran, ValTran>
 	where
 		KeyTran:Wooder<K>, ValTran:Wooder<V>,
@@ -399,12 +464,6 @@ impl<K, V, KeyTran, ValTran> Dewooder<HashMap<K, V>> for HashMapBi<KeyTran, ValT
 
 #[derive(Clone)]
 pub struct TaggedHashMapBi<'a, KeyTran, ValTran>(&'a str, KeyTran, ValTran);
-impl<'a, K, V, KeyTran, ValTran> Biwooder<HashMap<K, V>> for TaggedHashMapBi<'a, KeyTran, ValTran>
-	where
-		KeyTran:Biwooder<K>, ValTran:Biwooder<V>,
-		K: Eq + Hash,
-		V: Eq + Hash,
-{}
 impl<'a, K, V, KeyTran, ValTran> Wooder<HashMap<K, V>> for TaggedHashMapBi<'a, KeyTran, ValTran>
 	where
 		KeyTran:Wooder<K>, ValTran:Wooder<V>,
@@ -433,19 +492,21 @@ impl<'a, K, V, KeyTran, ValTran> Dewooder<HashMap<K, V>> for TaggedHashMapBi<'a,
 }
 
 
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	
 	#[test]
 	fn idempotent_int() {
-		assert!(90isize == IsizeBi().dewoodify(&IsizeBi().woodify(&90isize)).unwrap());
+		assert!(90isize == DefaultBiwooder.dewoodify(&DefaultBiwooder.woodify(&90isize)).unwrap());
 	}
 	
 	#[test]
 	fn tricky_branch_parse() {
 		let brancho = branch!(branch!("tricky", "branch"), branch!("parse"));
-		let tranner:SequenceTran<SequenceTran<DefaultBiwooder>> = SequenceTran(SequenceTran(DefaultBiwooder()));
+		let tranner:SequenceTran<SequenceTran<DefaultBiwooder>> = SequenceTran(SequenceTran(DefaultBiwooder));
 		let lv:Vec<Vec<String>> = tranner.dewoodify(&brancho).unwrap();
 		assert!(lv.len() == 2);
 		assert!(lv[0].len() == 2);
@@ -455,12 +516,12 @@ mod tests {
 	
 	#[test]
 	fn do_hash_map() {
-		let t = parse("a:b c:d d:e e:f").unwrap();
-		let bt = TaggedHashMapBi("ob", DefaultBiwooder(), DefaultBiwooder());
+		let t = parse_termpose("a:b c:d d:e e:f").unwrap();
+		let bt = TaggedHashMapBi("ob", DefaultBiwooder, DefaultBiwooder);
 		let utr: Result<HashMap<String, String>, DewoodifyError> = bt.dewoodify(&t);
 		assert!(utr.is_err());
-		let tt = parse("ob a:b c:d d:e e:f").unwrap();
-		let hm:HashMap<String, String> = TaggedHashMapBi("ob", DefaultBiwooder(), DefaultBiwooder()).dewoodify(&tt).unwrap();
+		let tt = parse_termpose("ob a:b c:d d:e e:f").unwrap();
+		let hm:HashMap<String, String> = TaggedHashMapBi("ob", DefaultBiwooder, DefaultBiwooder).dewoodify(&tt).unwrap();
 		assert!(hm.get("a").unwrap() == "b");
 		assert!(hm.get("d").unwrap() == "e");
 	}
@@ -474,12 +535,22 @@ mod tests {
 	
 	#[test]
 	fn implicit_biwooders() {
-		let t = parse("a:b c:d").unwrap();
+		let t = parse_termpose("a:b c:d").unwrap();
 		let exh = give_hm();
 		
 		let exu:HashMap<String, String> = dewoodify(&t).unwrap();
 		
 		assert!(exu == exh)
+	}
+	
+	const SPECIAL_SEQ_BIWOODER:SequenceTran<DefaultBiwooder> =
+		SequenceTran(DefaultBiwooder);
+	#[test]
+	fn static_biwooder() {
+		let r:Result<Wood, _> = parse_termpose("c c c c c a");
+		let v:Vec<char> = SPECIAL_SEQ_BIWOODER.dewoodify(&r.unwrap()).unwrap();
+		assert_eq!(v.len(), 6usize);
+		assert_eq!(v[5], 'a');
 	}
 	
 	#[test]

@@ -135,7 +135,12 @@ pub fn woodable_derive(input: TokenStream) -> TokenStream {
 
 
 
-#[proc_macro_derive(Dewoodable)]
+// #[proc_macro_attribute]
+// pub fn wood_derive(attr: TokenStream, item: TokenStream) -> TokenStream {
+// 	(quote!{}).into()
+// }
+
+#[proc_macro_derive(Dewoodable, attributes(wood))]
 pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 	let ast: syn::DeriveInput = syn::parse(input).unwrap();
 
@@ -166,7 +171,8 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 							let var_ident = &m.ident.as_ref().unwrap();
 							let var_type = &m.ty;
 							quote!{
-								#var_ident: #var_type::dewoodify(scanning.seek(stringify!(#var_ident))?)?
+								
+								#var_ident: {type T = #var_type; T::dewoodify(scanning.seek(stringify!(#var_ident))?)?}
 							}
 						}).collect();
 						
@@ -177,23 +183,6 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 							if scanning.li.len() != #number_of_fields {
 								return Err(wood::DewoodifyError::new(v, format!("{} expected the wood to have {} elements, but it has {}", stringify!(#name), #number_of_fields, scanning.li.len())));
 							}
-							
-							// let mut check_for = |key:&str|-> Result<&wood::Wood, wood::DewoodifyError> {
-							// 	for i in 0..li.len() {
-							// 		let c = &li[current_eye];
-							// 		if c.initial_str() == key {
-							// 			return
-							// 				if let Some(s) = c.tail().next() {
-							// 					Ok(s)
-							// 				}else{
-							// 					Err(wood::DewoodifyError::new(c, format!("expected a subwood, but the wood has no tail")))
-							// 				}
-							// 		}
-							// 		current_eye += 1;
-							// 		if current_eye >= li.len() { current_eye = 0; }
-							// 	}
-							// 	Err(wood::DewoodifyError::new(v, format!("could not find key \"{}\"", key)))
-							// };
 							
 							Ok(Self{
 								#(#var_parsing),*
@@ -304,9 +293,6 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 			panic!("derive(Dewoodable) doesn't yet support unions")
 		}
 	});
-	
-	
-	// println!("{}", ret);
 	
 	ret
 }

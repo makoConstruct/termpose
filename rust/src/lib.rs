@@ -68,6 +68,9 @@ pub use Wood::*;
 impl<'a> Into<Wood> for &'a str {
 	fn into(self) -> Wood { Leafv(Leaf{ line:-1, column:-1, v:self.to_string() }) }
 }
+impl Into<Wood> for String {
+	fn into(self) -> Wood { Leafv(Leaf{ line:-1, column:-1, v:self }) }
+}
 impl<'a> Into<Wood> for Vec<Wood> {
 	fn into(self) -> Wood { Branchv(Branch{ line:-1, column:-1, v:self }) }
 }
