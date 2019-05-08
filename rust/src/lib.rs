@@ -4,6 +4,7 @@
 
 // extern crate string_cache;
 // use string_cache::DefaultLeaf as Strin;
+use std::str::FromStr;
 use std::mem::{forget, replace, uninitialized};
 use std::cmp::{PartialEq};
 use std::result::Result;
@@ -11,7 +12,6 @@ use std::error::Error;
 use std::fmt::{Formatter, Display, Debug};
 use std::borrow::{Borrow};
 use std::ptr::{null_mut};
-// use std::debug_assert;
 extern crate ref_slice;
 use ref_slice::ref_slice;
 
@@ -48,16 +48,19 @@ impl PartialEq for Wood {
 }
 
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Branch {
 	pub line: isize,
 	pub column: isize,
 	pub v: Vec<Wood>,
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Leaf {
 	pub line: isize,
 	pub column: isize,
 	pub v: String,
 }
+#[derive(Debug, Clone, Eq)]
 pub enum Wood {
 	Branchv(Branch),
 	Leafv(Leaf),
@@ -65,11 +68,11 @@ pub enum Wood {
 pub use Wood::*;
 
 
-impl<'a> Into<Wood> for &'a str {
-	fn into(self) -> Wood { Leafv(Leaf{ line:-1, column:-1, v:self.to_string() }) }
-}
 impl Into<Wood> for String {
 	fn into(self) -> Wood { Leafv(Leaf{ line:-1, column:-1, v:self }) }
+}
+impl<'a> Into<Wood> for &'a str {
+	fn into(self) -> Wood { self.to_string().into() }
 }
 impl<'a> Into<Wood> for Vec<Wood> {
 	fn into(self) -> Wood { Branchv(Branch{ line:-1, column:-1, v:self }) }
@@ -104,6 +107,8 @@ fn push_escaped(take:&mut String, give:&str){
 impl Wood {
 	pub fn leaf(v:String)-> Wood    { Wood::Leafv(Leaf{line:-1, column:-1, v:v}) }
 	pub fn branch(v:Vec<Wood>)-> Wood { Wood::Branchv(Branch{line:-1, column:-1, v:v}) }
+	pub fn is_leaf(&self)-> bool { match self { &Leafv(_)=> true, _=> false } }
+	pub fn is_branch(&self)-> bool { match self { &Branchv(_)=> true, _=> false } }
 	pub fn line_and_col(&self)-> (isize, isize) {
 		match *self {
 			Wood::Branchv(ref l)=> (l.line, l.column),
@@ -123,33 +128,9 @@ impl Wood {
 		}
 	}
 	pub fn to_string(&self)-> String {
-		let mut ret = String::new();
-		self.stringify(&mut ret);
-		ret
+		to_woodslist(self)
 	}
-	pub fn stringify(&self, s:&mut String){
-		match *self {
-			Branchv(ref v)=> {
-				s.push('(');
-				//spaces go between
-				let mut i = v.v.iter();
-				if let Some(ref first) = i.next() {
-					first.stringify(s);
-					while let Some(ref nexto) = i.next() {
-						s.push(' ');
-						nexto.stringify(s);
-					}
-				}
-				s.push(')');
-			}
-			Leafv(ref v)=> {
-				let needs_quotes = v.v.chars().any(|c|{ c == ' ' || c == '\t' || c == ':' || c == '(' || c == ')' });
-				if needs_quotes { s.push('"'); }
-				push_escaped(s, v.v.as_str());
-				if needs_quotes { s.push('"'); }
-			}
-		}
-	}
+	
 	pub fn contents(&self)-> std::slice::Iter<Self> { //if Leaf, returns a slice iter of a single element that is the leaf's str
 		match *self.borrow() {
 			Branchv(ref v)=> v.v.iter(),
@@ -175,6 +156,189 @@ macro_rules! branch {
 }
 
 
-mod translators; pub use translators::*;
+
+pub trait Wooder<T> {
+	fn woodify(&self, v:&T) -> Wood;
+}
+pub trait Dewooder<T> {
+	fn dewoodify(&self, v:&Wood) -> Result<T, DewoodifyError>;
+}
+
+#[derive(Debug)]
+pub struct DewoodifyError{
+	pub line:isize,
+	pub column:isize,
+	pub msg:String,
+	pub cause:Option<Box<Error>>,
+}
+impl Display for DewoodifyError {
+	fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+		Debug::fmt(self, f)
+	}
+}
+impl DewoodifyError {
+	pub fn new(source: &Wood, msg:String) -> Self {
+		let (line, column) = source.line_and_col();
+		Self{ line, column, msg, cause:None }
+	}
+	pub fn new_with_cause(source:&Wood, msg:String, cause:Option<Box<Error>>) -> Self {
+		let (line, column) = source.line_and_col();
+		DewoodifyError{ line, column, msg, cause }
+	}
+}
+
+impl Error for DewoodifyError {
+	fn description(&self) -> &str { self.msg.as_str() }
+	fn cause(&self) -> Option<&Error> { self.cause.as_ref().map(|e| e.as_ref()) }
+}
+pub trait Woodable {
+	fn woodify(&self) -> Wood;
+}
+pub trait Dewoodable {
+	fn dewoodify(&Wood) -> Result<Self, DewoodifyError> where Self:Sized;
+}
+
+pub fn woodify<T>(v:&T) -> Wood where T: Woodable {
+	v.woodify()
+}
+pub fn dewoodify<T>(v:&Wood) -> Result<T, DewoodifyError> where T: Dewoodable {
+	T::dewoodify(v)
+}
+
+#[derive(Debug)]
+pub enum WoodError{
+	ParserError(PositionedError),
+	DewoodifyError(DewoodifyError),
+}
+
+/// An extremely simple but probably not very useful function that maps straight from string to data without providing any opportunity for customization
+pub fn deserialize<T>(v:&str) -> Result<T, WoodError> where T : Dewoodable {
+	match parse_termpose(v) {
+		Ok(t)=> dewoodify(&t).map_err(|e| WoodError::DewoodifyError(e)),
+		Err(e)=> Err(WoodError::ParserError(e)),
+	}
+}
+/// An extremely simple but probably not very useful function that maps straight from data to string without providing any opportunity for customization
+pub fn serialize<T>(v:&T) -> String where T: Woodable {
+	woodify(v).to_string()
+}
+
+macro_rules! do_basic_stringifying_woodable_for {
+	($Type:ident) => (
+		impl Woodable for $Type {
+			fn woodify(&self) -> Wood { self.to_string().into() }
+		}
+	)
+}
+macro_rules! do_basic_destringifying_dewoodable_for {
+	($Type:ident) => (
+		impl Dewoodable for $Type {
+			fn dewoodify(v:&Wood) -> Result<$Type, DewoodifyError> {
+				$Type::from_str(v.initial_str()).map_err(|er|{
+					DewoodifyError::new_with_cause(v, format!("couldn't parse {}", stringify!($name)), Some(Box::new(er)))
+				})
+			}
+		}
+	)
+}
+
+do_basic_stringifying_woodable_for!(char);
+do_basic_destringifying_dewoodable_for!(char);
+do_basic_stringifying_woodable_for!(u32);
+do_basic_destringifying_dewoodable_for!(u32);
+do_basic_stringifying_woodable_for!(u64);
+do_basic_destringifying_dewoodable_for!(u64);
+do_basic_stringifying_woodable_for!(i32);
+do_basic_destringifying_dewoodable_for!(i32);
+do_basic_stringifying_woodable_for!(i64);
+do_basic_destringifying_dewoodable_for!(i64);
+do_basic_stringifying_woodable_for!(f32);
+do_basic_destringifying_dewoodable_for!(f32);
+do_basic_stringifying_woodable_for!(f64);
+do_basic_destringifying_dewoodable_for!(f64);
+do_basic_stringifying_woodable_for!(isize);
+do_basic_destringifying_dewoodable_for!(isize);
+do_basic_stringifying_woodable_for!(usize);
+do_basic_destringifying_dewoodable_for!(usize);
+
+do_basic_stringifying_woodable_for!(bool);
+impl Dewoodable for bool {
+	fn dewoodify(v:&Wood) -> Result<Self, DewoodifyError> {
+		match v.initial_str() {
+			"true" | "⊤" | "yes" => {
+				Ok(true)
+			},
+			"false" | "⟂" | "no" => {
+				Ok(false)
+			},
+			_=> Err(DewoodifyError::new_with_cause(v, "expected a bool here".into(), None))
+		}
+	}
+}
+
+// impl<I, T> Woodable for I where I: Iterator<Item=T>, T:Woodable {
+	
+// }
+
+impl Woodable for String {
+	fn woodify(&self) -> Wood {
+		self.as_str().into()
+	}
+}
+impl Dewoodable for String {
+	fn dewoodify(v:&Wood) -> Result<Self, DewoodifyError> {
+		match *v {
+			Leafv(ref a)=> Ok(a.v.clone()),
+			Branchv(_)=> Err(DewoodifyError::new_with_cause(v, "sought string, found branch".into(), None)),
+		}
+	}
+}
+
+pub fn woodify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<Wood>)
+	where InnerTran: Wooder<T>, I:Iterator<Item=&'a T>, T:'a
+{
+	for vi in v { output.push(inner.woodify(vi)); }
+}
+pub fn dewoodify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mut Vec<T>) -> Result<(), DewoodifyError>
+	where InnerTran: Dewooder<T>, I:Iterator<Item=&'a Wood>
+{
+	// let errors = Vec::new();
+	for vi in v {
+		match inner.dewoodify(vi) {
+			Ok(vii)=> output.push(vii),
+			Err(e)=> return Err(e),
+		}
+	}
+	Ok(())
+	// if errors.len() > 0 {
+	// 	let msgs = String::new();
+	// 	for e in errors {
+	// 		msgs.push(format!("{}\n"))
+	// 	}
+	// }
+}
+
+
+impl<T> Woodable for Vec<T> where T:Woodable {
+	fn woodify(&self) -> Wood {
+		let mut ret = Vec::new();
+		woodify_seq_into(&wooder::Central, self.iter(), &mut ret);
+		ret.into()
+	}
+}
+impl<T> Dewoodable for Vec<T> where T:Dewoodable {
+	fn dewoodify(v:&Wood) -> Result<Vec<T>, DewoodifyError> {
+		let mut ret = Vec::new();
+		try!(dewoodify_seq_into(&wooder::Central, v.contents(), &mut ret));
+		Ok(ret)
+	}
+}
+
+
+
+
+
 mod parsers; pub use parsers::*;
+
+pub mod wooder;
 

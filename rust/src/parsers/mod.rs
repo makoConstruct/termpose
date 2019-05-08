@@ -81,9 +81,9 @@ unsafe fn str_from_bounds<'a>(o:*const u8, f:*const u8)-> &'a str {
 
 fn is_whitespace(c:char)-> bool { c == ' ' || c == '\t' }
 
-
-
-
+fn do_indent(indent:&str, indent_depth:usize, out:&mut String){
+	for _ in 0..indent_depth { out.push_str(indent); }
+}
 
 // pub fn parse_nakedbranch<'a>(v:&'a str)-> Result<Wood, PositionedError> {
 // 	NakedbranchParserState::<'a>::begin(v).parse()
@@ -100,8 +100,8 @@ fn is_whitespace(c:char)-> bool { c == ' ' || c == '\t' }
 mod termpose_parser;
 pub use self::termpose_parser::*;
 
-mod sexp_parser;
-pub use self::sexp_parser::*;
+mod woodslist_parser;
+pub use self::woodslist_parser::*;
 
 
 
@@ -163,7 +163,7 @@ mod tests {
 	#[test]
 	fn test_tests_sexp_file() {
 		let teststr = read_file_from_root("sexp tests.sexp");
-		let testt = parse_multiline_sexp(teststr.as_str()).unwrap();
+		let testt = parse_multiline_woodslist(teststr.as_str()).unwrap();
 		println!("{}", testt.to_string());
 		let testb = testt.find("tests").unwrap();
 		
@@ -207,6 +207,20 @@ mod tests {
 		});
 	}
 	
+	#[test]
+	fn longterm_termpose_idempotence(){
+		let w = parse_termpose(&read_file_from_root("longterm.term")).unwrap();
+		let wiw = parse_termpose(&pretty_termpose(&w)).unwrap();
+		assert_eq!(&w, &wiw);
+	}
+	
+	#[test]
+	fn longterm_woodslist_idempotence(){
+		let w = parse_woodslist(&read_file_from_root("longterm.term")).unwrap();
+		let wiw = parse_woodslist(&indented_woodslist(&w)).unwrap();
+		assert_eq!(&w, &wiw);
+	}
+	
 	fn windowsify(v:&str)-> String {
 		let mut out = String::new();
 		let mut vc = v.chars().peekable();
@@ -240,4 +254,15 @@ mod tests {
 		}
 	}
 	
+	#[test]
+	fn woodslist_parser_skips_first_newline() {
+		let w = parse_woodslist("aaa \"\naa sdi \n  idj\" a").unwrap();
+		assert_eq!(&branch!("aaa", "aa sdi \n  idj", "a"), &w, "uh");
+	}
+	
+	#[test]
+	fn woodslist_parser_doesnt_skip_first_non_newline() {
+		let w = parse_woodslist("aaa \"aa sdi \n  idj\" a").unwrap();
+		assert_eq!(&branch!("aaa", "aa sdi \n  idj", "a"), &w, "uh");
+	}
 }

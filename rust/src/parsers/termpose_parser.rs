@@ -607,3 +607,156 @@ pub fn parse_termpose<'a>(s:&'a str)-> Result<Wood, PositionedError> {
 		}
 	})
 }
+
+
+
+
+
+
+
+
+//printing
+
+
+pub fn stringify_leaf_termpose(v:&Leaf, s:&mut String, style:&WoodStyle){
+	let needs_quotes = v.v.chars().any(|c|{ c == ' ' || c == style.pairing || c == '\t' || c == style.open || c == style.close });
+	if needs_quotes { s.push('"'); }
+	push_escaped(s, v.v.as_str());
+	if needs_quotes { s.push('"'); }
+}
+fn inline_stringify_termpose_branch_baseline(b:&Branch, s:&mut String, style:&WoodStyle){
+	//space separated
+	let mut i = b.v.iter();
+	if let Some(ref first) = i.next() {
+		inline_stringify_termpose(first, s, style);
+		while let Some(ref nexto) = i.next() {
+			s.push(' ');
+			inline_stringify_termpose(nexto, s, style);
+		}
+	}
+}
+pub fn inline_stringify_termpose_branch(b:&Branch, s:&mut String, style:&WoodStyle){
+	if b.v.len() == 2 && b.v[0].is_leaf() {
+		inline_stringify_termpose(&b.v[0], s, style);
+		s.push(style.pairing);
+		inline_stringify_termpose(&b.v[1], s, style);
+	}else{
+		s.push(style.open);
+		inline_stringify_termpose_branch_baseline(b, s, style);
+		s.push(style.close);
+	}
+}
+pub fn inline_stringify_termpose(w:&Wood, s:&mut String, style:&WoodStyle){
+	match *w {
+		Branchv(ref b)=> {
+			inline_stringify_termpose_branch(b, s, style);
+		}
+		Leafv(ref v)=> {
+			stringify_leaf_termpose(v, s, style);
+		}
+	}
+}
+fn termpose_inline_length_estimate_branch_baseline(b:&Branch)-> usize {
+	if b.v.len() > 0 {
+		let spaces_length = b.v.len() - 1;
+		b.v.iter().fold(spaces_length, |n, w|{
+			n + termpose_inline_length_estimate(w)
+		})
+	}else{
+		2
+	}
+}
+fn termpose_inline_length_estimate_for_branch(b:&Branch)-> usize {
+	if b.v.len() == 2 && b.v[0].is_leaf() {
+		//do a pairing
+		return
+			1 +
+			termpose_inline_length_estimate(&b.v[0]) +
+			termpose_inline_length_estimate(&b.v[1]);
+	}else{
+		//+2 for parens
+		if b.v.len() > 0 {
+			let spaces_length = b.v.len() - 1;
+			2 + b.v.iter().fold(spaces_length, |n, w|{
+				n + termpose_inline_length_estimate(w)
+			})
+		}else{
+			2
+		}
+	}
+}
+fn termpose_inline_length_estimate(w:&Wood)-> usize {
+	match w {
+		&Branchv(ref b)=> {
+			termpose_inline_length_estimate_for_branch(b)
+		}
+		&Leafv(ref l)=> {
+			l.v.len()
+		}
+	}
+}
+fn maybe_inline_termpose_stringification_baseline<'a>(w:&'a Wood, column_limit:usize, out:&mut String, style:&WoodStyle)-> Option<&'a Branch> { //returns Some Branch that w is iff it did NOT insert it inline (because it didn't have room)
+	match w {
+		&Branchv(ref b)=> {
+			if termpose_inline_length_estimate_branch_baseline(b) > column_limit {
+				return Some(b);
+			}else{
+				inline_stringify_termpose_branch_baseline(b, out, style);
+			}
+		}
+		&Leafv(ref l)=> {
+			stringify_leaf_termpose(l, out, style);
+		}
+	}
+	None
+}
+fn do_termpose_stringification(w:&Wood, indent:&str, indent_depth:usize, column_limit:usize, out:&mut String, style:&WoodStyle){
+	out.push('\n');
+	do_indent(indent, indent_depth, out);
+	if let Some(b) = maybe_inline_termpose_stringification_baseline(w, column_limit, out, style) {
+		let mut bi = b.v.iter();
+		if let Some(fw) = bi.next() {
+			if let Some(_fwb) = maybe_inline_termpose_stringification_baseline(fw, column_limit, out, style) {
+				//then the first one wont fit in the first one position
+				out.push(style.open);
+				for iw in b.v.iter() {
+					do_termpose_stringification(iw, indent, indent_depth + 1, column_limit, out, style);
+				}
+			}else{
+				for iw in bi {
+					do_termpose_stringification(iw, indent, indent_depth + 1, column_limit, out, style);
+				}
+			}
+		}
+	}
+}
+
+
+pub fn pretty_termpose_detail(w:&Wood, indent_is_tab:bool, tab_size:usize, column_limit:usize, style:&WoodStyle)-> String {
+	let indent_string:String;
+	let indent:&str;
+	if indent_is_tab {
+		indent = "\t";
+	}else{
+		indent_string = " ".repeat(tab_size);
+		indent = indent_string.as_str();
+	}
+	
+	let mut ret = String::new();
+	
+	//we may need to do a special case for the first level if it's a long branch, in which case, every element should be at depth zero. This differs from the normal case where 
+	if let Some(b) = maybe_inline_termpose_stringification_baseline(w, column_limit, &mut ret, style) {
+		for iw in b.v.iter() {
+			do_termpose_stringification(iw, indent, 0, column_limit, &mut ret, style);
+		}
+	}
+	
+	ret
+}
+
+pub fn pretty_termpose(w:&Wood)-> String {
+	pretty_termpose_detail(w, false, 2, 73, &DEFAULT_STYLE)
+}
+
+
+

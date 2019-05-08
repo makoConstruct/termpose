@@ -13,7 +13,7 @@ we will name the elements of the syntax, then explain how those elements are map
 
 :line = an **:indentation**, optional **:linecontent**, then a **:newline** or `EOF`
 
-:newline = one or more `\n` `\r`
+:newline = "`\n`", "`\r`", or if a `\n` is immediately followed by a `\r`, this pair of characters constitutes only a single :newline "`\n``\r`" (it's a windows compatability thing)
 
 :indentation = any number of `space` `tab`
 

@@ -179,7 +179,7 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 						let number_of_fields = var_parsing.len();
 						
 						with_body(quote!{
-							let mut scanning = wood::FieldScanning::new(v);
+							let mut scanning = wood::wooder::FieldScanning::new(v);
 							if scanning.li.len() != #number_of_fields {
 								return Err(wood::DewoodifyError::new(v, format!("{} expected the wood to have {} elements, but it has {}", stringify!(#name), #number_of_fields, scanning.li.len())));
 							}
@@ -234,7 +234,7 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 						let number_of_fields = each_feild.len();
 						
 						quote!{
-							let mut scanning = wood::FieldScanning::new(v);
+							let mut scanning = wooder::FieldScanning::new(v);
 							if scanning.li.len() != #number_of_fields {
 								return Err(wood::DewoodifyError::new(v, format!("variant {} expected {} elements, found {}", stringify!(#variant_name), #number_of_fields, scanning.li.len())));
 							}
