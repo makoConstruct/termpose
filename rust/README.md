@@ -1,6 +1,6 @@
 # Rust Wood
 
-Wood is a very simple datatype that all sorts of data can easily be serialized to and from.
+Wood is a very simple serialization datatype consisting of nested lists of strings
 
 Termpose, Nakedlist, and Woodslist are text formats that parse into Wood.
 
@@ -39,9 +39,9 @@ fn main(){
 	let od = Dato{a:"chock".into(), b:true};
 	let s = pretty_termpose(&od.woodify());
 	
-	assert_eq!("Dato a:chock b:true", s.as_str());
+	assert_eq!("Dato a:chock b:true", &s);
 	
-	let d = Dato::dewoodify(&parse_termpose(s.as_str()).unwrap()).unwrap();
+	let d = Dato::dewoodify(&parse_termpose(&s).unwrap()).unwrap();
 	
 	assert_eq!(&od, &d);
 }
