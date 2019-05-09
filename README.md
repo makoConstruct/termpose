@@ -53,6 +53,8 @@ We were always able to use a nice, minimal, flexible S-Expressions language inst
 
 ## Platform support?
 
+(Caveat, Rust is currently the only language that supports termpose per specification, the others do something different with items in a line with indental, because until writing the spec I hadn't thought hard about what made the most sense there.)
+
 | language | status | the closest thing we have to documentation |
 | ---------|--------|------ |
 | C++ | Very nice. The maintainer is using it actively right now. | [Basic API](https://github.com/makoConstruct/termpose/blob/master/basic%20C%2B%2B%20api.md), [Intro to parser combinators](https://github.com/makoConstruct/termpose/blob/master/cppintro.md), [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
@@ -63,14 +65,14 @@ We were always able to use a nice, minimal, flexible S-Expressions language inst
 | Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | C | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
-| Rust | Basic support + custom Codings. | [Rust Source](https://github.com/makoConstruct/termpose/blob/master/rust/src/lib.rs) |
+| Rust | Good support for termpose and woodslist. Has autoderive. | [Rust Source](https://github.com/makoConstruct/termpose/blob/master/rust/src/lib.rs) |
 
 
 ## Format in detail
 
 Here, I'm going to describe how data and structures can be written in termpose.
 
-In s-expression based languages, the first term in a list is considered special. For instance,
+In s-expression based languages, the first term in a list is often considered special. For instance,
 
 ```
 (f a b c)
@@ -121,7 +123,7 @@ CGRect
   height:500
 ```
 
-You might interrupt: "But didn't you say there were only lists and atoms in termpose"? Right. Colons are nothing special really, they break down like this
+I should say, colons aren't a special syntax, they break down to lists as well:
 
 ```
 (CGRect (x 0) (y 0) (width 320) (height 500))

@@ -2,7 +2,7 @@
 
 Wood is a very simple serialization datatype consisting of nested lists of strings
 
-Termpose, Nakedlist, and Woodslist are text formats that parse into Wood.
+[Termpose](https://github.com/makoConstruct/termpose/), Nakedlist, and [Woodslist](https://github.com/makoConstruct/termpose/blob/master/woodslist_spec.md) are text formats that parse into Wood.
 
 The rust library currently has excellent support for termpose and woodslist.
 
@@ -14,9 +14,9 @@ extern crate wood;
 use wood::{parse_woodslist, dewoodify};
 
 fn main(){
-	let r:Vec<usize> = dewoodify(&parse_woodslist("0 1 2").unwrap()).unwrap();
-	
-	assert_eq!(2, r[2]); //easy as zero one two
+  let r:Vec<usize> = dewoodify(&parse_woodslist("0 1 2").unwrap()).unwrap();
+  
+  assert_eq!(2, r[2]); //easy as zero one two
 }
 ```
 
@@ -31,19 +31,19 @@ use wood_derive::{Woodable, Dewoodable};
 
 #[derive(Woodable, Dewoodable, PartialEq, Debug)]
 struct Dato {
-	a:String,
-	b:bool,
+  a:String,
+  b:bool,
 }
 
 fn main(){
-	let od = Dato{a:"chock".into(), b:true};
-	let s = pretty_termpose(&od.woodify());
-	
-	assert_eq!("Dato a:chock b:true", &s);
-	
-	let d = Dato::dewoodify(&parse_termpose(&s).unwrap()).unwrap();
-	
-	assert_eq!(&od, &d);
+  let od = Dato{a:"chock".into(), b:true};
+  let s = pretty_termpose(&od.woodify());
+  
+  assert_eq!("Dato a:chock b:true", &s);
+  
+  let d = Dato::dewoodify(&parse_termpose(&s).unwrap()).unwrap();
+  
+  assert_eq!(&od, &d);
 }
 ```
 
@@ -60,25 +60,25 @@ use wood_derive::{Woodable, Dewoodable};
 
 #[derive(Woodable, Dewoodable)]
 struct Datu {
-	name: String,
-	numbers: Vec<u32>,
+  name: String,
+  numbers: Vec<u32>,
 }
 
 fn main(){
-	let data:Wood = wood::parse_multiline_termpose("
-	
+  let data:Wood = wood::parse_multiline_termpose("
+  
 list
-	entry 1
-	entry 2
-	sublist
-		Datu name:n numbers(0 1 2)
-		Datu name:nnn numbers(0 1 2)
-	entry 3
-	
+  entry 1
+  entry 2
+  sublist
+    Datu name:n numbers(0 1 2)
+    Datu name:nnn numbers(0 1 2)
+  entry 3
+  
 ").unwrap();
-	
-	let sublist:&Wood = data.find("list").unwrap().find("sublist").unwrap();
-	
-	let _:Vec<Datu> = wooder::TaggedSequence("sublist", wooder::Central).dewoodify(sublist).unwrap();
+  
+  let sublist:&Wood = data.find("list").unwrap().find("sublist").unwrap();
+  
+  let _:Vec<Datu> = wooder::TaggedSequence("sublist", wooder::Central).dewoodify(sublist).unwrap();
 }
 ```
