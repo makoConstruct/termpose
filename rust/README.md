@@ -2,7 +2,7 @@
 
 Wood is a very simple serialization datatype consisting of nested lists of strings
 
-[Termpose](https://github.com/makoConstruct/termpose/), Nakedlist, and [Woodslist](https://github.com/makoConstruct/termpose/blob/master/woodslist_spec.md) are text formats that parse into Wood.
+[Termpose](https://github.com/makoConstruct/termpose/), Nakedlist, and [Woodslist](https://github.com/makoConstruct/termpose/blob/master/woodslist.md) are text formats that parse into Wood.
 
 The rust library currently has excellent support for termpose and woodslist.
 

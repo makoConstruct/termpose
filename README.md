@@ -55,7 +55,7 @@ We were always able to use a nice, minimal, flexible S-Expressions language inst
 
 (Caveat, Rust is currently the only language that supports termpose per specification, the others do something different with items in a line with indental, because until writing the spec I hadn't thought hard about what made the most sense there.)
 
-| language | status | the closest thing we have to documentation |
+| language | status | further info |
 | ---------|--------|------ |
 | C++ | Very nice. The maintainer is using it actively right now. | [Basic API](https://github.com/makoConstruct/termpose/blob/master/basic%20C%2B%2B%20api.md), [Intro to parser combinators](https://github.com/makoConstruct/termpose/blob/master/cppintro.md), [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
 | Haxe | Pretty good. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
@@ -65,7 +65,7 @@ We were always able to use a nice, minimal, flexible S-Expressions language inst
 | Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
 | C | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
-| Rust | Good support for termpose and woodslist. Has autoderive. | [Rust Source](https://github.com/makoConstruct/termpose/blob/master/rust/src/lib.rs) |
+| Rust | Good support for termpose and [woodslist](https://github.com/makoConstruct/termpose/blob/master/woodslist.md). Has autoderive. | [Rust Intro](https://github.com/makoConstruct/termpose/blob/master/rust/README.md) |
 
 
 ## Format in detail
