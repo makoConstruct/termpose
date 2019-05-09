@@ -211,14 +211,12 @@ pub enum WoodError{
 	DewoodifyError(DewoodifyError),
 }
 
-/// An extremely simple but probably not very useful function that maps straight from string to data without providing any opportunity for customization
 pub fn deserialize<T>(v:&str) -> Result<T, WoodError> where T : Dewoodable {
 	match parse_termpose(v) {
 		Ok(t)=> dewoodify(&t).map_err(|e| WoodError::DewoodifyError(e)),
 		Err(e)=> Err(WoodError::ParserError(e)),
 	}
 }
-/// An extremely simple but probably not very useful function that maps straight from data to string without providing any opportunity for customization
 pub fn serialize<T>(v:&T) -> String where T: Woodable {
 	woodify(v).to_string()
 }
@@ -322,14 +320,14 @@ pub fn dewoodify_seq_into<'a, InnerTran, T, I>(inner:&InnerTran, v:I, output:&mu
 impl<T> Woodable for Vec<T> where T:Woodable {
 	fn woodify(&self) -> Wood {
 		let mut ret = Vec::new();
-		woodify_seq_into(&wooder::Central, self.iter(), &mut ret);
+		woodify_seq_into(&wooder::Iden, self.iter(), &mut ret);
 		ret.into()
 	}
 }
 impl<T> Dewoodable for Vec<T> where T:Dewoodable {
 	fn dewoodify(v:&Wood) -> Result<Vec<T>, DewoodifyError> {
 		let mut ret = Vec::new();
-		try!(dewoodify_seq_into(&wooder::Central, v.contents(), &mut ret));
+		try!(dewoodify_seq_into(&wooder::Iden, v.contents(), &mut ret));
 		Ok(ret)
 	}
 }

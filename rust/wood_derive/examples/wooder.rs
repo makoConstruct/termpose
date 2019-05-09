@@ -24,5 +24,5 @@ list
 	
 	let sublist:&Wood = data.find("list").unwrap().find("sublist").unwrap();
 	
-	let _:Vec<Datu> = wooder::TaggedSequence("sublist", wooder::Central).dewoodify(sublist).unwrap();
+	let _:Vec<Datu> = wooder::TaggedSequenceBi("sublist", wooder::Iden).dewoodify(sublist).unwrap();
 }

@@ -327,7 +327,7 @@ fn do_woodslist_stringification(w:&Wood, indent:&str, indent_depth:usize, column
 ///
 /// # Arguments
 ///
-/// * `column_limit` - doesn't really limit the length of the output to be within column_limit, as that would be harder to do, as you'd occasionally get situations where the Wood is too deeply nested and it needs to change mode and go beyond the limit. May change, one day. Currently, it multilines Woods that would be longer than column_limit if serialized inline.
+/// * `column_limit` - column_limit ignores indentation, only limits the length of what's beyond the indentation. The reason is... for a start, that's simpler to implement. If it had a strict limit, deeply indented code would get sort of squashed as it approaches the side, which is visually awkward, and eventually it would have to be allowed to penetrate through the limit, and I didn't want to code that. If you don't expect to indent deeply, this shouldn't make much of a difference to you. Pull requests for a more strictly constraining column limit are welcome.
 pub fn indented_woodslist_detail(w:&Wood, indent_is_tab:bool, tab_size:usize, column_limit:usize)-> String {
 	let indent_string:String;
 	let indent:&str;
@@ -350,6 +350,7 @@ pub fn indented_woodslist_detail(w:&Wood, indent_is_tab:bool, tab_size:usize, co
 	ret
 }
 
+/// `indented_woodslist_detail(w, false, 2, 73)`
 pub fn indented_woodslist(w:&Wood)-> String {
 	indented_woodslist_detail(w, false, 2, 73)
 }

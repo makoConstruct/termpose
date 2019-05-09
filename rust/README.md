@@ -8,6 +8,8 @@ Wood is a very simple serialization datatype consisting of nested lists of strin
 
 The rust library currently has excellent support for termpose and woodslist.
 
+[Api docs](https://docs.rs/wood/0.3.0/)
+
 ### Examples
 
 ```rust
@@ -50,8 +52,6 @@ fn main(){
 
 
 There are also these things called wooder combinators. I haven't found a way to make them really useful in rust for various reasons, but they'll be (usually) zero-sized values that you can assemble to specify a translation between wood and data (you usually explain both directions at once. I wanna call them "bifunctions").
-
-I've made a start on Dewooder/Wooder combinators, for when you want to customize the parsing process.
 
 ```rust
 extern crate wood;

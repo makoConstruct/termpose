@@ -1,7 +1,7 @@
 
 use super::*;
 
-struct ParserState<'a>{
+struct TermposeParserState<'a>{
 	root: Wood,
 	indent_stack: Vec<&'a str>,
 	indent_branch_stack: Vec<*mut Vec<Wood>>, //the branchs corresponding to each indent level, into which new lines on that level are inserted
@@ -17,22 +17,22 @@ struct ParserState<'a>{
 	iter: std::str::Chars<'a>,
 	line: isize,
 	column: isize,
-	mode: fn(&mut ParserState<'a>, Option<char>)-> Result<(), PositionedError>,
-	chosen_style: WoodStyle,
+	mode: fn(&mut TermposeParserState<'a>, Option<char>)-> Result<(), PositionedError>,
+	chosen_style: TermposeStyle,
 }
 
 #[derive(Clone)]
-pub struct WoodStyle {
+pub struct TermposeStyle {
 	pub open:char,
 	pub close:char,
 	pub pairing:char,
 }
 
-static DEFAULT_STYLE:WoodStyle = WoodStyle{ open:'(', close:')', pairing:':' };
+pub static DEFAULT_STYLE:TermposeStyle = TermposeStyle{ open:'(', close:')', pairing:':' };
 
-impl<'a> ParserState<'a> {
+impl<'a> TermposeParserState<'a> {
 	
-	fn style(&self)-> &WoodStyle { &self.chosen_style }
+	fn style(&self)-> &TermposeStyle { &self.chosen_style }
 	
 	fn a_fail(&self, message:String)-> Result<(), PositionedError> { Err(PositionedError{
 		line: self.line,
@@ -559,11 +559,12 @@ impl<'a> ParserState<'a> {
 		Ok(())
 	}
 
-} //ParserState
+} //TermposeParserState
 
 
-pub fn parse_multiline_termpose_style<'a>(s:&'a str, style:WoodStyle)-> Result<Wood, PositionedError> { //parses as if it's a file, and each term at root is a separate term. This is not what you want if you expect only a single line, and you want that line to be the root term, but its behaviour is more consistent if you are parsing files
-	let mut state = ParserState::<'a>{
+///Returns a Branch containing all of the Woods at root level, even if there is only one Wood, it will be wrapped in an additional Branch
+pub fn parse_multiline_termpose_style<'a>(s:&'a str, style:TermposeStyle)-> Result<Wood, PositionedError> {
+	let mut state = TermposeParserState::<'a>{
 		root: branch!(), //a yet empty line
 		indent_stack: vec!(""),
 		stretch_reading_start: s.as_ptr(),
@@ -577,7 +578,7 @@ pub fn parse_multiline_termpose_style<'a>(s:&'a str, style:WoodStyle)-> Result<W
 		multilines_indent: "",
 		line_paren_stack: vec!(),
 		indent_branch_stack: vec!(),
-		mode: ParserState::<'a>::seeking_beginning,
+		mode: TermposeParserState::<'a>::seeking_beginning,
 		chosen_style: style,
 	};
 	state.indent_branch_stack = vec!(&mut assume_branch_mut(&mut state.root).v);
@@ -592,10 +593,12 @@ pub fn parse_multiline_termpose_style<'a>(s:&'a str, style:WoodStyle)-> Result<W
 	Ok(state.root)
 }
 
+///Returns a Branch containing all of the Woods at root level, even if there is only one Wood, it will be wrapped in an additional Branch
 pub fn parse_multiline_termpose<'a>(s:&'a str)-> Result<Wood, PositionedError> {
 	parse_multiline_termpose_style(s, DEFAULT_STYLE.clone())
 }
 
+///If multiple Woods are at root level in the input, it will wrap them all in a Branch Wood. Otherwise, if there's only one, it wont. This is probably the behaviour you will expect, most of the time, but if I didn't explain it here it might have derailed you, the rest of the time.
 pub fn parse_termpose<'a>(s:&'a str)-> Result<Wood, PositionedError> {
 	parse_multiline_termpose(s).map(|t|{
 		let l = assume_branch(t); //parse_multiline_termpose only returns branchs
@@ -617,14 +620,15 @@ pub fn parse_termpose<'a>(s:&'a str)-> Result<Wood, PositionedError> {
 
 //printing
 
-
-pub fn stringify_leaf_termpose(v:&Leaf, s:&mut String, style:&WoodStyle){
+///Blurts it into a single line. (Might be woodslist compatable??)
+pub fn stringify_leaf_termpose(v:&Leaf, s:&mut String, style:&TermposeStyle){
 	let needs_quotes = v.v.chars().any(|c|{ c == ' ' || c == style.pairing || c == '\t' || c == style.open || c == style.close });
 	if needs_quotes { s.push('"'); }
 	push_escaped(s, v.v.as_str());
 	if needs_quotes { s.push('"'); }
 }
-fn inline_stringify_termpose_branch_baseline(b:&Branch, s:&mut String, style:&WoodStyle){
+
+fn inline_stringify_termpose_branch_baseline(b:&Branch, s:&mut String, style:&TermposeStyle){
 	//space separated
 	let mut i = b.v.iter();
 	if let Some(ref first) = i.next() {
@@ -635,7 +639,7 @@ fn inline_stringify_termpose_branch_baseline(b:&Branch, s:&mut String, style:&Wo
 		}
 	}
 }
-pub fn inline_stringify_termpose_branch(b:&Branch, s:&mut String, style:&WoodStyle){
+fn inline_stringify_termpose_branch(b:&Branch, s:&mut String, style:&TermposeStyle){
 	if b.v.len() == 2 && b.v[0].is_leaf() {
 		inline_stringify_termpose(&b.v[0], s, style);
 		s.push(style.pairing);
@@ -646,7 +650,7 @@ pub fn inline_stringify_termpose_branch(b:&Branch, s:&mut String, style:&WoodSty
 		s.push(style.close);
 	}
 }
-pub fn inline_stringify_termpose(w:&Wood, s:&mut String, style:&WoodStyle){
+fn inline_stringify_termpose(w:&Wood, s:&mut String, style:&TermposeStyle){
 	match *w {
 		Branchv(ref b)=> {
 			inline_stringify_termpose_branch(b, s, style);
@@ -695,7 +699,7 @@ fn termpose_inline_length_estimate(w:&Wood)-> usize {
 		}
 	}
 }
-fn maybe_inline_termpose_stringification_baseline<'a>(w:&'a Wood, column_limit:usize, out:&mut String, style:&WoodStyle)-> Option<&'a Branch> { //returns Some Branch that w is iff it did NOT insert it inline (because it didn't have room)
+fn maybe_inline_termpose_stringification_baseline<'a>(w:&'a Wood, column_limit:usize, out:&mut String, style:&TermposeStyle)-> Option<&'a Branch> { //returns Some Branch that w is iff it did NOT insert it inline (because it didn't have room)
 	match w {
 		&Branchv(ref b)=> {
 			if termpose_inline_length_estimate_branch_baseline(b) > column_limit {
@@ -710,7 +714,7 @@ fn maybe_inline_termpose_stringification_baseline<'a>(w:&'a Wood, column_limit:u
 	}
 	None
 }
-fn do_termpose_stringification(w:&Wood, indent:&str, indent_depth:usize, column_limit:usize, out:&mut String, style:&WoodStyle){
+fn do_termpose_stringification(w:&Wood, indent:&str, indent_depth:usize, column_limit:usize, out:&mut String, style:&TermposeStyle){
 	out.push('\n');
 	do_indent(indent, indent_depth, out);
 	if let Some(b) = maybe_inline_termpose_stringification_baseline(w, column_limit, out, style) {
@@ -732,7 +736,12 @@ fn do_termpose_stringification(w:&Wood, indent:&str, indent_depth:usize, column_
 }
 
 
-pub fn pretty_termpose_detail(w:&Wood, indent_is_tab:bool, tab_size:usize, column_limit:usize, style:&WoodStyle)-> String {
+///Indents and uses pairing when appropriate.
+
+/// # Arguments
+///
+/// * `column_limit` - column_limit ignores indentation, only limits the length of what's beyond the indentation. The reason is... for a start, that's simpler to implement. If it had a strict limit, deeply indented code would get sort of squashed as it approaches the side, which is visually awkward, and eventually it would have to be allowed to penetrate through the limit, and I didn't want to code that. If you don't expect to indent deeply, this shouldn't make much of a difference to you. Pull requests for a more strictly constraining column limit are welcome.
+pub fn pretty_termpose_detail(w:&Wood, indent_is_tab:bool, tab_size:usize, column_limit:usize, style:&TermposeStyle)-> String {
 	let indent_string:String;
 	let indent:&str;
 	if indent_is_tab {
@@ -754,6 +763,7 @@ pub fn pretty_termpose_detail(w:&Wood, indent_is_tab:bool, tab_size:usize, colum
 	ret
 }
 
+///`pretty_termpose_detail(w, false, 2, 73, &DEFAULT_STYLE)`
 pub fn pretty_termpose(w:&Wood)-> String {
 	pretty_termpose_detail(w, false, 2, 73, &DEFAULT_STYLE)
 }

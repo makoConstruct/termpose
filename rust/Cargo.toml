@@ -1,7 +1,7 @@
 [package]
 name = "wood"
 description = "A robust material that is simple to work: Parsing, serialization and deserialization for termpose and woodslist"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["mako <marcus.yass@gmail.com>"]
 repository = "https://github.com/makoConstruct/termpose/blob/master/rust/README.md"
 license = "MIT"
