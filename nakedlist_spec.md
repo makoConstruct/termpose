@@ -28,7 +28,7 @@ a :list is a sequence type containing any number of :terms
 
 :line = an **:indentation**, optional **:linecontent**, then a **:newline** or `EOF`
 
-:newline = a `\n` and an optional `\r`
+:newline = :newline = "`\n`", "`\r`", or if a `\r` is immediately followed by a `\n`, this pair of characters constitutes only a single :newline "`\r` `\n`" (it's an ancient standard that, AFAIK, windows still uses)
 
 :indentation = any number of `space` or `tab`
 

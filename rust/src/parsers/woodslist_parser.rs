@@ -118,27 +118,24 @@ impl<'a> SexpParserState<'a> {
 	}
 	
 	fn move_char_ptr_and_update_line_col(&mut self)-> Option<char> {
-			self.iter.next().and_then(|c|{
-				if c == '\n' || c == '\r' {
-					//continue over any ensuing '\r's
-					let mut ic = self.iter.clone();
-					//the weird staggered structure reflects the fact that the first \r after a newline is ignored (because of windows)
-					if Some('\r') == ic.next() {
-						self.iter.next();
-						while Some('\r') == ic.next() {
-							self.iter.next();
-							self.line += 1;
-						}
-					}
-					self.line += 1;
-					self.column = 0;
-					Some('\n') //note, if it was a pesky '\r', it wont come through that way
-				}else {
-					self.column += 1;
-					Some(c)
+		self.iter.next().and_then(|c|{
+			if c == '\r' {
+				if Some('\n') == self.iter.clone().next() { //crlf support
+					self.iter.next();
 				}
-			})
-		}
+				self.line += 1;
+				self.column = 0;
+				Some('\n') //if it was a pesky '\r', it wont come through that way
+			}else if c == '\n' {
+				self.line += 1;
+				self.column = 0;
+				Some(c)
+			}else{
+				self.column += 1;
+				Some(c)
+			}
+		})
+	}
 
 	fn eating_quoted_string(&mut self, co:Option<char>)-> Result<(), PositionedError> {
 		let push_char = |slf:&mut Self, c:char| unsafe{((*slf.leaf_being_read_into)).push(c)}; //safe: leaf_being_read_into must have been validated before this mode could have been entered

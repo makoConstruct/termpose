@@ -27,7 +27,7 @@ mon
     bomb drain:3 effect:heal:standard:2 grenadeTimer:2 grenadeHealth:20 range:2 radius:2
 ```
 
-In an s-expression language, that would would break down to the following structure:
+In an s-expression language (such as [woodslist](https://github.com/makoConstruct/termpose/blob/master/woodslist.md)), that would would break down to the following structure:
 
 ```
 (mon

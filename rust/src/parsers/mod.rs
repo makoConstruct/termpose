@@ -225,19 +225,27 @@ mod tests {
 		let mut out = String::new();
 		let mut vc = v.chars().peekable();
 		while let Some(c) = vc.next() {
-			out.push(c);
 			if c == '\n' {
-				if vc.peek() != Some(&'\r') {
+				out.push('\r');
+				out.push('\n');
+			}else if c == '\r' {
+				if vc.peek() == Some(&'\n') {
+					//skip it
+					vc.next();
+				}else{
 					out.push('\r');
+					out.push('\n');
 				}
+			}else{
+				out.push(c);
 			}
 		}
 		out
 	}
 	
 	#[test]
-	fn windows_style_line_endings() {
-		let shortterm = windowsify(read_file_from_root("shortterm.term").as_str());
+	fn windows_style_line_endings_do_parse() {
+		let wshortterm = windowsify(read_file_from_root("shortterm.term").as_str());
 		
 		let expected_data = branch!(
 			branch!("let", "a", "2"),
@@ -248,11 +256,43 @@ mod tests {
 			)
 		);
 		
-		let parsed = parse_multiline_termpose(shortterm.as_str()).unwrap();
+		let parsed = parse_multiline_termpose(&wshortterm).unwrap();
 		if expected_data != parsed {
 			panic!("{} did not equal expected_data", parsed.to_string());
 		}
 	}
+	
+	#[test]
+	fn windows_style_line_endings_as_expected_in_multiline_string() {
+		let wshortterm = windowsify("
+ms \"
+	a
+	
+	b
+");
+		
+		let expected_data = "a\n\nb";
+		
+		let parsed = parse_multiline_termpose(&wshortterm).unwrap();
+		let pms = parsed.find("ms").unwrap().tail().next().unwrap().initial_str();
+		assert_eq!(expected_data, pms);
+	}
+	
+		#[test]
+		fn windows_style_line_endings_as_expected_in_multiline_woodslist_string() {
+			let wshortterm = windowsify("
+	(ms \"
+a
+
+b\")
+	");
+			
+			let expected_data = "a\n\nb";
+			
+			let parsed = parse_multiline_woodslist(&wshortterm).unwrap();
+			let pms = parsed.find("ms").unwrap().tail().next().unwrap().initial_str();
+			assert_eq!(expected_data, pms);
+		}
 	
 	#[test]
 	fn woodslist_parser_skips_first_newline() {
