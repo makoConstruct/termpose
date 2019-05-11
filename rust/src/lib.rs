@@ -115,7 +115,17 @@ impl Wood {
 			Wood::Leafv(ref a)=> (a.line, a.column),
 		}
 	}
-	pub fn initial_str(&self)-> &str { //if it bottoms out at an empty branch, it returns the empty str
+	/// Seeks the earliest string in the tree by looking at the first element of each branch recursively until it hits a leaf. (If it runs into an empty list, returns the emtpy string.
+	/// I recommend this whenever you want to use the first string as a discriminator, or whenever you want to get leaf str contents in general.
+	/// This abstracts over similar structures in a way that I consider generally desirable. I would go as far as to say that the more obvious, less abstract way of getting initial string should be Considered Harmful.
+	/// A few motivating examples:
+	/// If you wanted to add a feature to a programming language that allows you to add a special tag to an invocation, you want to put the tag inside the invocation's ast node but you don't want it to be confused for a parameter, this pattern enables:
+	/// ((f #:special_invoke_inline) a b)
+	/// If the syntax of a sexp language had more structure to it than usual:
+	/// ((if condition) ...) would still get easily picked up as an 'if' node.
+	/// Annotations are a good example, more generally, if you're refactoring and you decide you want to add an extra field to what was previously a leaf, this pattern enables you to make that change, confident that your code will still read its string content in the same way
+	/// (list key:value "some prose") -> (list key:value ("some prose" modifier:italicise))
+	pub fn initial_str(&self)-> &str {
 		match *self {
 			Branchv(ref v)=> {
 				if let Some(ref ss) = v.v.first() {
@@ -131,13 +141,15 @@ impl Wood {
 		to_woodslist(self)
 	}
 	
-	pub fn contents(&self)-> std::slice::Iter<Self> { //if Leaf, returns a slice iter of a single element that is the leaf's str
+	/// if Leaf, returns a slice iter containing just this, else Branch, iterates over branch contents
+	pub fn contents(&self)-> std::slice::Iter<Self> {
 		match *self.borrow() {
 			Branchv(ref v)=> v.v.iter(),
 			Leafv(_)=> ref_slice(self).iter(),
 		}
 	}
-	pub fn tail<'b>(&'b self)-> std::slice::Iter<'b, Self> { //if Leaf, returns an empty slice iter
+	/// if Leaf, returns an empty slice iter, if Branch, returns contents after the first element
+	pub fn tail<'b>(&'b self)-> std::slice::Iter<'b, Self> {
 		match *self.borrow() {
 			Branchv(ref v)=> tail((*v).v.iter()),
 			Leafv(_)=> [].iter(),

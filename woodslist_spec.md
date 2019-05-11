@@ -28,7 +28,7 @@ a :leaf contains a String
 
 :whitespace = some `space`, `tab`, or **:newline**
 
-:newline = :newline = "`\n`", "`\r`", or if a `\r` is immediately followed by a `\n`, this pair of characters constitutes only a single :newline "`\r` `\n`" (it's an ancient standard that, AFAIK, windows still uses)
+:newline = "`\n`", "`\r`", or if a `\r` is immediately followed by a `\n`, this pair of characters constitutes only a single :newline "`\r` `\n`" (it's an ancient standard that, AFAIK, windows still uses)
 
 :item = one of **:slist** **:word** **:quoted**
 
