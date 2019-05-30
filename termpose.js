@@ -109,6 +109,9 @@ Term.prototype = $extend(Stringificable.prototype,{
 	}
 	,buildJsonString: function(sb) {
 	}
+	,initialString: function() {
+		if(this.v != null) return this.v; else if(this.s.length > 0) return this.s[0].initialString(); else return "";
+	}
 	,prettyPrint: function() {
 		var sb = new StringBuf();
 		this.buildPrettyPrint(sb,2,true,80);
@@ -382,19 +385,15 @@ Parser.escapeIsNeeded = function(sy) {
 		var c = HxOverrides.cca(sy,i);
 		if(c == 32 || c == 40 || c == 58 || c == 9 || c == 10 || c == 13 || c == 41) return true;
 	}
-	return false;
+	return sy.length == 0;
 };
 Parser.mapArToVect = function(ar,f) {
-	var v;
-	var this1;
-	this1 = new Array(ar.length);
-	v = this1;
+	var v = [];
 	var _g1 = 0;
 	var _g = ar.length;
 	while(_g1 < _g) {
 		var i = _g1++;
-		var val = f(ar[i]);
-		v[i] = val;
+		v.push(f(ar[i]));
 	}
 	return v;
 };
@@ -544,7 +543,7 @@ Parser.prototype = {
 	,closeParen: function() {
 		if(this.parenTermStack.length <= 1) this.giveUp("unbalanced paren");
 		this.containsImmediateNext = null;
-		this.parenTermStack.pop();
+		this.lastAttachedTerm = this.parenTermStack.pop();
 	}
 	,receiveFinishedSymbol: function() {
 		var ret = this.interSt(this.stringBuffer.b);
@@ -825,6 +824,270 @@ Termpose.parse = function(s) {
 	var res = Termpose.parseMultiline(s);
 	var ress = res.s;
 	if(ress.length == 1) return ress[0]; else return res;
+};
+var WoodslistParser = $hx_exports.WoodslistParser = function(s) {
+	this.input = new StringIterator(s);
+	this.root = new Seqs([],0,0);
+	this.parenTermStack = [];
+	this.parenTermStack.push(this.root);
+	this.stringBeingReadInto = null;
+	this.leafReading = new StringBuf();
+	this.line = 0;
+	this.column = 0;
+	this.index = 0;
+	this.currentMode = $bind(this,this.seekingTerm);
+};
+WoodslistParser.__name__ = true;
+WoodslistParser.escapeIsNeeded = function(sy) {
+	var _g1 = 0;
+	var _g = sy.length;
+	while(_g1 < _g) {
+		var i = _g1++;
+		var c = HxOverrides.cca(sy,i);
+		if(c == 32 || c == 40 || c == 9 || c == 10 || c == 13 || c == 41) return true;
+	}
+	return false;
+};
+WoodslistParser.mapArToVect = function(ar,f) {
+	var v = [];
+	var _g1 = 0;
+	var _g = ar.length;
+	while(_g1 < _g) {
+		var i = _g1++;
+		v.push(f(ar[i]));
+	}
+	return v;
+};
+WoodslistParser.escapeSymbol = function(sb,str) {
+	var _g1 = 0;
+	var _g = str.length;
+	while(_g1 < _g) {
+		var i = _g1++;
+		var _g2 = HxOverrides.cca(str,i);
+		var c = _g2;
+		if(_g2 != null) switch(_g2) {
+		case 92:
+			sb.b += "\\";
+			sb.b += "\\";
+			break;
+		case 34:
+			sb.b += "\\";
+			sb.b += "\"";
+			break;
+		case 10:
+			sb.b += "\\";
+			sb.b += "n";
+			break;
+		case 13:
+			sb.b += "\\";
+			sb.b += "r";
+			break;
+		default:
+			sb.b += String.fromCharCode(c);
+		} else sb.b += String.fromCharCode(c);
+	}
+};
+WoodslistParser.array = function(el) {
+	var ret = [];
+	ret.push(el);
+	return ret;
+};
+WoodslistParser.prototype = {
+	emptyBranch: function() {
+		return new Seqs([],this.line,this.column);
+	}
+	,emptyLeaf: function() {
+		return new Stri("",this.line,this.column);
+	}
+	,transition: function(nm) {
+		this.currentMode = nm;
+	}
+	,giveUp: function(message) {
+		this.breakAt(this.line,this.column,message);
+	}
+	,breakAt: function(l,c,message) {
+		throw new js__$Boot_HaxeError(new ParsingException("line:" + l + " column:" + c + ", no, bad: " + message));
+	}
+	,finishLeaf: function() {
+		this.stringBeingReadInto.v = this.leafReading.b;
+		this.leafReading = new StringBuf();
+	}
+	,openParen: function() {
+		var s = this.emptyBranch();
+		this.lastList().push(s);
+		this.parenTermStack.push(s);
+		this.transition($bind(this,this.seekingTerm));
+		return s;
+	}
+	,closeParen: function() {
+		if(this.parenTermStack.length > 1) {
+			this.parenTermStack.pop();
+			this.transition($bind(this,this.seekingTerm));
+		} else this.giveUp("unmatched paren");
+	}
+	,lastList: function() {
+		return this.parenTermStack[this.parenTermStack.length - 1].s;
+	}
+	,beginLeaf: function() {
+		var n = this.emptyLeaf();
+		this.lastList().push(n);
+		this.stringBeingReadInto = n;
+		return n;
+	}
+	,beginQuoted: function() {
+		var l = this.beginLeaf();
+		var nc = this.input.peek();
+		if(nc == 10 || nc == 13) this.moveCharPtrAndUpdateLineCol();
+		this.transition($bind(this,this.eatingQuotedString));
+	}
+	,startReadingThing: function(c) {
+		if(c != null) switch(c) {
+		case 41:
+			this.closeParen();
+			break;
+		case 40:
+			this.openParen();
+			break;
+		case 34:
+			this.beginQuoted();
+			break;
+		default:
+			this.beginLeaf();
+			this.transition($bind(this,this.eatingLeaf));
+			this.eatingLeaf(c);
+		} else {
+			this.beginLeaf();
+			this.transition($bind(this,this.eatingLeaf));
+			this.eatingLeaf(c);
+		}
+	}
+	,seekingTerm: function(co) {
+		if(co == null) {
+		} else switch(co) {
+		case 32:case 9:case 10:case 13:
+			break;
+		default:
+			this.startReadingThing(co);
+		}
+	}
+	,readEscapedChar: function() {
+		var _g = this;
+		var push = function(c) {
+			_g.leafReading.b += String.fromCharCode(c);
+		};
+		var nco = this.moveCharPtrAndUpdateLineCol();
+		var matchFailMessage = "escape slash must be followed by a valid escape character code";
+		if(nco != null) {
+			if(nco != null) switch(nco) {
+			case 110:
+				push(10);
+				break;
+			case 114:
+				push(13);
+				break;
+			case 116:
+				push(9);
+				break;
+			case 104:
+				push(9731);
+				break;
+			case 34:
+				push(34);
+				break;
+			case 92:
+				push(92);
+				break;
+			default:
+				this.giveUp(matchFailMessage);
+			} else this.giveUp(matchFailMessage);
+		} else this.giveUp(matchFailMessage);
+	}
+	,moveCharPtrAndUpdateLineCol: function() {
+		var nco = this.input.next();
+		if(nco != null) {
+			if(nco == 13) {
+				if(10 == this.input.peek()) nco = this.input.next();
+				this.line += 1;
+				this.column = 0;
+				return 10;
+			} else if(nco == 10) {
+				this.line += 1;
+				this.column = 0;
+			} else this.column += 1;
+		}
+		return nco;
+	}
+	,eatingQuotedString: function(co) {
+		var _g = this;
+		var push = function(c) {
+			_g.leafReading.b += String.fromCharCode(c);
+		};
+		if(co == null) this.giveUp("unmatched quote, by the end of data"); else switch(co) {
+		case 92:
+			this.readEscapedChar();
+			break;
+		case 34:
+			this.finishLeaf();
+			this.transition($bind(this,this.seekingTerm));
+			break;
+		default:
+			push(co);
+		}
+	}
+	,eatingLeaf: function(co) {
+		var _g = this;
+		var push = function(c) {
+			_g.leafReading.b += String.fromCharCode(c);
+		};
+		if(co == null) {
+			this.finishLeaf();
+			this.transition($bind(this,this.seekingTerm));
+		} else switch(co) {
+		case 10:case 13:
+			this.finishLeaf();
+			this.transition($bind(this,this.seekingTerm));
+			break;
+		case 32:case 9:
+			this.finishLeaf();
+			this.transition($bind(this,this.seekingTerm));
+			break;
+		case 34:
+			this.finishLeaf();
+			this.beginQuoted();
+			break;
+		case 41:
+			this.finishLeaf();
+			this.closeParen();
+			break;
+		case 40:
+			this.finishLeaf();
+			this.openParen();
+			break;
+		case 92:
+			this.readEscapedChar();
+			break;
+		default:
+			push(co);
+		}
+	}
+	,parseMultipleWoodslist: function() {
+		while(true) {
+			var co = this.moveCharPtrAndUpdateLineCol();
+			this.currentMode(co);
+			if(co == null) break;
+		}
+		return this.root;
+	}
+	,__class__: WoodslistParser
+};
+var Woodslist = $hx_exports.Woodslist = function() { };
+Woodslist.__name__ = true;
+Woodslist.parseMultiple = function(s) {
+	return new WoodslistParser(s).parseMultipleWoodslist();
+};
+Woodslist.parseSingle = function(s) {
+	var r = Woodslist.parseMultiple(s);
+	if(r.s.length == 1) return r.s[0]; else return r;
 };
 var js__$Boot_HaxeError = function(val) {
 	Error.call(this);

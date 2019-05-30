@@ -1,5 +1,3 @@
-import haxe.ds.Vector;
-
 class Stringificable{ //has a method for stringifying through a StringBuf, provides a toString through this
 	public function stringify(sb:StringBuf){}
 	public function toString():String {
@@ -73,14 +71,25 @@ class StringIterator implements BufferedIterator<Int> {
 @:expose class Term extends Stringificable{
 	public var line (default, null):Int;
 	public var column (default, null):Int;
+	public var s:Null<Array<Term>>;
+	public var v:Null<String>;
 	public function jsonString():String{
 		var sb = new StringBuf();
 		buildJsonString(sb);
 		return sb.toString();
 	}
-	public var s:Null<Vector<Term>>;
-	public var v:Null<String>;
 	public function buildJsonString(sb:StringBuf){}
+	public function initialString():String {
+		if(this.v != null){
+			return this.v;
+		}else{
+			if(this.s.length > 0){
+				return this.s[0].initialString();
+			}else{
+				return "";
+			}
+		}
+	}
 	public function prettyPrint():String{
 		var sb = new StringBuf();
 		buildPrettyPrint(sb, 2, true, 80);
@@ -97,7 +106,7 @@ class StringIterator implements BufferedIterator<Int> {
 			stringify(sb);
 			sb.addSub(lineEndings,0);
 		}else{
-			var ts:Vector<Term> = this.s;
+			var ts:Array<Term> = this.s;
 			for(i in 0...depth){ sb.addSub(indent,0); }
 			if(ts.length == 0){
 				sb.addChar(':'.code);
@@ -175,7 +184,7 @@ class StringIterator implements BufferedIterator<Int> {
 }
 
 @:expose class Seqs extends Term{
-	public function new(s:Vector<Term>, line:Int, column:Int){
+	public function new(s:Array<Term>, line:Int, column:Int){
 		this.s = s;
 		this.v = null;
 		this.line = line;
@@ -196,19 +205,19 @@ class StringIterator implements BufferedIterator<Int> {
 	}
 	override private function baseLineStringify(sbuf:StringBuf){
 		if(s.length >= 1){
-			s.get(0).stringify(sbuf);
+			s[0].stringify(sbuf);
 			for(i in 1...s.length){
 				sbuf.addChar(' '.code);
-				s.get(i).stringify(sbuf);
+				s[i].stringify(sbuf);
 			}
 		}
 	}
 	override private function baseLinePrettyStringify(sbuf:StringBuf){
 		if(s.length >= 1){
-			s.get(0).prettyStringify(sbuf);
+			s[0].prettyStringify(sbuf);
 			for(i in 1...s.length){
 				sbuf.addChar(' '.code);
-				s.get(i).prettyStringify(sbuf);
+				s[i].prettyStringify(sbuf);
 			}
 		}
 	}
@@ -243,11 +252,11 @@ class StringIterator implements BufferedIterator<Int> {
 	override public function buildJsonString(sbuf:StringBuf){
 		sbuf.addChar('['.code);
 		if(s.length > 0){
-			s.get(0).buildJsonString(sbuf);
+			s[0].buildJsonString(sbuf);
 		}
 		for(i in 1...s.length){
 			sbuf.addChar(','.code);
-			s.get(i).buildJsonString(sbuf);
+			s[i].buildJsonString(sbuf);
 		}
 		sbuf.addChar(']'.code);
 	}
@@ -332,12 +341,12 @@ typedef PF = Bool -> Int -> Void;
 				return true;
 			}
 		}
-		return false;
+		return sy.length == 0;
 	}
 	public static function mapArToVect<A,B>(ar:Array<A>, f: A-> B){
-		var v = new Vector(ar.length);
+		var v = new Array();
 		for(i in 0...ar.length){
-			v[i] = f(ar[i]);
+			v.push(f(ar[i]));
 		}
 		return v;
 	}
@@ -749,6 +758,11 @@ typedef PF = Bool -> Int -> Void;
 
 
 
+
+
+
+
+
 @:expose class Termpose{
 	public static function parseMultiline(s:String):Seqs return new Parser().parseToSeqs(new StringIterator(s));
 	public static function parse(s:String):Term {
@@ -757,4 +771,279 @@ typedef PF = Bool -> Int -> Void;
 		if(ress.length == 1) return ress[0];
 		else return res;
 	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+typedef PH = Null<Int> -> Void;
+
+@:expose class WoodslistParser{
+	
+	
+	private var root:Seqs;
+	private var input:StringIterator;
+	private var parenTermStack:Array<Term>;
+	private var stringBeingReadInto:Null<Stri>;
+	private var leafReading:StringBuf;
+	private var line:Int;
+	private var column:Int;
+	private var index:Int;
+	private var currentMode:PH;
+	
+	public function new(s:String){
+		input = new StringIterator(s);
+		root = new Seqs(new Array(), 0,0);
+		parenTermStack = new Array();
+		parenTermStack.push(root);
+		stringBeingReadInto = null;
+		leafReading = new StringBuf();
+		line = 0;
+		column = 0;
+		index = 0;
+		currentMode = seekingTerm;
+	}
+	
+	public static function escapeIsNeeded(sy:String):Bool {
+		for(i in 0...sy.length){
+			var c = sy.charCodeAt(i);
+			if(c == " ".code ||
+			   c == "(".code ||
+			   c == "\t".code ||
+			   c == "\n".code ||
+			   c == "\r".code ||
+			   c == ")".code
+			){
+				return true;
+			}
+		}
+		return false;
+	}
+	public static function mapArToVect<A,B>(ar:Array<A>, f: A-> B){
+		var v = new Array();
+		for(i in 0...ar.length){
+			v.push(f(ar[i]));
+		}
+		return v;
+	}
+	public static function escapeSymbol(sb:StringBuf, str:String){
+		for(i in 0 ... str.length){
+			switch(str.charCodeAt(i)){
+				case "\\".code:
+					sb.addChar("\\".code);
+					sb.addChar("\\".code);
+				case "\"".code:
+					sb.addChar("\\".code);
+					sb.addChar("\"".code);
+				case "\n".code:
+					sb.addChar("\\".code);
+					sb.addChar("n".code);
+				case "\r".code:
+					sb.addChar("\\".code);
+					sb.addChar("r".code);
+				case c:
+					sb.addChar(c);
+			}
+		}
+	}
+	public static function array<T>(el:T){var ret = new Array(); ret.push(el); return ret;}
+	private function emptyBranch():Seqs { return new Seqs([], line, column); }
+	private function emptyLeaf():Stri { return new Stri("", line, column); }
+	private function transition(nm:PH){ currentMode = nm; }
+	private function giveUp(message:String){ breakAt(line, column, message); }
+	private function breakAt(l:Int, c:Int, message:String){ throw new ParsingException("line:"+l+" column:"+c+", no, bad: "+message); }
+	
+	
+	private function finishLeaf(){
+		stringBeingReadInto.v = leafReading.toString();
+		leafReading = new StringBuf();
+	}
+	private function openParen():Seqs {
+		var s = emptyBranch();
+		lastList().push(s);
+		parenTermStack.push(s);
+		transition(seekingTerm);
+		return s;
+	}
+	private function closeParen() {
+		if(parenTermStack.length > 1){
+			parenTermStack.pop();
+			transition(seekingTerm);
+		}else{
+			giveUp("unmatched paren");
+		}
+	}
+	private function lastList():Array<Term> {
+		return parenTermStack[parenTermStack.length-1].s;
+	}
+	private function beginLeaf():Stri {
+		var n = emptyLeaf();
+		lastList().push(n);
+		stringBeingReadInto = n;
+		return n;
+	}
+	
+	private function beginQuoted(){
+		var l = beginLeaf();
+		//potentially skip the first character if it's a newline
+		var nc = input.peek();
+		if(nc == '\n'.code || nc == '\r'.code){
+			moveCharPtrAndUpdateLineCol();
+		}
+		transition(eatingQuotedString);
+	}
+	
+	private function startReadingThing(c:Null<Int>){
+		switch(c){
+			case ')'.code:
+				closeParen();
+			case '('.code:
+				openParen();
+			case '"'.code:
+				beginQuoted();
+			case _: {
+				beginLeaf();
+				transition(eatingLeaf);
+				eatingLeaf(c);
+			}
+		}
+	}
+	
+	private function seekingTerm(co:Null<Int>){
+		switch(co){
+			case null | ' '.code | '\t'.code | '\n'.code | '\r'.code : {}
+			case _: {
+				startReadingThing(co);
+			}
+		}
+	}
+
+	private function readEscapedChar(){
+		var push = function(c:Int){ leafReading.addChar(c); };
+		var nco = moveCharPtrAndUpdateLineCol();
+		var matchFailMessage = "escape slash must be followed by a valid escape character code";
+		if(nco != null){
+			switch(nco){
+				case 'n'.code: { push('\n'.code); }
+				case 'r'.code: { push('\r'.code); }
+				case 't'.code: { push('\t'.code); }
+				case 'h'.code: { push('☃'.code); }
+				case '"'.code: { push('"'.code); }
+				case '\\'.code: { push('\\'.code); }
+				case _: { giveUp(matchFailMessage); }
+			}
+		}else{
+			giveUp(matchFailMessage);
+		}
+	}
+	
+	private function moveCharPtrAndUpdateLineCol():Null<Int>{
+		var nco = input.next();
+		if(nco != null){
+			if(nco == '\r'.code){
+				if('\n'.code == input.peek()){ //crlf support
+					nco = input.next();
+				}
+				line += 1;
+				column = 0;
+				return '\n'.code; //if it was a pesky '\r', it wont come through that way
+			}else if(nco == '\n'.code){
+				line += 1;
+				column = 0;
+			}else{
+				column += 1;
+			}
+		}
+		return nco;
+	}
+
+	private function eatingQuotedString(co:Null<Int>) {
+		var push = function(c:Int){ leafReading.addChar(c); };
+		switch(co){
+			case null: {
+				giveUp("unmatched quote, by the end of data");
+			}
+			case '\\'.code: {
+				readEscapedChar();
+			}
+			case '"'.code: {
+				finishLeaf();
+				transition(seekingTerm);
+			}
+			case _: {
+				push(co);
+			}
+		}
+	}
+
+	private function eatingLeaf(co:Null<Int>){
+		var push = function(c:Int){ leafReading.addChar(c); };
+		switch(co){
+			case null | '\n'.code | '\r'.code: {
+				finishLeaf();
+				transition(seekingTerm);
+			}
+			case ' '.code | '\t'.code: {
+				finishLeaf();
+				transition(seekingTerm);
+			}
+			case '"'.code: {
+				finishLeaf();
+				beginQuoted();
+			}
+			case ')'.code : {
+				finishLeaf();
+				closeParen();
+			}
+			case '('.code : {
+				finishLeaf();
+				openParen();
+			}
+			case '\\'.code: {
+				readEscapedChar();
+			}
+			case _: {
+				push(co);
+			}
+		}
+	}
+	
+	
+	
+	public function parseMultipleWoodslist():Term { //parses as if it's a file, and each term at root is a separate term. This is not what you want if you expect only a single line, and you want that line to be the root term, but its behaviour is more consistent if you are parsing files
+		while(true){
+			var co = moveCharPtrAndUpdateLineCol();
+			currentMode(co);
+			if(co == null){ break; }
+		}
+		return root;
+	}
+}
+
+
+
+
+@:expose class Woodslist{
+	public static function parseMultiple(s:String):Term {
+		return new WoodslistParser(s).parseMultipleWoodslist();
+	}
+	public static function parseSingle(s:String):Term {
+		var r = parseMultiple(s);
+		if(r.s.length == 1){
+			return r.s[0];
+		}else{
+			return r;
+		}
+	}
+	
 }

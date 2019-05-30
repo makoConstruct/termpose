@@ -8,7 +8,7 @@ Wood is a very simple serialization datatype consisting of nested lists of strin
 
 The rust library currently has excellent support for termpose and woodslist.
 
-[Api docs](https://docs.rs/wood/0.4.0/)
+[Api docs](https://docs.rs/wood/0.4.2/)
 
 ### Examples
 

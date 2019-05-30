@@ -1,5 +1,6 @@
 #![feature(test)]
 // #![feature(nll)]
+#![feature(drain_filter)]
 #![feature(core_intrinsics)]
 
 // extern crate string_cache;
@@ -28,8 +29,9 @@ use ref_slice::ref_slice;
 // 	}
 // }
 
+/// Line numbers aren't checked in equality comparisons
 impl PartialEq for Wood {
-	fn eq(&self, other: &Self)-> bool { //line numbers are not considered important
+	fn eq(&self, other: &Self)-> bool {
 		match *self {
 			Leafv(ref sa)=> {
 				match *other {
@@ -120,9 +122,9 @@ impl Wood {
 	/// This abstracts over similar structures in a way that I consider generally desirable. I would go as far as to say that the more obvious, less abstract way of getting initial string should be Considered Harmful.
 	/// A few motivating examples:
 	/// If you wanted to add a feature to a programming language that allows you to add a special tag to an invocation, you want to put the tag inside the invocation's ast node but you don't want it to be confused for a parameter, this pattern enables:
-	/// ((f #:special_invoke_inline) a b)
+	/// ((f tag(special_invoke_inline)) a b)
 	/// If the syntax of a sexp language had more structure to it than usual:
-	/// ((if condition) ...) would still get easily picked up as an 'if' node.
+	/// ((if condition) then...) would still get easily picked up as an 'if' node.
 	/// Annotations are a good example, more generally, if you're refactoring and you decide you want to add an extra field to what was previously a leaf, this pattern enables you to make that change, confident that your code will still read its string content in the same way
 	/// (list key:value "some prose") -> (list key:value ("some prose" modifier:italicise))
 	pub fn initial_str(&self)-> &str {
@@ -141,6 +143,46 @@ impl Wood {
 		to_woodslist(self)
 	}
 	
+	pub fn strip_comments_escape(&mut self, comment_str:&str, comment_escape_str:&str) {
+		match *self {
+			Branchv(ref mut b)=> {
+				b.v.drain_filter(|i|{
+					match *i {
+						Branchv(ref mut b)=> {
+							if b.v.len() > 0 {
+								match b.v[0] {
+									Leafv(Leaf{ref v, ..})=> {
+										if v == comment_str {
+											return true;
+										}
+									}
+									_=> {}
+								}
+							}
+						}
+						_=> {}
+					}
+					i.strip_comments_escape(comment_str, comment_escape_str);
+					false
+				});
+			}
+			Leafv(ref mut l)=> {
+				if &l.v == comment_escape_str {
+					l.v = comment_str.into();
+				}
+			}
+		}
+	}
+	
+	/// Strips any branches with first element of comment_str. If you need to produce a leaf that is equivalent to comment_str.
+	/// If you need the wood to contain a leaf that is the comment_str, you can escape it with a backslash.
+	/// This is actually a highly flawed way of providing commenting, because this will also strip out any serialization of a list of strings where the first element happens to equal the `comment_str`. That's a really subtle error, that violates a lot of expectations.
+	/// You could get around it by escaping your wood so that any strs that resemble comment tags wont read that way, but it's a bit awkward and sometimes wont really work.
+	pub fn strip_comments(&mut self, comment_str:&str){
+		let escstr = format!("\\{}", comment_str);
+		self.strip_comments_escape(comment_str, &escstr);
+	}
+	
 	/// if Leaf, returns a slice iter containing just this, else Branch, iterates over branch contents
 	pub fn contents(&self)-> std::slice::Iter<Self> {
 		match *self.borrow() {
@@ -155,7 +197,8 @@ impl Wood {
 			Leafv(_)=> [].iter(),
 		}
 	}
-	pub fn find(&self, key:&str)-> Option<&Wood> {
+	/// `self.contents().find(|el| el.initial_str() == key)`
+	pub fn find<'a, 'b>(&'a self, key:&'b str)-> Option<&'a Wood> {
 		self.contents().find(|el| el.initial_str() == key)
 	}
 }
@@ -352,3 +395,40 @@ mod parsers; pub use parsers::*;
 
 pub mod wooder;
 
+
+
+#[cfg(test)]
+mod tests {
+	extern crate test;
+	use super::*;
+	
+	#[test]
+	fn test_comment_stripping() {
+		let mut w = parse_multiline_termpose("
+
+#\"this function cannot be called with a false object criterion
+fn process_ishm_protocol_handling object criterion
+	if criterion(object)
+		#\"then it returns good
+		return good
+	else
+		return angered
+	return secret_egg
+
+").unwrap();
+		w.strip_comments("#");
+		
+		let should_be = parse_multiline_termpose("
+
+fn process_ishm_protocol_handling object criterion
+	if criterion(object)
+		return good
+	else
+		return angered
+	return secret_egg
+
+").unwrap();
+		
+		assert_eq!(&w, &should_be);
+	}
+}
