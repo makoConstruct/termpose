@@ -3,6 +3,10 @@
 //people who read this code often remark about how horrible it is. The truth is, it's the format that's horrible. By horrible, of course, you mean "complicated". I think the word you're really looking for might be "flexible". There is probably no way to write a parser for a format as sensitive as termpose that isn't "horrible". (I would love to find out about it, if there is)
 
 use super::*;
+use std::{
+	mem::replace,
+	ptr::{ read }
+};
 
 
 #[inline(always)]
@@ -20,7 +24,7 @@ pub struct PositionedError{
 
 impl Error for PositionedError {
 	fn description(&self) -> &str { self.msg.as_str() }
-	fn cause(&self) -> Option<&Error> { None }
+	fn cause(&self) -> Option<&dyn Error> { None }
 }
 impl Display for PositionedError {
 	fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
@@ -63,16 +67,17 @@ fn yank_first<T>(v:Vec<T>)-> T { //you must ensure that the v contains at least 
 fn accrete_branch(v:&mut Wood)-> &mut Vec<Wood> {
 	unsafe{
 		replace_self(v, |vv|{
-			let (line, col) = vv.line_and_col();
-			Branchv(Branch{line:line, column:col, v:vec!(vv)})
+			let (line, column) = vv.line_and_col();
+			Branchv(Branch{line, column, v:vec!(vv)})
 		}); //safe: branch creation doesn't panic
 	}
 	&mut assume_branch_mut(v).v
 }
 
-unsafe fn replace_self<T, F>(v:&mut T, f:F) where F : FnOnce(T)-> T { //for replacing a thing with a transformation of itself. It's actually fairly safe, you just have to guarantee that this transformation, f, doesn't panic, or else this function will drop an uninitialized, or v's drop will be called twice, or something. I don't even know, so don't don't panic or else!
-	let res = f(replace(v, uninitialized()));
-	forget(replace(v, res));
+#[inline(always)]
+unsafe fn replace_self<T, F:FnOnce(T)-> T> (t:&mut T, f:F){
+	let fr = f(read(t));
+	forget(replace(t, fr));
 }
 
 unsafe fn str_from_bounds<'a>(o:*const u8, f:*const u8)-> &'a str {

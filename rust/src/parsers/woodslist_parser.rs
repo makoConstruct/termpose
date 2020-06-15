@@ -67,7 +67,7 @@ impl<'a> SexpParserState<'a> {
 	fn start_reading_thing(&mut self, c:char)-> Result<(), PositionedError> {
 		match c {
 			')' => {
-				try!(self.close_paren());
+				self.close_paren()?;
 			},
 			'(' => {
 				self.open_paren();
@@ -78,7 +78,7 @@ impl<'a> SexpParserState<'a> {
 			_=> {
 				self.begin_leaf();
 				self.mode = Self::eating_leaf;
-				try!(self.eating_leaf(Some(c)));
+				self.eating_leaf(Some(c))?;
 			},
 		}
 		Ok(())
@@ -90,7 +90,7 @@ impl<'a> SexpParserState<'a> {
 				' ' | '\t' => {},
 				'\n' | '\r' => {} // \r shouldn't really occur here, but whatever
 				_=> {
-					try!(self.start_reading_thing(c));
+					self.start_reading_thing(c)?;
 				}
 			}
 		}
@@ -142,7 +142,7 @@ impl<'a> SexpParserState<'a> {
 		if let Some(c) = co {
 			match c {
 				'\\'=> {
-					try!(self.read_escaped_char());
+					self.read_escaped_char()?;
 				},
 				'"'=> {
 					self.mode = Self::seeking_term;
@@ -169,13 +169,13 @@ impl<'a> SexpParserState<'a> {
 					self.begin_quoted();
 				}
 				')' => {
-					try!(self.close_paren());
+					self.close_paren()?;
 				}
 				'(' => {
 					self.open_paren();
 				}
 				'\\'=> {
-					try!(self.read_escaped_char());
+					self.read_escaped_char()?;
 				}
 				_=> {
 					push_char(self, c);
@@ -204,7 +204,7 @@ pub fn parse_multiline_woodslist<'a>(s:&'a str)-> Result<Wood, PositionedError> 
 	loop {
 		// let co = state.iterate_char_iter();
 		let co = state.move_char_ptr_and_update_line_col();
-		try!((state.mode)(&mut state, co));
+		(state.mode)(&mut state, co)?;
 		if co == None { break; }
 	}
 	

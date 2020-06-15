@@ -1,4 +1,5 @@
 
+use std::mem::replace;
 use super::*;
 
 struct TermposeParserState<'a>{
@@ -159,7 +160,7 @@ impl<'a> TermposeParserState<'a> {
 		self.last_completed_term_on_line = unsafe{get_back_mut(&mut *branch_for_insert)};
 		self.leaf_being_read_into = &mut unsafe{assume_leaf_mut(get_back_mut(&mut *branch_for_insert))}.v;
 		if c == '\\' {
-			try!(self.read_escaped_char());
+			self.read_escaped_char()?;
 		}else{
 			unsafe{(*self.leaf_being_read_into).push(c)};
 		};
@@ -169,7 +170,7 @@ impl<'a> TermposeParserState<'a> {
 	fn start_reading_thing(&mut self, c:char)-> Result<(), PositionedError> {
 		match c {
 			c if c == self.style().close=> {
-				try!(self.close_paren());
+				self.close_paren()?;
 				self.mode = Self::seeking_immediately_after_thing;
 			},
 			c if c == self.style().open=> {
@@ -182,12 +183,12 @@ impl<'a> TermposeParserState<'a> {
 				self.mode = Self::eating_quoted_string;
 			},
 			c if c == self.style().pairing=> {
-				try!(self.open_colon());
+				self.open_colon()?;
 				self.mode = Self::seeking_term;
 			},
 			_=> {
 				let l = self.take_hanging_branch_for_insert();
-				try!(self.begin_leaf_with_char(l, c));
+				self.begin_leaf_with_char(l, c)?;
 				self.mode = Self::eating_leaf;
 			},
 		}
@@ -240,7 +241,7 @@ impl<'a> TermposeParserState<'a> {
 			//no indent:
 			self.end_unindented_line();
 			//pop indent stack until we're on the right level
-			try!(self.pop_indent_stack_down(this_indent));
+			self.pop_indent_stack_down(this_indent)?;
 			sc(self)
 		}else{ //greater
 			if !this_indent.starts_with(containing_indent) {
@@ -282,7 +283,7 @@ impl<'a> TermposeParserState<'a> {
 				},
 				_=> {
 					//there's definitely a thing here, ending indentation
-					try!(self.notice_this_new_indentation(
+					self.notice_this_new_indentation(
 						|_  :&mut Self|{ Ok(()) },
 						|_  :&mut Self|{ Ok(()) },
 						|slf:&mut Self, this_indent:&'a str|{
@@ -291,8 +292,8 @@ impl<'a> TermposeParserState<'a> {
 							slf.indent_branch_stack.push(plhl as *mut _);
 							Ok(())
 						},
-					));
-					try!(self.start_line(c));
+					)?;
+					self.start_line(c)?;
 				}
 			}
 		}else{
@@ -311,10 +312,10 @@ impl<'a> TermposeParserState<'a> {
 					self.mode = Self::eating_indentation;
 				},
 				c if c == self.style().pairing => {
-					try!(self.open_colon());
+					self.open_colon()?;
 				},
 				_=> {
-					try!(self.start_reading_thing(c));
+					self.start_reading_thing(c)?;
 				}
 			}
 		}else{
@@ -359,7 +360,7 @@ impl<'a> TermposeParserState<'a> {
 					}
 				},
 				'\\'=> {
-					try!(self.read_escaped_char());
+					self.read_escaped_char()?;
 				},
 				'"'=> {
 					self.mode = Self::seeking_immediately_after_thing;
@@ -386,17 +387,17 @@ impl<'a> TermposeParserState<'a> {
 					self.mode = Self::eating_indentation;
 				},
 				'\\'=> {
-					try!(self.read_escaped_char());
+					self.read_escaped_char()?;
 				},
 				'"'=> {
 					self.notice_quote_immediately_after_thing();
 				},
 				c if c == self.style().pairing=> {
-					try!(self.open_colon());
+					self.open_colon()?;
 					self.mode = Self::seeking_term;
 				},
 				c if c == self.style().close=> {
-					try!(self.close_paren());
+					self.close_paren()?;
 					self.mode = Self::seeking_immediately_after_thing;
 				},
 				c if c == self.style().open=> {
@@ -441,13 +442,13 @@ impl<'a> TermposeParserState<'a> {
 					self.notice_quote_immediately_after_thing();
 				},
 				c if c == self.style().close=> {
-					try!(self.close_paren());
+					self.close_paren()?;
 				},
 				c if c == self.style().open=> {
 					self.notice_paren_immediately_after_thing();
 				},
 				c if c == self.style().pairing=> {
-					try!(self.open_colon());
+					self.open_colon()?;
 					self.mode = Self::seeking_term;
 				},
 				' ' | '\t' => {
@@ -459,7 +460,7 @@ impl<'a> TermposeParserState<'a> {
 				},
 				_=> {
 					let il = self.take_hanging_branch_for_insert();
-					try!(self.begin_leaf_with_char(il, c));
+					self.begin_leaf_with_char(il, c)?;
 					self.mode = Self::eating_leaf;
 				},
 			}
@@ -478,7 +479,7 @@ impl<'a> TermposeParserState<'a> {
 				},
 				_=> {
 					//ending indentation
-					try!(self.notice_this_new_indentation(
+					self.notice_this_new_indentation(
 						|slf:&mut Self|{
 							//not multiline after all
 							slf.start_line(c)
@@ -493,7 +494,7 @@ impl<'a> TermposeParserState<'a> {
 							slf.mode = Self::eating_multiline_content;
 							Ok(())
 						},
-					));
+					)?;
 				},
 			}
 		}else{
@@ -545,9 +546,9 @@ impl<'a> TermposeParserState<'a> {
 					//ending indentation
 					//since the indentation hasn't ended already, this must be a shorter line than the multiline scope, so we'll pop
 					let this_indent = unsafe{str_from_bounds(self.stretch_reading_start, self.cur_char_ptr)};
-					try!(self.pop_indent_stack_down(this_indent));
+					self.pop_indent_stack_down(this_indent)?;
 					self.consider_collapsing_outer_branch_of_previous_line();
-					try!(self.start_line(c));
+					self.start_line(c)?;
 				},
 			}
 		}else{
@@ -583,7 +584,7 @@ pub fn parse_multiline_termpose_style<'a>(s:&'a str, style:TermposeStyle)-> Resu
 	
 	loop {
 		let co = state.move_char_ptr_and_update_line_col();
-		try!((state.mode)(&mut state, co));
+		(state.mode)(&mut state, co)?;
 		if co == None { break; }
 	}
 	

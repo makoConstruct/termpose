@@ -2,7 +2,7 @@
 
 ![crates.io](https://img.shields.io/crates/v/wood.svg)  ![crates.io](https://img.shields.io/crates/v/wood_derive.svg)
 
-Wood is a very simple serialization datatype consisting of nested lists of strings
+Wood is a very simple serialization datatype consisting of nested lists of strings.
 
 [Termpose](https://github.com/makoConstruct/termpose/), Nakedlist, and [Woodslist](https://github.com/makoConstruct/termpose/blob/master/woodslist.md) are text formats that parse into Wood.
 

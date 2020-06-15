@@ -6,11 +6,11 @@
 // extern crate string_cache;
 // use string_cache::DefaultLeaf as Strin;
 use std::str::FromStr;
-use std::mem::{forget, replace, uninitialized};
 use std::cmp::{PartialEq};
 use std::result::Result;
 use std::error::Error;
 use std::fmt::{Formatter, Display, Debug};
+use std::mem::forget;
 use std::borrow::{Borrow};
 use std::ptr::{null_mut};
 extern crate ref_slice;
@@ -111,13 +111,15 @@ impl Wood {
 	pub fn branch(v:Vec<Wood>)-> Wood { Wood::Branchv(Branch{line:-1, column:-1, v:v}) }
 	pub fn is_leaf(&self)-> bool { match self { &Leafv(_)=> true, _=> false } }
 	pub fn is_branch(&self)-> bool { match self { &Branchv(_)=> true, _=> false } }
+	pub fn line(&self)-> isize { match *self { Leafv(ref s)=> s.line, Branchv(ref s)=> s.line } }
+	pub fn col(&self)-> isize { match *self { Leafv(ref s)=> s.column, Branchv(ref s)=> s.column } }
 	pub fn line_and_col(&self)-> (isize, isize) {
 		match *self {
 			Wood::Branchv(ref l)=> (l.line, l.column),
 			Wood::Leafv(ref a)=> (a.line, a.column),
 		}
 	}
-	/// Seeks the earliest string in the tree by looking at the first element of each branch recursively until it hits a leaf. (If it runs into an empty list, returns the emtpy string.
+	/// Seeks the earliest string in the tree by looking at the first element of each branch recursively until it hits a leaf. (If it runs into an empty list, returns the empty string.
 	/// I recommend this whenever you want to use the first string as a discriminator, or whenever you want to get leaf str contents in general.
 	/// This abstracts over similar structures in a way that I consider generally desirable. I would go as far as to say that the more obvious, less abstract way of getting initial string should be Considered Harmful.
 	/// A few motivating examples:
@@ -190,6 +192,14 @@ impl Wood {
 			Leafv(_)=> ref_slice(self).iter(),
 		}
 	}
+	/// returns the first term, or if it's a leaf, itself
+	pub fn head(&self)-> Option<&Wood> {
+		self.contents().next()
+	}
+	/// returns the second term if there is one
+	pub fn second(&self)-> Option<&Wood> {
+		self.tail().next()
+	}
 	/// if Leaf, returns an empty slice iter, if Branch, returns contents after the first element
 	pub fn tail<'b>(&'b self)-> std::slice::Iter<'b, Self> {
 		match *self.borrow() {
@@ -219,12 +229,27 @@ pub trait Dewooder<T> {
 	fn dewoodify(&self, v:&Wood) -> Result<T, DewoodifyError>;
 }
 
+macro_rules! wood_assert {
+	($term:expr, $condition:expr, $message:expr) => {
+		if !$condition {
+			let (l, c) = ($term).line_and_col();
+			panic!(format!("line: {}, column: {}, {}", l, c, $message));
+		}
+	};
+	($term:expr, $condition:expr) => {
+		if !$condition {
+			let (l, c) = ($term).line_and_col();
+			panic!(format!("line: {}, column: {}, condition `{}` did not hold", l, c, stringify!($condition)));
+		}
+	};
+}
+
 #[derive(Debug)]
 pub struct DewoodifyError{
 	pub line:isize,
 	pub column:isize,
 	pub msg:String,
-	pub cause:Option<Box<Error>>,
+	pub cause:Option<Box<dyn Error>>,
 }
 impl Display for DewoodifyError {
 	fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
@@ -236,7 +261,7 @@ impl DewoodifyError {
 		let (line, column) = source.line_and_col();
 		Self{ line, column, msg, cause:None }
 	}
-	pub fn new_with_cause(source:&Wood, msg:String, cause:Option<Box<Error>>) -> Self {
+	pub fn new_with_cause(source:&Wood, msg:String, cause:Option<Box<dyn Error>>) -> Self {
 		let (line, column) = source.line_and_col();
 		DewoodifyError{ line, column, msg, cause }
 	}
@@ -244,7 +269,7 @@ impl DewoodifyError {
 
 impl Error for DewoodifyError {
 	fn description(&self) -> &str { self.msg.as_str() }
-	fn cause(&self) -> Option<&Error> { self.cause.as_ref().map(|e| e.as_ref()) }
+	fn cause(&self) -> Option<&dyn Error> { self.cause.as_ref().map(|e| e.as_ref()) }
 }
 pub trait Woodable {
 	fn woodify(&self) -> Wood;
@@ -382,7 +407,7 @@ impl<T> Woodable for Vec<T> where T:Woodable {
 impl<T> Dewoodable for Vec<T> where T:Dewoodable {
 	fn dewoodify(v:&Wood) -> Result<Vec<T>, DewoodifyError> {
 		let mut ret = Vec::new();
-		try!(dewoodify_seq_into(&wooder::Iden, v.contents(), &mut ret));
+		dewoodify_seq_into(&wooder::Iden, v.contents(), &mut ret)?;
 		Ok(ret)
 	}
 }

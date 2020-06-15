@@ -122,7 +122,7 @@ impl<T, SubTran> Wooder<Vec<T>> for SequenceBi<SubTran> where SubTran:Wooder<T> 
 impl<T, SubTran> Dewooder<Vec<T>> for SequenceBi<SubTran> where SubTran:Dewooder<T> {
 	fn dewoodify(&self, v:&Wood) -> Result<Vec<T>, DewoodifyError> {
 		let mut ret = Vec::new();
-		try!(dewoodify_seq_into(&self.0, v.contents(), &mut ret));
+		dewoodify_seq_into(&self.0, v.contents(), &mut ret)?;
 		Ok(ret)
 	}
 }
