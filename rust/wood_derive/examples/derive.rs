@@ -10,7 +10,7 @@ struct Dato {
 }
 
 fn main(){
-	let od = Dato{a:"chock".into(), b:true};
+	let od = Dato{ a:"chock".into(), b:true };
 	let s = pretty_termpose(&od.woodify());
 	
 	assert_eq!("Dato a:chock b:true", &s);

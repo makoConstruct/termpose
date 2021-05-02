@@ -153,7 +153,7 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 				//it seeks over the contents of the wood branch in such way where if the items are in order it will find each one immediately
 				quote! {
 					impl wood::Dewoodable for #name {
-						fn dewoodify(v:&wood::Wood)-> Result<Self, wood::DewoodifyError> {
+						fn dewoodify(v:&wood::Wood)-> Result<Self, Box<wood::WoodError>> {
 							#method_body
 						}
 					}
@@ -172,7 +172,7 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 							let var_type = &m.ty;
 							quote!{
 								
-								#var_ident: {type T = #var_type; T::dewoodify(scanning.seek(stringify!(#var_ident))?)?}
+								#var_ident: {type T = #var_type; T::dewoodify(scanning.find(stringify!(#var_ident))?)?}
 							}
 						}).collect();
 						
@@ -181,7 +181,7 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 						with_body(quote!{
 							let mut scanning = wood::wooder::FieldScanning::new(v);
 							if scanning.li.len() != #number_of_fields {
-								return Err(wood::DewoodifyError::new(v, format!("{} expected the wood to have {} elements, but it has {}", stringify!(#name), #number_of_fields, scanning.li.len())));
+								return Err(Box::new(wood::WoodError::new(v, format!("{} expected the wood to have {} elements, but it has {}", stringify!(#name), #number_of_fields, scanning.li.len()))));
 							}
 							
 							Ok(Self{
@@ -205,7 +205,7 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 						if li.len() == #number_of_fields {
 							Ok(Self(#(#each_field),*))
 						}else{
-							Err(wood::DewoodifyError::new(v, format!("{} expected the wood to have {} fields, but it has {}", stringify!(#name), #number_of_fields, li.len())))
+							Err(Box::new(wood::WoodError::new(v, format!("{} expected the wood to have {} fields, but it has {}", stringify!(#name), #number_of_fields, li.len()))))
 						}
 					})
 				},
@@ -228,7 +228,7 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 						let each_feild:Vec<PM2TS> = n.named.iter().map(|f:&syn::Field|{
 							let id = &f.ident;
 							let ty = &f.ty;
-							quote!{ #id: #ty::dewoodify(scanning.seek(stringify!(#id))?)? }
+							quote!{ #id: #ty::dewoodify(scanning.find(stringify!(#id))?)? }
 						}).collect();
 						
 						let number_of_fields = each_feild.len();
@@ -236,7 +236,7 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 						quote!{
 							let mut scanning = wooder::FieldScanning::new(v);
 							if scanning.li.len() != #number_of_fields {
-								return Err(wood::DewoodifyError::new(v, format!("variant {} expected {} elements, found {}", stringify!(#variant_name), #number_of_fields, scanning.li.len())));
+								return Err(Box::new(wood::WoodError::new(v, format!("variant {} expected {} elements, found {}", stringify!(#variant_name), #number_of_fields, scanning.li.len()))));
 							}
 							Ok(#name::#variant_name {
 								#(#each_feild),*
@@ -256,7 +256,7 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 							let li = v.tail().as_slice();
 							
 							if li.len() != #number_of_fields {
-								return Err(wood::DewoodifyError::new(v, format!("variant {} expected {} elements, found {}", stringify!(#variant_name), #number_of_fields, li.len())));
+								return Err(Box::new(wood::WoodError::new(v, format!("variant {} expected {} elements, found {}", stringify!(#variant_name), #number_of_fields, li.len()))));
 							}
 							
 							Ok(#name::#variant_name(
@@ -278,10 +278,10 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 			
 			quote!{
 				impl Dewoodable for #name {
-					fn dewoodify(v:&wood::Wood)-> Result<Self, wood::DewoodifyError> {
+					fn dewoodify(v:&wood::Wood)-> Result<Self, Box<wood::WoodError>> {
 						match v.initial_str() {
 							#(#variant_cases,)*
-							erc => Err(wood::DewoodifyError::new(v, format!("expected a {}, but no variant of {} is called {}", stringify!(#name), stringify!(#name), erc))),
+							erc => Err(Box::new(wood::WoodError::new(v, format!("expected a {}, but no variant of {} is called {}", stringify!(#name), stringify!(#name), erc)))),
 						}
 					}
 				}
