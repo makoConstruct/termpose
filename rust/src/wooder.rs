@@ -23,7 +23,7 @@ impl<'a> FieldScanning<'a>{
 	pub fn new(v:&'a Wood) -> Self {
 		FieldScanning{ v:v, li:v.tail().as_slice(), eye:0, }
 	}
-	pub fn seek(&mut self, key:&str) -> Result<&Wood, DewoodifyError> {
+	pub fn find(&mut self, key:&str) -> Result<&Wood, Box<WoodError>> {
 		for _ in 0..self.li.len() {
 			let c = &self.li[self.eye];
 			if c.initial_str() == key {
@@ -31,13 +31,13 @@ impl<'a> FieldScanning<'a>{
 					if let Some(s) = c.tail().next() {
 						Ok(s)
 					}else{
-						Err(DewoodifyError::new(c, format!("expected a subwood, but the wood has no tail")))
+						Err(Box::new(WoodError::new(c, format!("expected a subwood, but the wood has no tail"))))
 					}
 			}
 			self.eye += 1;
 			if self.eye >= self.li.len() { self.eye = 0; }
 		}
-		Err(DewoodifyError::new(self.v, format!("could not find key \"{}\"", key)))
+		Err(Box::new(WoodError::new(self.v, format!("could not find key \"{}\"", key))))
 	}
 }
 
@@ -49,7 +49,7 @@ impl<T> Wooder<T> for Iden where T:Woodable {
 	fn woodify(&self, v:&T) -> Wood { v.woodify() }
 }
 impl<T> Dewooder<T> for Iden where T:Dewoodable {
-	fn dewoodify(&self, v:&Wood) -> Result<T, DewoodifyError> { T::dewoodify(v) }
+	fn dewoodify(&self, v:&Wood) -> Result<T, Box<WoodError>> { T::dewoodify(v) }
 }
 
 
@@ -62,8 +62,8 @@ impl<W, L> Wooder<W> for LambdaWooder<L> where L:Fn(&W)-> Wood {
 	}
 }
 pub struct LambdaDewooder<D>(D);
-impl<D, L> Dewooder<D> for LambdaDewooder<L> where L:Fn(&Wood)-> Result<D, DewoodifyError> {
-	fn dewoodify(&self, v:&Wood) -> Result<D, DewoodifyError> {
+impl<D, L> Dewooder<D> for LambdaDewooder<L> where L:Fn(&Wood)-> Result<D, Box<WoodError>> {
+	fn dewoodify(&self, v:&Wood) -> Result<D, Box<WoodError>> {
 		self.0(v)
 	}
 }
@@ -77,7 +77,7 @@ impl<T, W, D> Wooder<T> for CompositeBiwooder<W, D>
 impl<T, W, D> Dewooder<T> for CompositeBiwooder<W, D>
 	where D:Dewooder<T>
 {
-	fn dewoodify(&self, v:&Wood) -> Result<T, DewoodifyError> {
+	fn dewoodify(&self, v:&Wood) -> Result<T, Box<WoodError>> {
 		Dewooder::dewoodify(&self.1, v)
 	}
 }
@@ -93,7 +93,7 @@ impl<T, B> Wooder<T> for OptionalBoxBiwooder<B>
 impl<T, B> Dewooder<T> for OptionalBoxBiwooder<B>
 	where B:Dewooder<T> + ?Sized
 {
-	fn dewoodify(&self, v:&Wood) -> Result<T, DewoodifyError> {
+	fn dewoodify(&self, v:&Wood) -> Result<T, Box<WoodError>> {
 		Dewooder::dewoodify(&**self.0.as_ref().unwrap(), v)
 	}
 }
@@ -120,7 +120,7 @@ impl<T, SubTran> Wooder<Vec<T>> for SequenceBi<SubTran> where SubTran:Wooder<T> 
 	}
 }
 impl<T, SubTran> Dewooder<Vec<T>> for SequenceBi<SubTran> where SubTran:Dewooder<T> {
-	fn dewoodify(&self, v:&Wood) -> Result<Vec<T>, DewoodifyError> {
+	fn dewoodify(&self, v:&Wood) -> Result<Vec<T>, Box<WoodError>> {
 		let mut ret = Vec::new();
 		dewoodify_seq_into(&self.0, v.contents(), &mut ret)?;
 		Ok(ret)
@@ -138,7 +138,7 @@ impl<'a, T, SubTran> Wooder<Vec<T>> for TaggedSequenceBi<'a, SubTran> where SubT
 	}
 }
 
-fn ensure_tag<'b>(v:&'b Wood, tag:&str) -> Result<std::slice::Iter<'b, Wood>, DewoodifyError> {
+fn ensure_tag<'b>(v:&'b Wood, tag:&str) -> Result<std::slice::Iter<'b, Wood>, Box<WoodError>> {
 	let mut i = v.contents();
 	if let Some(name_wood) = i.next() {
 		match *name_wood {
@@ -147,20 +147,20 @@ fn ensure_tag<'b>(v:&'b Wood, tag:&str) -> Result<std::slice::Iter<'b, Wood>, De
 				if name == tag {
 					Ok(i)
 				}else{
-					Err(DewoodifyError::new_with_cause(name_wood, format!("expected \"{}\" here, but instead there was \"{}\"", tag, name), None))
+					Err(Box::new(WoodError::new(name_wood, format!("expected \"{}\" here, but instead there was \"{}\"", tag, name))))
 				}
 			},
 			_=> {
-				Err(DewoodifyError::new_with_cause(name_wood, format!("expected \"{}\" here, but instead there was a branch wood", tag), None))
+				Err(Box::new(WoodError::new(name_wood, format!("expected \"{}\" here, but instead there was a branch wood", tag))))
 			}
 		}
 	}else{
-		Err(DewoodifyError::new_with_cause(v, format!("expected \"{}\" at beginning, but the wood was empty", tag), None))
+		Err(Box::new(WoodError::new(v, format!("expected \"{}\" at beginning, but the wood was empty", tag))))
 	}
 }
 
 impl<'a, T, SubTran> Dewooder<Vec<T>> for TaggedSequenceBi<'a, SubTran> where SubTran:Dewooder<T> {
-	fn dewoodify(&self, v:&Wood) -> Result<Vec<T>, DewoodifyError> {
+	fn dewoodify(&self, v:&Wood) -> Result<Vec<T>, Box<WoodError>> {
 		let mut ret = Vec::new();
 		let it = ensure_tag(v, &self.0)?;
 		dewoodify_seq_into(&self.1, it, &mut ret)?;
@@ -170,7 +170,7 @@ impl<'a, T, SubTran> Dewooder<Vec<T>> for TaggedSequenceBi<'a, SubTran> where Su
 
 
 
-fn dewoodify_pair<K, V, KeyTran, ValTran>(kt:&KeyTran, vt:&ValTran, v:&Wood) -> Result<(K,V), DewoodifyError>
+fn dewoodify_pair<K, V, KeyTran, ValTran>(kt:&KeyTran, vt:&ValTran, v:&Wood) -> Result<(K,V), Box<WoodError>>
 	where KeyTran:Dewooder<K>, ValTran:Dewooder<V>
 {
 	match *v {
@@ -182,11 +182,11 @@ fn dewoodify_pair<K, V, KeyTran, ValTran>(kt:&KeyTran, vt:&ValTran, v:&Wood) -> 
 					Ok((k, v))
 				}
 			}else{
-				Err(DewoodifyError::new_with_cause(v, format!("expected a pair, two elements, but the branch here has {}", lc.v.len()), None))
+				Err(Box::new(WoodError::new(v, format!("expected a pair, two elements, but the branch here has {}", lc.v.len()))))
 			}
 		}
 		Leafv(_)=> {
-			Err(DewoodifyError::new_with_cause(v, "expected a pair, but the wood here is an leaf".into(), None))
+			Err(Box::new(WoodError::new(v, "expected a pair, but the wood here is an leaf".into())))
 		}
 	}
 }
@@ -201,7 +201,7 @@ impl<K, V, KeyTran, ValTran> Wooder<(K, V)> for PairBi<KeyTran, ValTran> where K
 	}
 }
 impl<K, V, KeyTran, ValTran> Dewooder<(K, V)> for PairBi<KeyTran, ValTran> where KeyTran:Dewooder<K>, ValTran:Dewooder<V> {
-	fn dewoodify(&self, v:&Wood) -> Result<(K,V), DewoodifyError> {
+	fn dewoodify(&self, v:&Wood) -> Result<(K,V), Box<WoodError>> {
 		dewoodify_pair(&self.0, &self.1, v)
 	}
 }
@@ -220,7 +220,7 @@ fn woodify_map<'a, K, V, KeyWooder, ValWooder, I>(ktr:&KeyWooder, vtr:&ValWooder
 	}
 }
 
-fn dewoodify_map<'a, K, V, KeyTran, ValTran, I>(ktr:&KeyTran, vtr:&ValTran, i:I, o:&mut Vec<(K, V)>) -> Result<(), DewoodifyError>
+fn dewoodify_map<'a, K, V, KeyTran, ValTran, I>(ktr:&KeyTran, vtr:&ValTran, i:I, o:&mut Vec<(K, V)>) -> Result<(), Box<WoodError>>
 	where
 		KeyTran: Dewooder<K>,
 		ValTran: Dewooder<V>,
@@ -247,7 +247,7 @@ impl<K, V> Dewoodable for HashMap<K, V>
 		K: Eq + Hash + Dewoodable,
 		V: Eq + Hash + Dewoodable,
 {
-	fn dewoodify(v:&Wood) -> Result<HashMap<K,V>, DewoodifyError> {
+	fn dewoodify(v:&Wood) -> Result<HashMap<K,V>, Box<WoodError>> {
 		let mut ret = Vec::new();
 		dewoodify_map(&Iden, &Iden, v.contents(), &mut ret)?;
 		Ok(HashMap::from_iter(ret.into_iter()))
@@ -274,7 +274,7 @@ impl<K, V, KeyTran, ValTran> Dewooder<HashMap<K, V>> for HashMapBi<KeyTran, ValT
 		K: Eq + Hash,
 		V: Eq + Hash,
 {
-	fn dewoodify(&self, v:&Wood) -> Result<HashMap<K,V>, DewoodifyError> {
+	fn dewoodify(&self, v:&Wood) -> Result<HashMap<K,V>, Box<WoodError>> {
 		let mut ret = Vec::new();
 		dewoodify_map(&self.0, &self.1, v.contents(), &mut ret)?;
 		Ok(HashMap::from_iter(ret.into_iter()))
@@ -302,7 +302,7 @@ impl<'a, K, V, KeyTran, ValTran> Dewooder<HashMap<K, V>> for TaggedHashMapBi<'a,
 		K: Eq + Hash,
 		V: Eq + Hash,
 {
-	fn dewoodify(&self, v:&Wood) -> Result<HashMap<K,V>, DewoodifyError> {
+	fn dewoodify(&self, v:&Wood) -> Result<HashMap<K,V>, Box<WoodError>> {
 		let mut ret = Vec::new();
 		let it = ensure_tag(v, self.0)?;
 		dewoodify_map(&self.1, &self.2, it, &mut ret)?;
@@ -337,7 +337,7 @@ mod tests {
 	fn do_hash_map() {
 		let t = parse_termpose("a:b c:d d:e e:f").unwrap();
 		let bt = TaggedHashMapBi("ob", Iden, Iden);
-		let utr: Result<HashMap<String, String>, DewoodifyError> = bt.dewoodify(&t);
+		let utr: Result<HashMap<String, String>, Box<WoodError>> = bt.dewoodify(&t);
 		assert!(utr.is_err());
 		let tt = parse_termpose("ob a:b c:d d:e e:f").unwrap();
 		let hm:HashMap<String, String> = TaggedHashMapBi("ob", Iden, Iden).dewoodify(&tt).unwrap();

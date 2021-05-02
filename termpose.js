@@ -112,6 +112,11 @@ Term.prototype = $extend(Stringificable.prototype,{
 	,initialString: function() {
 		if(this.v != null) return this.v; else if(this.s.length > 0) return this.s[0].initialString(); else return "";
 	}
+	,asArraysOfStrings: function() {
+		if(this.s != null) return this.s.map(function(e) {
+			return e.asArraysOfStrings();
+		}); else return this.v;
+	}
 	,prettyPrint: function() {
 		var sb = new StringBuf();
 		this.buildPrettyPrint(sb,2,true,80);
@@ -1250,5 +1255,15 @@ var Bool = Boolean;
 Bool.__ename__ = ["Bool"];
 var Class = { __name__ : ["Class"]};
 var Enum = { };
+if(Array.prototype.map == null) Array.prototype.map = function(f) {
+	var a = [];
+	var _g1 = 0;
+	var _g = this.length;
+	while(_g1 < _g) {
+		var i = _g1++;
+		a[i] = f(this[i]);
+	}
+	return a;
+};
 js_Boot.__toStr = {}.toString;
 })(typeof console != "undefined" ? console : {log:function(){}}, typeof window != "undefined" ? window : exports);

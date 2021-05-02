@@ -90,6 +90,13 @@ class StringIterator implements BufferedIterator<Int> {
 			}
 		}
 	}
+	public function asArraysOfStrings():Dynamic {
+		if(s != null){
+			return s.map(function(e){ return e.asArraysOfStrings(); });
+		}else{
+			return v;
+		}
+	}
 	public function prettyPrint():String{
 		var sb = new StringBuf();
 		buildPrettyPrint(sb, 2, true, 80);

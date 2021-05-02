@@ -314,13 +314,20 @@ Term& Term::findTerm(std::string const& key){
 	throw TyperError(*this, ss.str());
 }
 Term* Term::seekTerm(std::string const& key){
-	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
-	for(Term& t : l.l){
-		if(t.initialString() == key){
-			return &t;
+	if(!isList()){
+		if(key == s.s){
+			return this;
+		}else{
+			return nullptr;
 		}
+	}else{
+		for(Term& t : l.l){
+			if(t.initialString() == key){
+				return &t;
+			}
+		}
+		return nullptr;
 	}
-	return nullptr;
 }
 Term& Term::findSubTerm(std::string const& key){
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
@@ -338,7 +345,7 @@ Term& Term::findSubTerm(std::string const& key){
 	throw TyperError(*this, ss.str());
 }
 Term* Term::seekSubTerm(std::string const& key){
-	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
+	if(!isList()){ return nullptr; }
 	for(Term& t : l.l){
 		if(t.isList() && t.l.l.size() == 2){
 			Term& ft = t.l.l[0];
@@ -362,13 +369,20 @@ Term const& Term::findTermConst(std::string const& key) const {
 	throw TyperError(*this, ss.str());
 }
 Term const* Term::seekTermConst(std::string const& key) const {
-	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
-	for(Term const& t : l.l){
-		if(t.initialString() == key){
-			return &t;
+	if(!isList()){
+		if(key == s.s){
+			return this;
+		}else{
+			return nullptr;
 		}
+	}else{
+		for(Term const& t : l.l){
+			if(t.initialString() == key){
+				return &t;
+			}
+		}
+		return nullptr;
 	}
-	return nullptr;
 }
 Term const& Term::findSubTermConst(std::string const& key) const {
 	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
@@ -390,16 +404,13 @@ Term const& Term::findSubTermConst(std::string const& key) const {
 	throw TyperError(*this, ss.str());
 }
 Term const* Term::seekSubTermConst(std::string const& key) const {
-	if(!isList()) throw TyperError(*this, "searching for a term on a non-list term");
+	if(!isList()){ return nullptr; }
 	for(Term const& t : l.l){
-		if(t.isList() && t.l.l.size() >= 1){
-			Term const& ft = t.l.l[0];
-			if(ft.isStr() && ft.s.s == key){
-				if(t.l.l.size() == 2){
-					return &t.l.l[1];
-				}else{
-					throw TyperError(t, "seekSubTerm matched this term's key, but the term is not a pair");
-				}
+		if(t.initialString() == key){
+			if(t.isList() && t.l.l.size() >= 2){
+				return &t.l.l[1];
+			}else{
+				return nullptr;
 			}
 		}
 	}
@@ -932,20 +943,23 @@ namespace parsingDSL{
 		virtual int check(Term const& v){ return checkInt(v); }
 	};
 	
-	struct u32Translator : Translator<uint32_t> {
-		Term termify(uint32_t const& b) override { return std::to_string(b); }
-		uint32_t check(Term const& v) override {
-			std::string const& sv = v.strContentsConst();
+	uint32_t checkU32(Term const& v){
+		std::string const& sv = v.strContentsConst();
+		errno = 0;
+		unsigned long ret = ::strtoul(sv.c_str(), nullptr, 10);
+		if(errno || ret > std::numeric_limits<uint32_t>::max()){
+			uint errnooo = errno;
 			errno = 0;
-			unsigned long ret = ::strtoul(sv.c_str(), nullptr, 10);
-			if(errno || ret > std::numeric_limits<uint32_t>::max()){
-				uint errnooo = errno;
-				errno = 0;
-				throw TyperError(v, std::string("range error ") + std::to_string(errnooo) + " " + sv);
-			}else{
-				return ret;
-			}
+			throw TyperError(v, std::string("range error ") + std::to_string(errnooo) + " " + sv);
+		}else{
+			return ret;
 		}
+	}
+	Term termifyU32(uint32_t const& b){ return std::to_string(b); }
+	
+	struct u32Translator : Translator<uint32_t> {
+		Term termify(uint32_t const& b) override { return termifyU32(b); }
+		uint32_t check(Term const& v) override { return checkU32(v); }
 	};
 	
 	

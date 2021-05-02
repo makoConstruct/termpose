@@ -5,7 +5,7 @@ use super::*;
 struct TermposeParserState<'a>{
 	root: Wood,
 	indent_stack: Vec<&'a str>,
-	indent_branch_stack: Vec<*mut Vec<Wood>>, //the branchs corresponding to each indent level, into which new lines on that level are inserted
+	indent_branch_stack: Vec<*mut Vec<Wood>>, //the branches corresponding to each indent level, into which new lines on that level are inserted
 	line_paren_stack: Vec<*mut Wood>,
 	cur_char_ptr: *const u8,
 	//optimization: Consider making these three an untagged union, since only one is used at a time?:
@@ -18,7 +18,7 @@ struct TermposeParserState<'a>{
 	iter: std::str::Chars<'a>,
 	line: isize,
 	column: isize,
-	mode: fn(&mut TermposeParserState<'a>, Option<char>)-> Result<(), PositionedError>,
+	mode: fn(&mut TermposeParserState<'a>, Option<char>)-> Result<(), Box<WoodError>>,
 	chosen_style: TermposeStyle,
 }
 
@@ -35,15 +35,16 @@ impl<'a> TermposeParserState<'a> {
 	
 	fn style(&self)-> &TermposeStyle { &self.chosen_style }
 	
-	fn a_fail(&self, message:String)-> Result<(), PositionedError> { Err(PositionedError{
+	fn a_fail(&self, message:String)-> Result<(), Box<WoodError>> { Err(Box::new(WoodError{
 		line: self.line,
 		column: self.column,
 		msg: message,
-	}) }
+		cause: None,
+	})) }
 	
 	fn mkbranch(&self)-> Wood { Branchv(Branch{ line:self.line, column:self.column, v:Vec::new() }) }
 	
-	fn start_line(&mut self, c:char)-> Result<(), PositionedError> {
+	fn start_line(&mut self, c:char)-> Result<(), Box<WoodError>> {
 		let bin:*mut Vec<Wood> = *get_back_mut(&mut self.indent_branch_stack); //there is always at least root in the indent_branch_stack
 		unsafe{
 			(*bin).push(self.mkbranch());
@@ -99,11 +100,11 @@ impl<'a> TermposeParserState<'a> {
 					self.iter.next();
 				}
 				self.line += 1;
-				self.column = 0;
+				self.column = 1;
 				Some('\n') //if it was a pesky '\r', it wont come through that way
 			}else if c == '\n' {
 				self.line += 1;
-				self.column = 0;
+				self.column = 1;
 				Some(c)
 			}else{
 				self.column += 1;
@@ -123,7 +124,7 @@ impl<'a> TermposeParserState<'a> {
 		self.line_paren_stack.push(unsafe{&mut *get_back_mut(&mut*branch_for_insert)});
 		self.last_completed_term_on_line = null_mut();
 	}
-	fn close_paren(&mut self)-> Result<(), PositionedError> {
+	fn close_paren(&mut self)-> Result<(), Box<WoodError>> {
 		self.colon_receptacle = null_mut();
 		if self.line_paren_stack.len() > 1 {
 			self.last_completed_term_on_line = unsafe{ &mut **get_back_mut(&mut self.line_paren_stack)};
@@ -136,14 +137,14 @@ impl<'a> TermposeParserState<'a> {
 	fn take_last_completed_term_on_line(&mut self)-> *mut Wood {
 		replace(&mut self.last_completed_term_on_line, null_mut())
 	}
-	fn open_colon(&mut self)-> Result<(), PositionedError> {
+	fn open_colon(&mut self)-> Result<(), Box<WoodError>> {
 		//seek the back term and accrete over it. If there isn't one, create an empty branch
 		self.colon_receptacle = {
 			let lt = self.take_last_completed_term_on_line();
 			if lt != null_mut() {
 				unsafe{ accrete_branch(&mut *lt) }
 			}else{
-				return Err(PositionedError{line: self.line, column: self.column, msg:"no previous term, cannot open a colon here".into()});
+				return Err(Box::new(WoodError{line: self.line, column: self.column, msg:"no previous term, cannot open a colon here".into(), cause:None}));
 			}
 		};
 		Ok(())
@@ -154,7 +155,7 @@ impl<'a> TermposeParserState<'a> {
 		self.last_completed_term_on_line = unsafe{get_back_mut(&mut *branch_for_insert)};
 		self.leaf_being_read_into = &mut unsafe{assume_leaf_mut(get_back_mut(&mut *branch_for_insert))}.v;
 	}
-	fn begin_leaf_with_char(&mut self, branch_for_insert:*mut Vec<Wood>, c:char)-> Result<(), PositionedError> {
+	fn begin_leaf_with_char(&mut self, branch_for_insert:*mut Vec<Wood>, c:char)-> Result<(), Box<WoodError>> {
 		let to_push = Leafv(Leaf{line:self.line, column:self.column, v:String::new()});
 		unsafe{(*branch_for_insert).push(to_push)};
 		self.last_completed_term_on_line = unsafe{get_back_mut(&mut *branch_for_insert)};
@@ -167,7 +168,7 @@ impl<'a> TermposeParserState<'a> {
 		Ok(())
 	}
 	
-	fn start_reading_thing(&mut self, c:char)-> Result<(), PositionedError> {
+	fn start_reading_thing(&mut self, c:char)-> Result<(), Box<WoodError>> {
 		match c {
 			c if c == self.style().close=> {
 				self.close_paren()?;
@@ -195,7 +196,7 @@ impl<'a> TermposeParserState<'a> {
 		Ok(())
 	}
 	
-	fn pop_indent_stack_down(&mut self, this_indent:&'a str)-> Result<(), PositionedError> {
+	fn pop_indent_stack_down(&mut self, this_indent:&'a str)-> Result<(), Box<WoodError>> {
 		loop{
 			let containing_indent = *get_back_mut(&mut self.indent_stack); //we can be assured that there is always something at back, because a str can't be smaller than the root indent "" and not be a prefix of it
 			if this_indent.len() == containing_indent.len() {
@@ -219,10 +220,10 @@ impl<'a> TermposeParserState<'a> {
 		self.colon_receptacle = null_mut();
 	}
 	
-	fn notice_this_new_indentation<OnSmaller, OnEqual, OnGreater>(&mut self, sc:OnSmaller, ec:OnEqual, gc:OnGreater)-> Result<(), PositionedError> where
-		OnSmaller : FnOnce(&mut Self)-> Result<(), PositionedError>,
-		OnEqual   : FnOnce(&mut Self)-> Result<(), PositionedError>,
-		OnGreater : FnOnce(&mut Self, &'a str)-> Result<(), PositionedError>,
+	fn notice_this_new_indentation<OnSmaller, OnEqual, OnGreater>(&mut self, sc:OnSmaller, ec:OnEqual, gc:OnGreater)-> Result<(), Box<WoodError>> where
+		OnSmaller : FnOnce(&mut Self)-> Result<(), Box<WoodError>>,
+		OnEqual   : FnOnce(&mut Self)-> Result<(), Box<WoodError>>,
+		OnGreater : FnOnce(&mut Self, &'a str)-> Result<(), Box<WoodError>>,
 	{
 		//there's definitely a thing here, ending indentation
 		let this_indent = unsafe{str_from_bounds(self.stretch_reading_start, self.cur_char_ptr)};
@@ -254,7 +255,7 @@ impl<'a> TermposeParserState<'a> {
 	
 	//modes
 	
-	fn seeking_beginning(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+	fn seeking_beginning(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> {
 		if let Some(c) = co {
 			match c {
 				' ' | '\t' => {
@@ -272,7 +273,7 @@ impl<'a> TermposeParserState<'a> {
 		}
 	}
 	
-	fn eating_indentation(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+	fn eating_indentation(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> {
 		if let Some(c) = co {
 			match c {
 				' ' | '\t' => {
@@ -302,7 +303,7 @@ impl<'a> TermposeParserState<'a> {
 		}
 		Ok(())
 	}
-	fn seeking_term(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+	fn seeking_term(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> {
 		if let Some(c) = co {
 			match c {
 				' ' | '\t' => {
@@ -324,7 +325,7 @@ impl<'a> TermposeParserState<'a> {
 		Ok(())
 	}
 
-	fn read_escaped_char(&mut self)-> Result<(), PositionedError> {
+	fn read_escaped_char(&mut self)-> Result<(), Box<WoodError>> {
 		let push = |slf:&mut Self, c:char| unsafe{((*slf.leaf_being_read_into)).push(c)}; //safe: leaf_being_read_into must have been validated before this mode could have been entered
 		let match_fail_message = "escape slash must be followed by a valid escape character code";
 		if let Some(nc) = self.move_char_ptr_and_update_line_col() {
@@ -344,7 +345,7 @@ impl<'a> TermposeParserState<'a> {
 		Ok(())
 	}
 
-	fn eating_quoted_string(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+	fn eating_quoted_string(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> {
 		let push_char = |slf:&mut Self, c:char| unsafe{((*slf.leaf_being_read_into)).push(c)}; //safe: leaf_being_read_into must have been validated before this mode could have been entered
 		if let Some(c) = co {
 			match c {
@@ -375,7 +376,7 @@ impl<'a> TermposeParserState<'a> {
 		Ok(())
 	}
 
-	fn eating_leaf(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+	fn eating_leaf(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> {
 		let push_char = |slf:&mut Self, c:char| unsafe{((*slf.leaf_being_read_into)).push(c)}; //safe: leaf_being_read_into must have been validated before this mode could have been entered
 		if let Some(c) = co {
 			match c {
@@ -435,7 +436,7 @@ impl<'a> TermposeParserState<'a> {
 		self.mode = Self::eating_quoted_string;
 	}
 
-	fn seeking_immediately_after_thing(&mut self, co:Option<char>)-> Result<(), PositionedError> { //generally called after ')' or a closing '"', because '"'s and self.style().opens have slightly different meaning in that context
+	fn seeking_immediately_after_thing(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> { //generally called after ')' or a closing '"', because '"'s and self.style().opens have slightly different meaning in that context
 		if let Some(c) = co {
 			match c {
 				'"'=> {
@@ -470,7 +471,7 @@ impl<'a> TermposeParserState<'a> {
 		Ok(())
 	}
 
-	fn eating_initial_multline_string_indentation(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+	fn eating_initial_multline_string_indentation(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> {
 		if let Some(c) = co {
 			match c {
 				' ' | '\t' => {},
@@ -503,7 +504,7 @@ impl<'a> TermposeParserState<'a> {
 		Ok(())
 	}
 
-	fn eating_multiline_content(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+	fn eating_multiline_content(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> {
 		if let Some(c) = co {
 			match c {
 				'\n'=> {
@@ -521,7 +522,7 @@ impl<'a> TermposeParserState<'a> {
 		Ok(())
 	}
 
-	fn eating_multiline_later_indent(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+	fn eating_multiline_later_indent(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> {
 		if let Some(c) = co {
 			match c {
 				' ' | '\t' => {
@@ -561,7 +562,7 @@ impl<'a> TermposeParserState<'a> {
 
 
 ///Returns a Branch containing all of the Woods at root level, even if there is only one Wood, it will be wrapped in an additional Branch
-pub fn parse_multiline_termpose_style<'a>(s:&'a str, style:TermposeStyle)-> Result<Wood, PositionedError> {
+pub fn parse_multiline_termpose_style<'a>(s:&'a str, style:TermposeStyle)-> Result<Wood, Box<WoodError>> {
 	let mut state = TermposeParserState::<'a>{
 		root: branch!(), //a yet empty line
 		indent_stack: vec!(""),
@@ -571,8 +572,8 @@ pub fn parse_multiline_termpose_style<'a>(s:&'a str, style:TermposeStyle)-> Resu
 		last_completed_term_on_line: null_mut(),
 		leaf_being_read_into: null_mut(),
 		iter: s.chars(),
-		line: 0,
-		column: 0,
+		line: 1,
+		column: 1,
 		multilines_indent: "",
 		line_paren_stack: vec!(),
 		indent_branch_stack: vec!(),
@@ -592,18 +593,18 @@ pub fn parse_multiline_termpose_style<'a>(s:&'a str, style:TermposeStyle)-> Resu
 }
 
 ///Returns a Branch containing all of the Woods at root level, even if there is only one Wood, it will be wrapped in an additional Branch
-pub fn parse_multiline_termpose<'a>(s:&'a str)-> Result<Wood, PositionedError> {
+pub fn parse_multiline_termpose<'a>(s:&'a str)-> Result<Wood, Box<WoodError>> {
 	parse_multiline_termpose_style(s, DEFAULT_STYLE.clone())
 }
 
 ///If multiple Woods are at root level in the input, it will wrap them all in a Branch Wood. Otherwise, if there's only one, it wont. This is probably the behaviour you will expect, most of the time, but if I didn't explain it here it might have derailed you, the rest of the time.
-pub fn parse_termpose<'a>(s:&'a str)-> Result<Wood, PositionedError> {
+pub fn parse_termpose<'a>(s:&'a str)-> Result<Wood, Box<WoodError>> {
 	parse_multiline_termpose(s).map(|t|{
 		let l = assume_branch(t); //parse_multiline_termpose only returns branchs
 		if l.v.len() == 1 {
 			yank_first(l.v) //just confirmed it's there
 		}else{
-			//then the caller was wrong, it wasn't a single root term, so I guess, they get the whole Branch? Maybe this should be a PositionedError... I dunno about that
+			//then the caller was wrong, it wasn't a single root term, so I guess, they get the whole Branch? Maybe this should be a WoodError... I dunno about that
 			Branchv(l)
 		}
 	})

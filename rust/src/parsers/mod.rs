@@ -15,22 +15,6 @@ fn get_back_mut<T>(v:&mut Vec<T>)-> &mut T {
 	else{ panic!("this vec should never be empty"); }
 }
 
-#[derive(Debug)]
-pub struct PositionedError{
-	pub line:isize,
-	pub column:isize,
-	pub msg:String,
-}
-
-impl Error for PositionedError {
-	fn description(&self) -> &str { self.msg.as_str() }
-	fn cause(&self) -> Option<&dyn Error> { None }
-}
-impl Display for PositionedError {
-	fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-		Debug::fmt(self, f)
-	}
-}
 
 
 
@@ -90,7 +74,7 @@ fn do_indent(indent:&str, indent_depth:usize, out:&mut String){
 	for _ in 0..indent_depth { out.push_str(indent); }
 }
 
-// pub fn parse_nakedbranch<'a>(v:&'a str)-> Result<Wood, PositionedError> {
+// pub fn parse_nakedbranch<'a>(v:&'a str)-> Result<Wood, WoodError> {
 // 	NakedbranchParserState::<'a>::begin(v).parse()
 // }
 
@@ -184,7 +168,7 @@ mod tests {
 			}
 		}
 		
-		if let Some(failts) = testt.find("failing") {
+		if let Ok(failts) = testt.find("failing") {
 			for tc in failts.tail() {
 				let test_name = tc.initial_str();
 				for t in tc.tail() {

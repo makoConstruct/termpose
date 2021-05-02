@@ -8,16 +8,17 @@ struct SexpParserState<'a>{
 	iter: std::iter::Peekable<std::str::Chars<'a>>,
 	line: isize,
 	column: isize,
-	mode: fn(&mut SexpParserState<'a>, Option<char>)-> Result<(), PositionedError>,
+	mode: fn(&mut SexpParserState<'a>, Option<char>)-> Result<(), Box<WoodError>>,
 }
 
 impl<'a> SexpParserState<'a> {
 	
-	fn a_fail(&self, message:String)-> Result<(), PositionedError> { Err(PositionedError{
+	fn a_fail(&self, message:String)-> Result<(), Box<WoodError>> { Err(Box::new(WoodError{
 		line: self.line,
 		column: self.column,
 		msg: message,
-	}) }
+		cause: None,
+	})) }
 	
 	fn mkbranch(&self)-> Wood { Branchv(Branch{ line:self.line, column:self.column, v:Vec::new() }) }
 	
@@ -36,7 +37,7 @@ impl<'a> SexpParserState<'a> {
 		self.paren_stack.push(&mut assume_branch_mut(get_back_mut(unsafe{&mut *branch_for_insert})).v);
 		self.mode = Self::seeking_term;
 	}
-	fn close_paren(&mut self)-> Result<(), PositionedError> {
+	fn close_paren(&mut self)-> Result<(), Box<WoodError>> {
 		if self.paren_stack.len() > 1 {
 			self.paren_stack.pop();
 			self.mode = Self::seeking_term;
@@ -64,7 +65,7 @@ impl<'a> SexpParserState<'a> {
 		self.mode = Self::eating_quoted_string;
 	}
 	
-	fn start_reading_thing(&mut self, c:char)-> Result<(), PositionedError> {
+	fn start_reading_thing(&mut self, c:char)-> Result<(), Box<WoodError>> {
 		match c {
 			')' => {
 				self.close_paren()?;
@@ -84,7 +85,7 @@ impl<'a> SexpParserState<'a> {
 		Ok(())
 	}
 	
-	fn seeking_term(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+	fn seeking_term(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> {
 		if let Some(c) = co {
 			match c {
 				' ' | '\t' => {},
@@ -97,7 +98,7 @@ impl<'a> SexpParserState<'a> {
 		Ok(())
 	}
 
-	fn read_escaped_char(&mut self)-> Result<(), PositionedError> {
+	fn read_escaped_char(&mut self)-> Result<(), Box<WoodError>> {
 		let push = |slf:&mut Self, c:char| unsafe{((*slf.leaf_being_read_into)).push(c)}; //safe: leaf_being_read_into must have been validated before this mode could have been entered
 		let nco = self.move_char_ptr_and_update_line_col();
 		let match_fail_message = "escape slash must be followed by a valid escape character code";
@@ -137,7 +138,7 @@ impl<'a> SexpParserState<'a> {
 		})
 	}
 
-	fn eating_quoted_string(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+	fn eating_quoted_string(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> {
 		let push_char = |slf:&mut Self, c:char| unsafe{((*slf.leaf_being_read_into)).push(c)}; //safe: leaf_being_read_into must have been validated before this mode could have been entered
 		if let Some(c) = co {
 			match c {
@@ -155,7 +156,7 @@ impl<'a> SexpParserState<'a> {
 		Ok(())
 	}
 
-	fn eating_leaf(&mut self, co:Option<char>)-> Result<(), PositionedError> {
+	fn eating_leaf(&mut self, co:Option<char>)-> Result<(), Box<WoodError>> {
 		let push_char = |slf:&mut Self, c:char| unsafe{((*slf.leaf_being_read_into)).push(c)}; //safe: leaf_being_read_into must have been validated before this mode could have been entered
 		if let Some(c) = co {
 			match c {
@@ -188,7 +189,7 @@ impl<'a> SexpParserState<'a> {
 
 
 
-pub fn parse_multiline_woodslist<'a>(s:&'a str)-> Result<Wood, PositionedError> { //parses as if it's a file, and each term at root is a separate term. This is not what you want if you expect only a single line, and you want that line to be the root term, but its behaviour is more consistent if you are parsing files
+pub fn parse_multiline_woodslist<'a>(s:&'a str)-> Result<Wood, Box<WoodError>> { //parses as if it's a file, and each term at root is a separate term. This is not what you want if you expect only a single line, and you want that line to be the root term, but its behaviour is more consistent if you are parsing files
 	let mut state = SexpParserState::<'a>{
 		root: branch!(), //a yet empty line
 		paren_stack: Vec::new(),
@@ -211,7 +212,7 @@ pub fn parse_multiline_woodslist<'a>(s:&'a str)-> Result<Wood, PositionedError> 
 	Ok(state.root)
 }
 
-pub fn parse_woodslist<'a>(s:&'a str)-> Result<Wood, PositionedError> {
+pub fn parse_woodslist<'a>(s:&'a str)-> Result<Wood, Box<WoodError>> {
 	parse_multiline_woodslist(s).map(|t|{
 		let l = assume_branch(t); //parse_multiline_termpose only returns branchs
 		if l.v.len() == 1 {
