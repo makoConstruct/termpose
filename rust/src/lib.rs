@@ -214,10 +214,14 @@ impl Wood {
 	
 	/// returns the first child term with initial_str == key, or if none is found, an error
 	pub fn find<'a, 'b>(&'a self, key:&'b str)-> Result<&'a Wood, Box<WoodError>> {
-		self.contents().find(|el| el.initial_str() == key).ok_or_else(|| Box::new(WoodError::new(
+		self.seek(key).ok_or_else(|| Box::new(WoodError::new(
 			self,
 			format!("could not find child with key \"{}\"", key),
 		)))
+	}
+	/// find(self, key).and_then(|v| v.second())
+	pub fn find_val<'a, 'b>(&'a self, key:&'b str)-> Result<&'a Wood, Box<WoodError>> {
+		self.find(key).and_then(|v| v.second())
 	}
 }
 

@@ -1,7 +1,7 @@
 [package]
 name = "wood"
 description = "A robust material that is simple to work: Parsing, serialization and deserialization for termpose and woodslist"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["mako <marcus.yass@gmail.com>"]
 repository = "https://github.com/makoConstruct/termpose/blob/master/rust/README.md"
 license = "MIT"
@@ -11,3 +11,6 @@ keywords = ["s-expression", "serialization"]
 [dependencies]
 #string_cache = "0.7.0"
 ref_slice = "1.1.1"
+
+[dev-dependencies]
+wood_derive = { path = "./wood_derive" }

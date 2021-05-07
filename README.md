@@ -8,7 +8,7 @@ Termpose data, once parsed, is very simple to work with. It doesn't have maps an
 
 
 
-Here's an example of the kind data I store in termpose. This is very similar to the save format of a game I'm working on:
+Here's an example of the kind of data I store in termpose. This is very similar to the save format of a game I'm working on:
 ```
 mon
   name leafward

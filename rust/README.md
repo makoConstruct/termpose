@@ -44,7 +44,7 @@ fn main(){
   
   assert_eq!("Dato a:chock b:true", &s);
   
-  let d = Dato::dewoodify(&parse_termpose(&s).unwrap()).unwrap();
+  let d = parse_termpose(&s).and_then(|sw| Dato::dewoodify(&sw)).unwrap();
   
   assert_eq!(&od, &d);
 }
@@ -56,7 +56,7 @@ There are also these things called wooder combinators. I haven't found a way to 
 ```rust
 extern crate wood;
 extern crate wood_derive;
-use wood::{wooder, Wood, Dewooder};
+use wood::{wooder, Wood, Dewooder, parse_multiline_termpose};
 use wood_derive::{Woodable, Dewoodable};
 
 #[derive(Woodable, Dewoodable)]
@@ -66,7 +66,7 @@ struct Datu {
 }
 
 fn main(){
-  let data:Wood = wood::parse_multiline_termpose("
+  let data:Wood = parse_multiline_termpose("
   
 list
   entry 1
@@ -78,7 +78,7 @@ list
   
 ").unwrap();
   
-  let sublist:&Wood = data.find("list").unwrap().find("sublist").unwrap();
+  let sublist:&Wood = data.find("list").and_then(|l| l.find("sublist")).unwrap();
   
   let _:Vec<Datu> = wooder::TaggedSequenceBi("sublist", wooder::Iden).dewoodify(sublist).unwrap();
 }
