@@ -137,6 +137,17 @@ void escapeSymbol(std::stringstream& ss, std::string const& str){
 	}
 }
 
+/// just used during pretty printing
+union Term;
+struct PrettyPrintingState {
+	std::unordered_map<Term const*, unsigned> totalLengthsWithChildren;
+	std::stringstream out;
+	std::string indent;
+	std::string lineEndings;
+	unsigned depth;
+	unsigned lineWidth;
+	unsigned shortWordLimit;
+};
 
 struct List;
 struct Stri{
@@ -149,8 +160,8 @@ struct Stri{
 private:
 	void baseLineStringify(std::stringstream& ss) const;
 	void stringify(std::stringstream& ss) const;
-	unsigned estimateLength() const;
-	void prettyPrinting(std::stringstream& ss, unsigned depth, std::string indent, std::string lineEndings, unsigned lineWidth) const;
+	void prettyPrinting(PrettyPrintingState& s, unsigned depth) const;
+	// void prettyPrinting(std::stringstream& ss, unsigned depth, std::string indent, std::string lineEndings, unsigned lineWidth) const;
 	friend Term;
 	friend List;
 };
@@ -163,18 +174,17 @@ struct List{
 	static List create(std::vector<Term> ov, uint32_t line, uint32_t column);
 private:
 	void stringify(std::stringstream& ss) const;
-	unsigned estimateLength() const;
 	void baseLineStringify(std::stringstream& ss) const;
-	void prettyPrinting(std::stringstream& sb, unsigned depth, std::string indent, std::string lineEndings, unsigned lineWidth) const;
+	void prettyPrinting(PrettyPrintingState& s, unsigned depth) const;
 	friend Term;
 	friend Stri;
 };
 struct Checker;
+
 union Term{
 public:
 	Stri s; List l;
 	static void mimicInterTerm(Term* r, InterTerm* v);
-	unsigned estimateLength() const;
 	bool isStr() const;
 	bool isList() const;
 	bool isEmpty() const; //iff it's an empty list
@@ -190,9 +200,12 @@ public:
 	Term const* seekSubTermConst(std::string const& key) const;
 	Term& subTerm();
 	Term const& subTermConst() const;
+	Term& head();
+	Term const& headConst() const;
 	std::vector<Term> const& listContentsConst() const;
 	std::string const& strContentsConst() const;
 	std::string toString() const;
+	std::string toStringMultiline() const;
 	std::vector<Term> const& listContentsConst(uint expectedLength) const;
 	std::vector<Term>& listContents(uint expectedLength);
 	std::vector<Term> const& listContentsOfLengthConst(uint expectedLength) const ;
@@ -223,9 +236,11 @@ public:
 	size_t hash() const;
 	~Term();
 private:
+	uint computeTotalLengths(PrettyPrintingState& pp) const;
 	void baseLineStringify(std::stringstream& ss) const;
 	void stringify(std::stringstream& ss) const;
-	void prettyPrinting(std::stringstream& sb, unsigned depth, std::string indent, std::string lineEndings, unsigned lineWidth) const;
+	void prettyPrinting(PrettyPrintingState& s, unsigned depth) const;
+	// void prettyPrinting(std::stringstream& sb, unsigned depth, std::string indent, std::string lineEndings, unsigned lineWidth) const;
 	static void parseLengthedToSeqs(Term* termOut, std::string& unicodeString, char** errorOut);
 	friend Stri;
 	friend List;
@@ -263,11 +278,10 @@ void Stri::stringify(std::stringstream& ss) const{
 	}
 }
 void Stri::baseLineStringify(std::stringstream& ss) const{ stringify(ss); }
-unsigned Stri::estimateLength() const{ return s.size(); }
-void Stri::prettyPrinting(std::stringstream& ss, unsigned depth, std::string indent, std::string lineEndings, unsigned lineWidth) const{
-	for(int i=0; i<depth; ++i){ ss<<indent; }
-	stringify(ss);
-	ss << lineEndings;
+void Stri::prettyPrinting(PrettyPrintingState& pp, unsigned depth) const{
+	for(int i=0; i<depth; ++i){ pp.out<<pp.indent; }
+	stringify(pp.out);
+	pp.out << pp.lineEndings;
 }
 
 void Term::mimicInterTerm(Term* r, InterTerm* v){
@@ -426,6 +440,16 @@ Term const& Term::subTermConst() const {
 	if(l.l.size() < 2){ throw TyperError(*this, "wanted to find a subterm, but the list is too short"); }
 	return l.l[1];
 }
+Term& Term::head() {
+	if(!isList()){ throw TyperError(*this, "wanted to find the head term, but it is not a list term"); }
+	if(l.l.size() < 1){ throw TyperError(*this, "wanted to find the head term, but the list is empty"); }
+	return l.l[0];
+}
+Term const& Term::headConst() const {
+	if(!isList()){ throw TyperError(*this, "wanted to find the head term, but it is not a list term"); }
+	if(l.l.size() < 1){ throw TyperError(*this, "wanted to find the head term, but the list is empty"); }
+	return l.l[0];
+}
 std::vector<Term>& Term::listContents(){
 	if(isList()){
 		return l.l;
@@ -579,13 +603,6 @@ Term::~Term(){
 		((List*)this)->~List();
 	}
 }
-unsigned Term::estimateLength() const{
-	if(isStr()){
-		return s.estimateLength();
-	}else{
-		return l.estimateLength();
-	}
-}
 void Term::baseLineStringify(std::stringstream& ss) const{
 	if(isStr()){
 		s.baseLineStringify(ss);
@@ -593,11 +610,11 @@ void Term::baseLineStringify(std::stringstream& ss) const{
 		l.baseLineStringify(ss);
 	}
 }
-void Term::prettyPrinting(std::stringstream& sb, unsigned depth, std::string indent, std::string lineEndings, unsigned lineWidth) const{
+void Term::prettyPrinting(PrettyPrintingState& pp, unsigned depth) const{
 	if(isStr()){
-		s.prettyPrinting(sb, depth, indent, lineEndings, lineWidth);
+		s.prettyPrinting(pp, depth);
 	}else{
-		l.prettyPrinting(sb, depth, indent, lineEndings, lineWidth);
+		l.prettyPrinting(pp, depth);
 	}
 }
 void Term::stringify(std::stringstream& ss) const{
@@ -623,30 +640,73 @@ std::string Term::toString() const{
 	stringify(ss);
 	return ss.str();
 }
-std::string Term::prettyPrint(unsigned lineLimit) const{
-	std::stringstream ss;
+uint Term::computeTotalLengths(PrettyPrintingState& pp) const {
+	unsigned thisl = 0;
 	if(isStr()){
-		s.stringify(ss);
+		thisl = s.s.length();
 	}else{
-		//special case for root line of multiline files
-		if(l.l.size() > 1 && estimateLength() > lineLimit){
-			for(Term const& t : l.l){
-				t.prettyPrinting(ss, 0, "  ", "\n", lineLimit);
+		thisl = 2;
+		if(l.l.size()){
+			thisl += l.l.size() - 1;
+			for(Term const& c : l.l){
+				thisl += c.computeTotalLengths(pp);
 			}
-		}else{
-			prettyPrinting(ss, 0, "  ", "\n", lineLimit);
 		}
 	}
-	return ss.str();
+	pp.totalLengthsWithChildren[this] = thisl;
+	return thisl;
+}
+std::string Term::prettyPrint(unsigned lineLimit) const {
+	PrettyPrintingState pp;
+	pp.indent = "  ";
+	pp.lineEndings = "\n";
+	pp.shortWordLimit = 21;
+	pp.lineWidth = lineLimit;
+	
+	computeTotalLengths(pp);
+	
+	if(isStr()){
+		s.stringify(pp.out);
+	}else{
+		//special case for root line of multiline files
+		if(l.l.size() > 1 && pp.totalLengthsWithChildren[this] > lineLimit){
+			for(Term const& t : l.l){
+				t.prettyPrinting(pp, 0);
+			}
+		}else{
+			prettyPrinting(pp, 0);
+		}
+	}
+	return pp.out.str();
 }
 std::string Term::prettyPrintMultiline(unsigned lineLimit) const{
+	PrettyPrintingState pp;
+	pp.indent = "  ";
+	pp.lineEndings = "\n";
+	pp.shortWordLimit = 21;
+	pp.lineWidth = lineLimit;
+	
+	computeTotalLengths(pp);
+	
+	if(isStr()){
+		//this should maybe throw exception..
+		s.stringify(pp.out);
+	}else{
+		for(Term const& t : l.l){
+			t.prettyPrinting(pp, 0);
+		}
+	}
+	return pp.out.str();
+}
+std::string Term::toStringMultiline() const {
 	std::stringstream ss;
 	if(isStr()){
 		//this should maybe throw exception..
 		s.stringify(ss);
 	}else{
 		for(Term const& t : l.l){
-			t.prettyPrinting(ss, 0, "  ", "\n", lineLimit);
+			t.stringify(ss);
+			ss << "\n";
 		}
 	}
 	return ss.str();
@@ -700,7 +760,7 @@ inline Term Term::parse(std::string const& unicodeString){ //if there is exactly
 	}
 }
 
-void List::stringify(std::stringstream& ss) const{
+void List::stringify(std::stringstream& ss) const {
 	ss<<'(';
 	size_t ls = l.size();
 	if(ls > 0){
@@ -712,14 +772,7 @@ void List::stringify(std::stringstream& ss) const{
 	}
 	ss<<')';
 }
-unsigned List::estimateLength() const{
-	unsigned ret = 2;
-	for(Term const& t : l){
-		ret += 1 + t.estimateLength();
-	}
-	return ret;
-}
-void List::baseLineStringify(std::stringstream& ss) const{
+void List::baseLineStringify(std::stringstream& ss) const {
 	size_t ls = l.size();
 	if(ls > 0){
 		if(ls > 1){
@@ -738,35 +791,42 @@ void List::baseLineStringify(std::stringstream& ss) const{
 		ss << ')';
 	}
 }
-void List::prettyPrinting(std::stringstream& sb, unsigned depth, std::string indent, std::string lineEndings, unsigned lineWidth) const{
-	for(int i=0; i<depth; ++i){ sb << indent; }
+void List::prettyPrinting(PrettyPrintingState& pp, uint depth) const {
+	for(int i=0; i<depth; ++i){ pp.out << pp.indent; }
 	if(l.size() == 0){
-		sb << '(';
-		sb << ')';
-		sb << lineEndings;
+		pp.out << '(';
+		pp.out << ')';
+		pp.out << pp.lineEndings;
+		return;
 	}else{
-		if(estimateLength() > lineWidth){
-			//print in indent style
-			if(l[0].estimateLength() > lineWidth){
-				//indent sequence style
-				sb << ':';
-				sb << lineEndings;
-				for(Term const& t : l){
-					t.prettyPrinting(sb, depth+1, indent, lineEndings, lineWidth);
-				}
-			}else{
-				l[0].stringify(sb);
-				sb << lineEndings;
-				size_t ln = l.size();
-				for(int i=1; i<ln; ++i){
-					l[i].prettyPrinting(sb, depth+1, indent, lineEndings, lineWidth);
+		if(pp.totalLengthsWithChildren[(Term const*)this] > pp.lineWidth){
+			//consider printing in line anyway if none of the inner terms are long enough for that to be hard to read
+			for(Term const& t : l){
+				if(pp.totalLengthsWithChildren[&t] > pp.shortWordLimit){
+					//print in indent style after all
+					if(pp.totalLengthsWithChildren[&l[0]] > pp.lineWidth){
+						//indent sequence style
+						pp.out << ':';
+						pp.out << pp.lineEndings;
+						for(Term const& t : l){
+							t.prettyPrinting(pp, depth + 1);
+						}
+					}else{
+						l[0].stringify(pp.out);
+						pp.out << pp.lineEndings;
+						size_t ln = l.size();
+						for(int i=1; i<ln; ++i){
+							l[i].prettyPrinting(pp, depth+1);
+						}
+					}
+					return;
 				}
 			}
-		}else{
-			//print inline style
-			baseLineStringify(sb);
-			sb << lineEndings;
+			//nothing was too long, okay then, print inline
 		}
+		//otherwise, either it fits in one line, or none of the interior terms are long enough for printing inline to be difficult to read.
+		baseLineStringify(pp.out);
+		pp.out << pp.lineEndings;
 	}
 }
 Stri Stri::create(std::string str){ return Stri::create(str, 0,0); }
@@ -961,6 +1021,20 @@ namespace parsingDSL{
 		Term termify(uint32_t const& b) override { return termifyU32(b); }
 		uint32_t check(Term const& v) override { return checkU32(v); }
 	};
+	
+	uint64_t checkU64(Term const& v){
+		std::string const& sv = v.strContentsConst();
+		errno = 0;
+		unsigned long long ret = ::strtoull(sv.c_str(), nullptr, 10); //this wont catch all range errors on every platform, but oh well
+		if(errno || ret > std::numeric_limits<uint64_t>::max()){
+			uint errnooo = errno;
+			errno = 0;
+			throw TyperError(v, std::string("range error ") + std::to_string(errnooo) + " " + sv);
+		}else{
+			return ret;
+		}
+	}
+	Term termifyU64(uint64_t const& b){ return std::to_string(b); }
 	
 	
 	Term termifyFloat(float const& b){
@@ -2058,7 +2132,7 @@ struct Deserialization<std::vector<T>>{ std::vector<T> deserialize(Term const& v
 	std::vector<T> ret;
 	std::vector<Term> const& out = v.listContentsConst();
 	ret.reserve(out.size());
-	for(T const& vv : out){
+	for(Term const& vv : out){
 		ret.emplace_back(Deserialization<T>().deserialize(vv));
 	}
 	return ret;

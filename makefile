@@ -12,3 +12,7 @@ basicCppExample: basicCppExample.cpp termpose.cpp termpose.c termpose.h
 
 perftest: perftest.cpp termpose.cpp termpose.c termpose.h
 	g++ -std=c++11 perftest.cpp -o perftest
+
+
+csharp_from_haxe: Termpose.hx
+	~/bin/haxe/haxe Termpose.hx -cs csharp_from_haxe

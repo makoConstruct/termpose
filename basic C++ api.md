@@ -44,21 +44,19 @@ Returns true iff the term is an empty list
 
 It is often more efficient to do a linear search over a list than it is to generate a hashmap over the list's keys and values. Even just querying that hashmap can take longer than a linear search in many cases. For lists of fewer than 20 elements*, using the following methods will be more efficient than creating a mapping.
 
- (cases of lists with fewer than )
-
 ```C++
 Term& Term::findTerm(string const& key);
 Term const& Term::findTermConst(string const& key) const;
 ```
 
-Finds a term within `this` that is a list that starts with `key`. Throws a TyperError if there is no such term, or if `this` is not a list.
+Finds a term within `this` that that is equal to, or starts with `key`. Throws a TyperError if there is no such term, or if `this` is not a list.
 
 ```C++
 Term* Term::seekTerm(string const& key);
 Term const* Term::seekTermConst(string const& key) const;
 ```
 
-Seeks a term within `this` that is a list that starts with `key`. Returns null if there is no such term. Throws a TyperError if `this` is not a list.
+Seeks a term within `this` that is equal to, or starts with `key`. Returns null if there is no such term. Throws a TyperError if `this` is not a list.
 
 
 
@@ -78,7 +76,7 @@ Seeks a list of two elements within `this` that starts with `key`, then returns 
 
 
 
-### Type Checking
+### Deserializing
 
 ```C++
 float checkFloat(Term const& v);
@@ -97,7 +95,7 @@ bool checkBool(Term const& v);
 Term termifyBool(bool const& v);
 ```
 
-You can also compose bidirectional functions for checking or termifying complex structures
+You can also compose bidirectional functions for serializing or deserializing complex structures
 
 ```C++
 Term term;
@@ -108,7 +106,7 @@ unordered_map<string, vector<bool>>> r = tr->check(term);
 cout<< tr->termify(r).prettyPrint() <<endl;
 ```
 
-One of the advantages of using a `Translator`; if there are type errors, a `Translator` will find all of them and it will list their line and column number in the `TyperError` it will throw. For comparable code you would be likely to write using check and termify methods, it is likely that you will only find the first error, and then throw there.
+One of the advantages of using a `Translator`; if there are type errors, a `Translator` will find all of them and it will list their line and column number in the `TyperError` it will throw. For comparable code you would be likely to write using check and termify methods, it is likely that you would only find the first error, and then throw there.
 
 
 ### Example
