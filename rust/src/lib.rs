@@ -76,9 +76,10 @@ impl Into<Wood> for String {
 impl<'a> Into<Wood> for &'a str {
 	fn into(self) -> Wood { self.to_string().into() }
 }
-impl<'a> Into<Wood> for Vec<Wood> {
+impl Into<Wood> for Vec<Wood> {
 	fn into(self) -> Wood { Branchv(Branch{ line:-1, column:-1, v:self }) }
 }
+
 
 fn tail<I:Iterator>(mut v:I)-> I {
 	v.next();
@@ -227,7 +228,7 @@ impl Wood {
 
 #[macro_export]
 macro_rules! branch {
-	($($inner:expr),* $(,)*)=> {{
+	[$($inner:expr),* $(,)*]=> {{
 		$crate::Branchv($crate::Branch{line:-1, column:-1, v:vec!($($inner.into()),*)})
 	}};
 }
@@ -317,10 +318,14 @@ do_basic_stringifying_woodable_for!(u32);
 do_basic_destringifying_dewoodable_for!(u32);
 do_basic_stringifying_woodable_for!(u64);
 do_basic_destringifying_dewoodable_for!(u64);
+do_basic_stringifying_woodable_for!(u128);
+do_basic_destringifying_dewoodable_for!(u128);
 do_basic_stringifying_woodable_for!(i32);
 do_basic_destringifying_dewoodable_for!(i32);
 do_basic_stringifying_woodable_for!(i64);
 do_basic_destringifying_dewoodable_for!(i64);
+do_basic_stringifying_woodable_for!(i128);
+do_basic_destringifying_dewoodable_for!(i128);
 do_basic_stringifying_woodable_for!(f32);
 do_basic_destringifying_dewoodable_for!(f32);
 do_basic_stringifying_woodable_for!(f64);
