@@ -249,7 +249,7 @@ pub struct WoodError{
 	pub cause:Option<Box<dyn Error>>,
 }
 impl Display for WoodError {
-	fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+	fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
 		Debug::fmt(self, f)
 	}
 }
@@ -258,16 +258,16 @@ impl WoodError {
 		let (line, column) = source.line_and_col();
 		Self{ line, column, msg, cause:None }
 	}
-	pub fn new_with_cause(source:&Wood, msg:String, cause:Option<Box<dyn Error>>) -> Self {
+	pub fn new_with_cause(source:&Wood, msg:String, cause:Box<dyn Error>) -> Self {
 		let (line, column) = source.line_and_col();
-		WoodError{ line, column, msg, cause }
+		WoodError{ line, column, msg, cause:Some(cause) }
 	}
 }
-
 impl Error for WoodError {
-	fn description(&self) -> &str { self.msg.as_str() }
 	fn cause(&self) -> Option<&dyn Error> { self.cause.as_ref().map(|e| e.as_ref()) }
 }
+
+
 pub trait Woodable {
 	fn woodify(&self) -> Wood;
 }
@@ -304,7 +304,7 @@ macro_rules! do_basic_destringifying_dewoodable_for {
 		impl Dewoodable for $Type {
 			fn dewoodify(v:&Wood) -> Result<$Type, Box<WoodError>> {
 				$Type::from_str(v.initial_str()).map_err(|er|{
-					Box::new(WoodError::new_with_cause(v, format!("couldn't parse {}", stringify!($name)), Some(Box::new(er))))
+					Box::new(WoodError::new_with_cause(v, format!("couldn't parse {}", stringify!($name)), Box::new(er)))
 				})
 			}
 		}
@@ -340,7 +340,7 @@ impl Dewoodable for bool {
 			"false" | "⟂" | "no" => {
 				Ok(false)
 			},
-			_=> Err(Box::new(WoodError::new_with_cause(v, "expected a bool here".into(), None)))
+			_=> Err(Box::new(WoodError::new(v, "expected a bool here".into())))
 		}
 	}
 }
@@ -358,7 +358,7 @@ impl Dewoodable for String {
 	fn dewoodify(v:&Wood) -> Result<Self, Box<WoodError>> {
 		match *v {
 			Leafv(ref a)=> Ok(a.v.clone()),
-			Branchv(_)=> Err(Box::new(WoodError::new_with_cause(v, "sought string, found branch".into(), None))),
+			Branchv(_)=> Err(Box::new(WoodError::new(v, "sought string, found branch".into()))),
 		}
 	}
 }
