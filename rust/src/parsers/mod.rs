@@ -5,7 +5,7 @@
 use super::*;
 use std::{
 	mem::replace,
-	ptr::{ read }
+	ptr::read
 };
 
 
@@ -131,7 +131,7 @@ mod tests {
 			if let Some(first_case) = ttests.next() {
 				for remaining_case in ttests {
 					if first_case != remaining_case {
-						panic!(format!("in \"{}\" case, {} did not equal {}", test_name, first_case.to_string(), remaining_case.to_string()));
+						panic!("in \"{}\" case, {} did not equal {}", test_name, first_case.to_string(), remaining_case.to_string());
 					}
 				}
 			}
@@ -162,7 +162,7 @@ mod tests {
 			if let Some(first_case) = ttests.next() {
 				for remaining_case in ttests {
 					if first_case != remaining_case {
-						panic!(format!("in \"{}\" case, {} did not equal {}", test_name, first_case.to_string(), remaining_case.to_string()));
+						panic!("in \"{}\" case, {} did not equal {}", test_name, first_case.to_string(), remaining_case.to_string());
 					}
 				}
 			}

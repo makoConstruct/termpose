@@ -68,10 +68,10 @@ class StringIterator implements BufferedIterator<Int> {
 
 
 
-@:expose class Wood extends Stringificable{
+@:expose class Term extends Stringificable{
 	public var line (default, null):Int;
 	public var column (default, null):Int;
-	public var s:Null<Array<Wood>>;
+	public var s:Null<Array<Term>>;
 	public var v:Null<String>;
 	public function jsonString():String{
 		var sb = new StringBuf();
@@ -113,7 +113,7 @@ class StringIterator implements BufferedIterator<Int> {
 			stringify(sb);
 			sb.addSub(lineEndings,0);
 		}else{
-			var ts:Array<Wood> = this.s;
+			var ts:Array<Term> = this.s;
 			for(i in 0...depth){ sb.addSub(indent,0); }
 			if(ts.length == 0){
 				sb.addChar(':'.code);
@@ -161,7 +161,7 @@ class StringIterator implements BufferedIterator<Int> {
 	}
 }
 
-@:expose class Stri extends Wood{
+@:expose class Stri extends Term{
 	public function new(vp:String, line:Int, column:Int){
 		this.s = null;
 		this.v = vp;
@@ -190,8 +190,8 @@ class StringIterator implements BufferedIterator<Int> {
 	}
 }
 
-@:expose class Seqs extends Wood{
-	public function new(s:Array<Wood>, line:Int, column:Int){
+@:expose class Seqs extends Term{
+	public function new(s:Array<Term>, line:Int, column:Int){
 		this.s = s;
 		this.v = null;
 		this.line = line;
@@ -278,7 +278,7 @@ class StringIterator implements BufferedIterator<Int> {
 private interface InterTerm{
 	var line:Int;
 	var column:Int;
-	function toTerm():Wood;
+	function toTerm():Term;
 }
 private class PointsInterTerm{ //sometimes an interterm might want to reattach partway through the process. It should be attached through a PointsInterTerm which it knows so it can do that.
 	public var t:InterTerm;
@@ -295,7 +295,7 @@ private class Sq implements InterTerm{
 		this.column = column;
 		pointing.t = this;
 	}
-	public function toTerm():Wood{return toSeqs();}
+	public function toTerm():Term{return toSeqs();}
 	public function toSeqs(){ return new Seqs(Parser.mapArToVect(s, function(e){return e.t.toTerm();}), line, column); }
 }
 private class St implements InterTerm{
@@ -308,13 +308,13 @@ private class St implements InterTerm{
 		this.column = column;
 		pointing.t = this;
 	}
-	public function toTerm():Wood{ return new Stri(sy, line, column); }
+	public function toTerm():Term{ return new Stri(sy, line, column); }
 }
 
 typedef PF = Bool -> Int -> Void;
 
 @:expose class Parser{
-	public function new(){init();}
+	public function new(){}
 	public static function prefixes(shorter:String, longer:String):Bool{
 		if(shorter.length > longer.length){
 			return false;
@@ -772,7 +772,7 @@ typedef PF = Bool -> Int -> Void;
 
 @:expose class Termpose{
 	public static function parseMultiline(s:String):Seqs return new Parser().parseToSeqs(new StringIterator(s));
-	public static function parse(s:String):Wood {
+	public static function parse(s:String):Term {
 		var res = parseMultiline(s);
 		var ress = res.s;
 		if(ress.length == 1) return ress[0];
@@ -800,7 +800,7 @@ typedef PH = Null<Int> -> Void;
 	
 	private var root:Seqs;
 	private var input:StringIterator;
-	private var parenTermStack:Array<Wood>;
+	private var parenTermStack:Array<Term>;
 	private var stringBeingReadInto:Null<Stri>;
 	private var leafReading:StringBuf;
 	private var line:Int;
@@ -890,7 +890,7 @@ typedef PH = Null<Int> -> Void;
 			giveUp("unmatched paren");
 		}
 	}
-	private function lastList():Array<Wood> {
+	private function lastList():Array<Term> {
 		return parenTermStack[parenTermStack.length-1].s;
 	}
 	private function beginLeaf():Stri {
@@ -955,7 +955,7 @@ typedef PH = Null<Int> -> Void;
 	}
 	
 	private function moveCharPtrAndUpdateLineCol():Null<Int>{
-		var nco:Null<Int> = input.next();
+		var nco = input.next();
 		if(nco != null){
 			if(nco == '\r'.code){
 				if('\n'.code == input.peek()){ //crlf support
@@ -1027,7 +1027,7 @@ typedef PH = Null<Int> -> Void;
 	
 	
 	
-	public function parseMultipleWoodslist():Wood { //parses as if it's a file, and each term at root is a separate term. This is not what you want if you expect only a single line, and you want that line to be the root term, but its behaviour is more consistent if you are parsing files
+	public function parseMultipleWoodslist():Term { //parses as if it's a file, and each term at root is a separate term. This is not what you want if you expect only a single line, and you want that line to be the root term, but its behaviour is more consistent if you are parsing files
 		while(true){
 			var co = moveCharPtrAndUpdateLineCol();
 			currentMode(co);
@@ -1041,10 +1041,10 @@ typedef PH = Null<Int> -> Void;
 
 
 @:expose class Woodslist{
-	public static function parseMultiple(s:String):Wood {
+	public static function parseMultiple(s:String):Term {
 		return new WoodslistParser(s).parseMultipleWoodslist();
 	}
-	public static function parseSingle(s:String):Wood {
+	public static function parseSingle(s:String):Term {
 		var r = parseMultiple(s);
 		if(r.s.length == 1){
 			return r.s[0];

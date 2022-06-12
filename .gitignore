@@ -1,0 +1,12 @@
+*.sublime-workspace
+node_modules
+notCompiled
+csharp_from_haxe
+cppout
+project
+rust_aside
+src/main/scala/target
+target
+a.out
+basicCppExample
+scraps

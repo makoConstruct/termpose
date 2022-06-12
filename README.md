@@ -4,11 +4,11 @@
 
 Termpose is an extremely flexible markup language with an elegant whitespace syntax.
 
-Termpose data, once parsed, is very simple to work with. It doesn't have maps and numbers. It only has lists and strings. APIs are provided for type-checking-translating into types like maps and numbers, but the format itself does not impose. The only characters termpose applies special meaning to are `":() `. The rest are yours to use as you please.
+Termpose data, once parsed, is very simple to work with. It doesn't have maps and numbers. It only has lists and strings. APIs are provided for type-checking-translating into types like maps and numbers, but the format itself does not impose. The only characters termpose applies special meaning to are `":()\ `. The rest are yours to use as you please.
 
 
 
-Here's an example of the kind of data I store in termpose. This is very similar to the save format of a game I'm working on:
+Here's an example of the kind of data I store in termpose. This is very similar to part of the save format of a game I'm working on:
 ```
 mon
   name leafward
@@ -53,19 +53,19 @@ We were always able to use a nice, minimal, flexible S-Expressions language inst
 
 ## Platform support?
 
-(Caveat, Rust is currently the only language that supports termpose per specification, the others do something different with items in a line with indental, because until writing the spec I hadn't thought hard about what made the most sense there.)
+Warning, Rust is currently the only language that supports termpose per specification, the others do something different with items in a line with indental, because until writing the spec I hadn't thought hard about what made the most sense there.
 
-| language | status | further info |
-| ---------|--------|------ |
-| C++ | Very nice. The maintainer is using it actively right now. | [Basic API](https://github.com/makoConstruct/termpose/blob/master/basic%20C%2B%2B%20api.md), [Intro to parser combinators](https://github.com/makoConstruct/termpose/blob/master/cppintro.md), [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
-| Haxe | Pretty good. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| Scala | Very nice | [This brief intro](https://github.com/makoConstruct/termpose/wiki/Introducing-Termpose!-(To-Scala)) and the [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
-| Javascript | There is a basic API that converts termpose to arrays of strings. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| C# | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| Java | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| Python | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| C | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
-| Rust | Good support for termpose and [woodslist](https://github.com/makoConstruct/termpose/blob/master/woodslist.md). Has autoderive. | [Rust Intro](https://github.com/makoConstruct/termpose/blob/master/rust/README.md) |
+| language | compliant | status | further info |
+| ---------|-----------|--------|------ |
+| C++ | | Very nice. The maintainer is using it actively right now. | [Basic API](https://github.com/makoConstruct/termpose/blob/master/basic%20C%2B%2B%20api.md), [Intro to parser combinators](https://github.com/makoConstruct/termpose/blob/master/cppintro.md), [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
+| Haxe | | Pretty good. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| Scala | | Very nice | [This brief intro](https://github.com/makoConstruct/termpose/wiki/Introducing-Termpose!-(To-Scala)) and the [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
+| Javascript | | There is a basic API that converts termpose to arrays of strings. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| C# | | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| Java | | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| Python | | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| C | | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
+| Rust | Yes | Good support for termpose and [woodslist](https://github.com/makoConstruct/termpose/blob/master/woodslist.md). Has autoderive. | [Rust Intro](https://github.com/makoConstruct/termpose/blob/master/rust/README.md) |
 
 
 ## Format in detail

@@ -1,0 +1,11 @@
+
+tests
+	"list"
+		a b
+		(a b)
+	"multiline string drops first newline"
+		"
+a
+b"
+		"a
+b"

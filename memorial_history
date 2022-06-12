@@ -1,0 +1,4 @@
+bug stories
+	double free of p->error. p->error was kept despite drainParser having freed it. Resolved by copying p->error
+	output terms were overlapping each other because the outArr was being allocated with malloc(n*sizeof(Term*)) rather than malloc(n*sizeof(Term)). Thanks valgrind.
+	

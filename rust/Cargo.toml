@@ -11,6 +11,3 @@ keywords = ["s-expression", "serialization"]
 [dependencies]
 #string_cache = "0.7.0"
 ref_slice = "1.1.1"
-
-[dev-dependencies]
-wood_derive = { path = "./wood_derive" }

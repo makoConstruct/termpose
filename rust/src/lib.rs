@@ -241,21 +241,6 @@ pub trait Dewooder<T> {
 	fn dewoodify(&self, v:&Wood) -> Result<T, Box<WoodError>>;
 }
 
-macro_rules! wood_assert {
-	($term:expr, $condition:expr, $message:expr) => {
-		if !$condition {
-			let (l, c) = ($term).line_and_col();
-			panic!(format!("line: {}, column: {}, {}", l, c, $message));
-		}
-	};
-	($term:expr, $condition:expr) => {
-		if !$condition {
-			let (l, c) = ($term).line_and_col();
-			panic!(format!("line: {}, column: {}, condition `{}` did not hold", l, c, stringify!($condition)));
-		}
-	};
-}
-
 #[derive(Debug)]
 pub struct WoodError{
 	pub line:isize,
@@ -287,7 +272,7 @@ pub trait Woodable {
 	fn woodify(&self) -> Wood;
 }
 pub trait Dewoodable {
-	fn dewoodify(&Wood) -> Result<Self, Box<WoodError>> where Self:Sized;
+	fn dewoodify(v:&Wood) -> Result<Self, Box<WoodError>> where Self:Sized;
 }
 
 pub fn woodify<T>(v:&T) -> Wood where T: Woodable {

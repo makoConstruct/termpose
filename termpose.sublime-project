@@ -1,0 +1,26 @@
+{
+	"folders":[
+		{
+			"follow_symlinks": true,
+			"path": "."
+		}
+	],
+	"build_systems":[
+		{
+			"name": "cppdemo",
+			"cmd": ["g++", "-std=c++11", "cppdemo.cpp"],
+			"file_regex": "^(..[^\\n:]*):([0-9]+):?([0-9]+)?: (fatal error|error|warning): (.*)$"
+		},
+		{
+			"name": "testCPP",
+			"cmd": ["g++", "-std=c++11", "testCPPTermpose.cpp"],
+			"file_regex": "^(..[^\\n:]*):([0-9]+):?([0-9]+)?: (fatal error|error|warning): (.*)$"
+		},
+		{
+			"name": "jsting",
+			"cmd": ["haxe", "Parser.hx", "-js", "hxpkg.js"],
+			"file_regex": "^(.*\\.hx):([0-9]+): characters ([0-9]+)",
+			"selector": "source.haxe"
+		}
+	]
+}
