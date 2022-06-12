@@ -11,9 +11,17 @@ use quote::quote;
 use syn::{Ident, Data::{Struct, Enum, Union}, Fields::{Named, Unnamed, Unit}};
 
 
+// was going to make an impl that only does part of the translation, to let the user prepend tags. But I decided I'd prefer to just write translations by hand. Opening this up to the point where it's helping to automate, but also the user has full control, seems daunting. I might hate magic.
+// #[proc_macro_derive(GeneratedWoodable)]
+// pub fn generatedwoodable_derive(input: TokenStream) -> TokenStream {
+// 	generated_Woodable(input, quote!{GeneratedWoodable});
+// }
 
 #[proc_macro_derive(Woodable)]
 pub fn woodable_derive(input: TokenStream) -> TokenStream {
+	generated_woodable(input, quote!{Woodable})
+}
+fn generated_woodable(input: TokenStream, being_impld: PM2TS) -> TokenStream {
 	let ast: syn::DeriveInput = syn::parse(input).unwrap();
 
 	let name = &ast.ident;
@@ -46,7 +54,7 @@ pub fn woodable_derive(input: TokenStream) -> TokenStream {
 			let tit = woodify_branch_contents.into_iter();
 			
 			(quote! {
-				impl wood::Woodable for #name {
+				impl wood::#being_impld for #name {
 					fn woodify(&self)-> wood::Wood {
 						wood::branch!(
 							stringify!(#name),
@@ -116,7 +124,7 @@ pub fn woodable_derive(input: TokenStream) -> TokenStream {
 			}).collect();
 			
 			(quote! {
-				impl wood::Woodable for #name {
+				impl wood::#being_impld for #name {
 					fn woodify(&self)-> wood::Wood {
 					 	match *self {
 							#(#variant_cases),*
@@ -139,6 +147,7 @@ pub fn woodable_derive(input: TokenStream) -> TokenStream {
 // pub fn wood_derive(attr: TokenStream, item: TokenStream) -> TokenStream {
 // 	(quote!{}).into()
 // }
+
 
 #[proc_macro_derive(Dewoodable, attributes(wood))]
 pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
@@ -166,15 +175,16 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 					if n.named.len() == 0 {
 						with_body(quote! { Self{} })
 					}else{
-					
-						let var_parsing:Vec<PM2TS> = n.named.iter().map(|m:&syn::Field|{
+						
+						let mut var_parsing:Vec<PM2TS> = Vec::new();
+						for m in n.named.iter() {
+							// if m.attrs.iter().any(|a| a.path.segments.zip(["wood", "dont"].iter()).all(|i, s| i.ident == s)) {continue;}
 							let var_ident = &m.ident.as_ref().unwrap();
 							let var_type = &m.ty;
-							quote!{
-								
+							var_parsing.push(quote!{
 								#var_ident: {type T = #var_type; T::dewoodify(scanning.find(stringify!(#var_ident))?)?}
-							}
-						}).collect();
+							});
+						}
 						
 						let number_of_fields = var_parsing.len();
 						

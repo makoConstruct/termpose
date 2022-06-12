@@ -212,6 +212,9 @@ impl Wood {
 	pub fn seek<'a, 'b>(&'a self, key:&'b str)-> Option<&'a Wood> {
 		self.contents().find(|el| el.initial_str() == key)
 	}
+	pub fn seek_val<'a, 'b>(&'a self, key:&'b str)-> Option<&'a Wood> {
+		self.seek(key).and_then(|w| w.tail().next())
+	}
 	
 	/// returns the first child term with initial_str == key, or if none is found, an error
 	pub fn find<'a, 'b>(&'a self, key:&'b str)-> Result<&'a Wood, Box<WoodError>> {
@@ -282,7 +285,6 @@ pub fn woodify<T>(v:&T) -> Wood where T: Woodable {
 pub fn dewoodify<T>(v:&Wood) -> Result<T, Box<WoodError>> where T: Dewoodable {
 	T::dewoodify(v)
 }
-
 
 /// parse_termpose(v).and_then(dewoodify)
 pub fn deserialize<T>(v:&str) -> Result<T, Box<WoodError>> where T : Dewoodable {
