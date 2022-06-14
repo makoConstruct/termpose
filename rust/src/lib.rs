@@ -70,14 +70,14 @@ pub enum Wood {
 pub use Wood::*;
 
 
-impl Into<Wood> for String {
-	fn into(self) -> Wood { Leafv(Leaf{ line:-1, column:-1, v:self }) }
+impl From<String> for Wood {
+	fn from(v:String) -> Wood { Leafv(Leaf{ line:-1, column:-1, v }) }
 }
-impl<'a> Into<Wood> for &'a str {
-	fn into(self) -> Wood { self.to_string().into() }
+impl<'a> From<&'a str> for Wood {
+	fn from(v:&'a str) -> Wood { Wood::from(v.to_string()) }
 }
-impl Into<Wood> for Vec<Wood> {
-	fn into(self) -> Wood { Branchv(Branch{ line:-1, column:-1, v:self }) }
+impl From<Vec<Wood>> for Wood {
+	fn from(v:Vec<Wood>) -> Wood { Branchv(Branch{ line:-1, column:-1, v }) }
 }
 
 
@@ -110,6 +110,7 @@ fn push_escaped(take:&mut String, give:&str){
 impl Wood {
 	pub fn leaf(v:String)-> Wood    { Wood::Leafv(Leaf{line:-1, column:-1, v:v}) }
 	pub fn branch(v:Vec<Wood>)-> Wood { Wood::Branchv(Branch{line:-1, column:-1, v:v}) }
+	pub fn empty()-> Wood { Wood::branch(Vec::new()) }
 	pub fn is_leaf(&self)-> bool { match self { &Leafv(_)=> true, _=> false } }
 	pub fn is_branch(&self)-> bool { match self { &Branchv(_)=> true, _=> false } }
 	pub fn line(&self)-> isize { match *self { Leafv(ref s)=> s.line, Branchv(ref s)=> s.line } }
@@ -229,13 +230,14 @@ impl Wood {
 	}
 }
 
-#[macro_export]
-macro_rules! branch {
-	[$($inner:expr),* $(,)*]=> {{
-		$crate::Branchv($crate::Branch{line:-1, column:-1, v:vec!($($inner.into()),*)})
-	}};
+//I really wanted to make this recurse over everything, in braces, making branches of each, but this did not work
+// #[macro_export]
+macro_rules! woods {
+	($($el:expr),*)=> {
+		$crate::Branchv($crate::Branch{line:-1, column:-1, v:vec!($(Wood::from($el)),*)})
+	};
+	// ($e:expr)=> { Wood::from($e) }
 }
-
 
 
 pub trait Wooder<T> {
@@ -454,4 +456,14 @@ fn process_ishm_protocol_handling object criterion
 		
 		assert_eq!(&w, &should_be);
 	}
+	
+	// unfortunately I wasn't able to implement this. Rust's macros are really deeply horrible to work with.
+	// #[test]
+	// fn test_build_macro(){
+	// 	let w = woodser!("yeah");
+	// 	// let wa = woodser!(["yeah", ["how", [[], "okay"]]]);
+	// 	let a = Wood::from([Wood::from("yeah")]);
+	// 	let wa = woodser!(["yeah", ["how", "d", [], w]]);
+	// 	panic!("{}", super::pretty_termpose(&wa))
+	// }
 }

@@ -287,7 +287,7 @@ where
     fn woodify(&self, v: &(K, V)) -> Wood {
         let kt = self.0.woodify(&v.0);
         let vt = self.1.woodify(&v.1);
-        branch!(kt, vt).into()
+        woods!(kt, vt)
     }
 }
 impl<K, V, KeyTran, ValTran> Dewooder<(K, V)> for PairBi<KeyTran, ValTran>
@@ -313,7 +313,7 @@ fn woodify_map<'a, K, V, KeyWooder, ValWooder, I>(
     V: 'a,
 {
     for (kr, vr) in i {
-        o.push(branch!(ktr.woodify(kr), vtr.woodify(vr)).into())
+        o.push(Wood::from(vec!(ktr.woodify(kr), vtr.woodify(vr))));
     }
 }
 
@@ -428,7 +428,7 @@ mod tests {
 
     #[test]
     fn tricky_branch_parse() {
-        let brancho = branch!(branch!("tricky", "branch"), branch!("parse"));
+        let brancho = woods!(woods!("tricky", "branch"), "parse");
         let tranner: SequenceBi<SequenceBi<Iden>> = SequenceBi(SequenceBi(Iden));
         let lv: Vec<Vec<String>> = tranner.dewoodify(&brancho).unwrap();
         assert!(lv.len() == 2);

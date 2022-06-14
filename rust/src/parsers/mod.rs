@@ -111,13 +111,6 @@ mod tests {
 		ret
 	}
 	
-	// #[test]
-	// fn it_work() {
-	// 	let ti = branch!(branch!("hue", branch!("when", "you", "now"), "then", "else"));
-	// 	let to:Wood<&'static str> = parse_sexp("hue (when you now) then else").unwrap();
-	// 	println!("the parsed is {}", to.to_string());
-	// 	assert!(ti == to);
-	// }
 	
 	#[test]
 	fn test_tests_term_file() {
@@ -183,7 +176,7 @@ mod tests {
 	
 	#[test]
 	fn idempotence() {
-		let term = branch!("how", branch!("about", "that"));
+		let term = woods!("how", woods!("about", "that"));
 		assert!(term == parse_termpose(parse_termpose(term.to_string().as_str()).unwrap().to_string().as_str()).unwrap())
 	}
 	
@@ -236,12 +229,12 @@ mod tests {
 	fn windows_style_line_endings_do_parse() {
 		let wshortterm = windowsify(read_file_from_root("shortterm.term").as_str());
 		
-		let expected_data = branch!(
-			branch!("let", "a", "2"),
-			branch!(
-				branch!("if", "a"),
-				branch!("then", branch!("+", "a", "2")),
-				branch!("else", "0")
+		let expected_data = woods!(
+			woods!("let", "a", "2"),
+			woods!(
+				woods!("if", "a"),
+				woods!("then", woods!("+", "a", "2")),
+				woods!("else", "0")
 			)
 		);
 		
@@ -286,12 +279,12 @@ b\")
 	#[test]
 	fn woodslist_parser_skips_first_newline() {
 		let w = parse_woodslist("aaa \"\naa sdi \n  idj\" a").unwrap();
-		assert_eq!(&branch!("aaa", "aa sdi \n  idj", "a"), &w, "uh");
+		assert_eq!(&woods!("aaa", "aa sdi \n  idj", "a"), &w, "uh");
 	}
 	
 	#[test]
 	fn woodslist_parser_doesnt_skip_first_non_newline() {
 		let w = parse_woodslist("aaa \"aa sdi \n  idj\" a").unwrap();
-		assert_eq!(&branch!("aaa", "aa sdi \n  idj", "a"), &w, "uh");
+		assert_eq!(&woods!("aaa", "aa sdi \n  idj", "a"), &w, "uh");
 	}
 }

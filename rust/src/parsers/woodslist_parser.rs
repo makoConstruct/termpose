@@ -191,7 +191,7 @@ impl<'a> SexpParserState<'a> {
 
 pub fn parse_multiline_woodslist<'a>(s:&'a str)-> Result<Wood, Box<WoodError>> { //parses as if it's a file, and each term at root is a separate term. This is not what you want if you expect only a single line, and you want that line to be the root term, but its behaviour is more consistent if you are parsing files
 	let mut state = SexpParserState::<'a>{
-		root: branch!(), //a yet empty line
+		root: Wood::empty(), //a yet empty line
 		paren_stack: Vec::new(),
 		leaf_being_read_into: null_mut(),
 		iter: s.chars().peekable(),

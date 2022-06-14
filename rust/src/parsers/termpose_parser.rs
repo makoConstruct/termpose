@@ -564,7 +564,7 @@ impl<'a> TermposeParserState<'a> {
 ///Returns a Branch containing all of the Woods at root level, even if there is only one Wood, it will be wrapped in an additional Branch
 pub fn parse_multiline_termpose_style<'a>(s:&'a str, style:TermposeStyle)-> Result<Wood, Box<WoodError>> {
 	let mut state = TermposeParserState::<'a>{
-		root: branch!(), //a yet empty line
+		root: Wood::empty(), //a yet empty line
 		indent_stack: vec!(""),
 		stretch_reading_start: s.as_ptr(),
 		cur_char_ptr: s.as_ptr(),
