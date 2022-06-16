@@ -229,7 +229,7 @@ impl Wood {
 #[macro_export]
 macro_rules! woods {
 	($($el:expr),* $(,)?)=> {
-		$crate::Branchv($crate::Branch{line:-1, column:-1, v:vec!($(Wood::from($el)),*)})
+		$crate::Branchv($crate::Branch{line:-1, column:-1, v:vec!($($crate::Wood::from($el)),*)})
 	};
 	// ($e:expr)=> { Wood::from($e) }
 }

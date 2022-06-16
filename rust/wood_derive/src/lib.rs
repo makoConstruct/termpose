@@ -33,7 +33,7 @@ fn generated_woodable(input: TokenStream, being_impld: PM2TS) -> TokenStream {
 					n.named.iter().map(|m:&syn::Field|{
 						let mid = &m.ident.as_ref().unwrap();
 						quote!{
-							wood::branch!(
+							wood::woods!(
 								stringify!(#mid),
 								self.#mid.woodify(),
 							)
@@ -56,7 +56,7 @@ fn generated_woodable(input: TokenStream, being_impld: PM2TS) -> TokenStream {
 			(quote! {
 				impl wood::#being_impld for #name {
 					fn woodify(&self)-> wood::Wood {
-						wood::branch!(
+						wood::woods!(
 							stringify!(#name),
 							#(#tit),*
 						)
@@ -74,7 +74,7 @@ fn generated_woodable(input: TokenStream, being_impld: PM2TS) -> TokenStream {
 				let has_fields = |bindings: PM2TS, woodifications:PM2TS|{
 					quote!{
 						#name::#variant_name #bindings => {
-							wood::branch!(
+							wood::woods!(
 								stringify!(#variant_name),
 								#woodifications
 							)
@@ -92,7 +92,7 @@ fn generated_woodable(input: TokenStream, being_impld: PM2TS) -> TokenStream {
 						let woodvec:Vec<PM2TS> = fs.named.iter().map(|m:&syn::Field|{
 							let fid = m.ident.as_ref().unwrap();
 							quote!{
-								wood::branch!(
+								wood::woods!(
 									stringify!(#fid),
 									#fid.woodify(),
 								)
