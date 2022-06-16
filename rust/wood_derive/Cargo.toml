@@ -1,6 +1,6 @@
 [package]
 name = "wood_derive"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["mako <marcus.yass@gmail.com>"]
 edition = "2018"
 description = "autoderive for wood serialization"
@@ -14,5 +14,5 @@ proc-macro = true
 syn = "0.15.33"
 quote = "0.6.12"
 proc-macro2 = "0.4.29"
-wood = "0.5.2"
+wood = "0.5.3"
 # wood = { path = "../" }

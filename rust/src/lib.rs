@@ -3,8 +3,6 @@
 #![feature(drain_filter)]
 #![feature(core_intrinsics)]
 
-// extern crate string_cache;
-// use string_cache::DefaultLeaf as Strin;
 use std::str::FromStr;
 use std::cmp::{PartialEq};
 use std::result::Result;
@@ -13,9 +11,6 @@ use std::fmt::{Formatter, Display, Debug};
 use std::mem::forget;
 use std::borrow::{Borrow};
 use std::ptr::{null_mut};
-extern crate ref_slice;
-use ref_slice::ref_slice;
-
 
 // pub trait Wood where Self:Sized {
 // 	type Iter:Iterator<Item=Self>;
@@ -191,7 +186,7 @@ impl Wood {
 	pub fn contents(&self)-> std::slice::Iter<Self> {
 		match *self.borrow() {
 			Branchv(ref v)=> v.v.iter(),
-			Leafv(_)=> ref_slice(self).iter(),
+			Leafv(_)=> std::slice::from_ref(self).iter(),
 		}
 	}
 	/// returns the first wood, or if it's a leaf, itself
@@ -231,9 +226,9 @@ impl Wood {
 }
 
 //I really wanted to make this recurse over everything, in braces, making branches of each, but this did not work
-// #[macro_export]
+#[macro_export]
 macro_rules! woods {
-	($($el:expr),*)=> {
+	($($el:expr),* $(,)?)=> {
 		$crate::Branchv($crate::Branch{line:-1, column:-1, v:vec!($(Wood::from($el)),*)})
 	};
 	// ($e:expr)=> { Wood::from($e) }
@@ -248,7 +243,7 @@ pub trait Dewooder<T> {
 }
 
 #[derive(Debug)]
-pub struct WoodError{
+pub struct WoodError {
 	pub line:isize,
 	pub column:isize,
 	pub msg:String,

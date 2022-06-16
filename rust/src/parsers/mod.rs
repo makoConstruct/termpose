@@ -86,6 +86,7 @@ fn do_indent(indent:&str, indent_depth:usize, out:&mut String){
 
 
 
+mod ref_stack;
 mod termpose_parser;
 pub use self::termpose_parser::*;
 

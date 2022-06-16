@@ -308,3 +308,11 @@ pub fn dewoodable_derive(input: TokenStream) -> TokenStream {
 }
 
 
+
+
+// I think, to complete this API, we kinda need something like this:
+// define_struct_biwooder!(ProfileBiwooder {
+//     id "uuid": Base64Bi,
+//     name: Ident, 
+//     description: Ident, 
+// })
