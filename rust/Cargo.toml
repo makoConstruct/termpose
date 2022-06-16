@@ -8,6 +8,8 @@ license = "MIT"
 edition = "2021"
 keywords = ["s-expression", "serialization"]
 
+[dev-dependencies]
+criterion = "0.3.5"
 
 [dependencies]
-smallvec = "1.8.0"
+# smallvec = "1.8.0"

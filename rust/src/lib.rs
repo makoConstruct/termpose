@@ -205,6 +205,7 @@ impl Wood {
 		}
 	}
 	/// `self.contents().find(|el| el.initial_str() == key)`
+	// TODO: Make this seek the initial list. For instance, In (((key vv) val) (nonkey a)), it should return (key vv), not ((key vv) val). This allows the schema to be evolved so that things can be associated with a kv pair without changing it
 	pub fn seek<'a, 'b>(&'a self, key:&'b str)-> Option<&'a Wood> {
 		self.contents().find(|el| el.initial_str() == key)
 	}

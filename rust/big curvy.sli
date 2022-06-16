@@ -1,0 +1,57 @@
+
+(tests
+  ("paren term thing" (abacus deus magnitude) (abacus deus magnitude))
+  ("more paren term things"
+    (let (it happen))
+    (let (it happen))
+    (let (it happen))
+  )
+  ("colons alone in list" ((())))
+  ("treat colons as colons even if there's a space"
+    (ne (ne ne))
+    (ne (ne ne))
+  )
+  ("central feature about terms alone on their lines not being in a list"
+    (a b c)
+    (a b c)
+  )
+  ("nested colons work the same way" (((a b))))
+  ("escaped chars can occur in the middle of unquoted atoms. Yes it was weird that you did it the other way. The intuition driving this is=> If there are no spaces a person should just be able to remove the quotes and the string should mean the same thing."
+    h\"ow
+    h\"ow
+    h\"ow
+  )
+  ("finalize the multiline string's newline only after finding another line matching the indent given. Only newline if the indent goes all the way up."
+    (m something\n)
+    (m something\n)
+  )
+  ("and if there's no newline" (m something) (m something))
+  ("and what if we be tricky and have it be invisibly different but different in meaning"
+    (m something)
+    (m something)
+  )
+  ("many open parens"
+    (- (A (B (C (D E)))) (N (M E)))
+    (- (A (B (C (D E)))) (N (M E)))
+  )
+  ("trailing colon" (a (b c)) (a (b c)) (a (b c)))
+  ("non trailing colon" (a (b c)) (a (b c)))
+  ("colon chaining"
+    (a (b (c d)))
+    ((a (b (c d)))
+      bug
+      (seiosejse
+        (opsefk
+          iopsdofkpsodkfpsd
+          kdofk
+          (d (dsfios ((Dfiosds sjdiasjd how how how nnnnnnnnnnnnnns))))
+        )
+        sdd
+        d
+        sdsfsd
+        fsdf
+      )
+    )
+  )
+)
+sdffdssdf
