@@ -1,145 +1,31 @@
-use super::ref_stack::RefStack;
 use super::*;
 
-struct SexpParserState<'a, 'b> {
-    paren_stack: RefStack<'b, Vec<Wood>>,
+struct SexpParserState<'a> {
     iter: std::iter::Peekable<std::str::Chars<'a>>,
     line: isize,
     column: isize,
-    mode: fn(&mut SexpParserState<'a, 'b>, Option<char>) -> Result<(), Box<WoodError>>,
 }
 
-impl<'a, 'b> SexpParserState<'a, 'b> {
-    fn a_fail(&self, message: String) -> Result<(), Box<WoodError>> {
-        Err(Box::new(WoodError {
+#[derive(PartialEq)]
+enum HowEnded {
+    FoundParen,
+    FoundEOF,
+}
+
+impl<'a> SexpParserState<'a> {
+    fn a_fail(&self, message: String) -> Box<WoodError> {
+        Box::new(WoodError {
             line: self.line,
             column: self.column,
             msg: message,
             cause: None,
-        }))
-    }
-
-    fn make_branch(&self) -> Wood {
-        Branchv(Branch {
-            line: self.line,
-            column: self.column,
-            v: Vec::new(),
         })
-    }
-
-    fn open_paren(&mut self) {
-        let b = self.make_branch();
-		self.paren_stack.top.push(b);
-        self.paren_stack
-            .push(|v| &mut assume_branch_mut(get_back_mut(v)).v);
-        self.mode = Self::seeking_term;
-    }
-    fn close_paren(&mut self) -> Result<(), Box<WoodError>> {
-        if self.paren_stack.len() > 1 {
-            self.paren_stack.pop();
-            self.mode = Self::seeking_term;
-            Ok(())
-        } else {
-            self.a_fail("unmatched paren".into())
-        }
-    }
-    fn leaf_being_read_into(&mut self) -> &mut String {
-        &mut assume_leaf_mut(self.paren_stack.top.last_mut().unwrap()).v
-    }
-    fn begin_leaf(&mut self) {
-        self.paren_stack.top.push(Leafv(Leaf {
-            line: self.line,
-            column: self.column,
-            v: String::new(),
-        }));
-    }
-
-    fn begin_quoted(&mut self) {
-        self.begin_leaf();
-        //potentially skip the first character if it's a newline
-        match self.iter.peek() {
-            Some(&'\n') | Some(&'\r') => {
-                self.move_char_ptr_and_update_line_col();
-            }
-            _ => {}
-        }
-        self.mode = Self::eating_quoted_string;
-    }
-
-    fn start_reading_thing(&mut self, c: char) -> Result<(), Box<WoodError>> {
-        match c {
-            ')' => {
-                self.close_paren()?;
-            }
-            '(' => {
-                self.open_paren();
-            }
-            '"' => {
-                self.begin_quoted();
-            }
-            _ => {
-                self.begin_leaf();
-                self.mode = Self::eating_leaf;
-                self.eating_leaf(Some(c))?;
-            }
-        }
-        Ok(())
-    }
-
-    fn seeking_term(&mut self, co: Option<char>) -> Result<(), Box<WoodError>> {
-        if let Some(c) = co {
-            match c {
-                ' ' | '\t' => {}
-                '\n' | '\r' => {} // \r shouldn't really occur here, but whatever
-                _ => {
-                    self.start_reading_thing(c)?;
-                }
-            }
-        }
-        Ok(())
-    }
-	
-	fn push(&mut self, c:char){
-		self.leaf_being_read_into().push(c);
-	}
-	
-    fn read_escaped_char(&mut self) -> Result<(), Box<WoodError>> {
-        let nco = self.move_char_ptr_and_update_line_col();
-        let match_fail_message = "escape slash must be followed by a valid escape character code";
-        if let Some(nc) = nco {
-            match nc {
-                'n' => {
-                    self.push('\n');
-                }
-                'r' => {
-                    self.push('\r');
-                }
-                't' => {
-                    self.push('\t');
-                }
-                'h' => {
-                    self.push('☃');
-                }
-                '"' => {
-                    self.push('"');
-                }
-                '\\' => {
-                    self.push('\\');
-                }
-                _ => {
-                    return self.a_fail(match_fail_message.into());
-                }
-            }
-        } else {
-            return self.a_fail(match_fail_message.into());
-        }
-        Ok(())
     }
 
     fn move_char_ptr_and_update_line_col(&mut self) -> Option<char> {
         self.iter.next().and_then(|c| {
             if c == '\r' {
-                if Some('\n') == self.iter.clone().next() {
+                if Some(&'\n') == self.iter.peek() {
                     //crlf support
                     self.iter.next();
                 }
@@ -157,76 +43,139 @@ impl<'a, 'b> SexpParserState<'a, 'b> {
         })
     }
 
-    fn eating_quoted_string(&mut self, co: Option<char>) -> Result<(), Box<WoodError>> {
-        let push = |slf: &mut Self, c: char| slf.leaf_being_read_into().push(c); //safe: leaf_being_read_into must have been validated before this mode could have been entered
-        if let Some(c) = co {
-            match c {
-                '\\' => {
-                    self.read_escaped_char()?;
-                }
-                '"' => {
-                    self.mode = Self::seeking_term;
-                }
-                _ => {
-                    push(self, c);
-                }
+    fn read_escaped_char(&mut self) -> Result<char, Box<WoodError>> {
+        let nco = self.move_char_ptr_and_update_line_col();
+        let match_fail_message = "escape slash must be followed by a valid escape character code";
+        if let Some(nc) = nco {
+            match nc {
+                'n' => Ok('\n'),
+                'r' => Ok('\r'),
+                't' => Ok('\t'),
+                'h' => Ok('☃'),
+                '"' => Ok('"'),
+                '\\' => Ok('\\'),
+                _ => Err(self.a_fail(match_fail_message.into())),
             }
+        } else {
+            Err(self.a_fail(match_fail_message.into()))
         }
-        Ok(())
     }
 
-    fn eating_leaf(&mut self, co: Option<char>) -> Result<(), Box<WoodError>> {
-        let push = |slf: &mut Self, c: char| slf.leaf_being_read_into().push(c); //safe: leaf_being_read_into must have been validated before this mode could have been entered
-        if let Some(c) = co {
+    fn seeking(&mut self, into: &mut Branch) -> Result<HowEnded, Box<WoodError>> {
+        while let Some(c) = self.move_char_ptr_and_update_line_col() {
             match c {
-                '\n' | '\r' => {
-                    self.mode = Self::seeking_term;
-                }
-                ' ' | '\t' => {
-                    self.mode = Self::seeking_term;
-                }
-                '"' => {
-                    self.begin_quoted();
+                '(' => {
+                    into.v.push(Branchv(Branch {
+                        line: self.line,
+                        column: self.column,
+                        v: Vec::new(),
+                    }));
+                    let b = assume_branch_mut(into.v.last_mut().unwrap());
+                    let how_inner_ended = self.seeking(b)?;
+                    if HowEnded::FoundEOF == how_inner_ended {
+                        return Err(Box::new(WoodError {
+                            msg: "unmatched opening paren".into(),
+                            line: b.line,
+                            column: b.column,
+                            cause: None,
+                        }));
+                    }
                 }
                 ')' => {
-                    self.close_paren()?;
+                    return Ok(HowEnded::FoundParen);
                 }
-                '(' => {
-                    self.open_paren();
+                ' ' | '\t' | '\n' => {}
+                '"' => {
+                    into.v.push(Leafv(Leaf {
+                        line: self.line,
+                        column: self.column,
+                        v: String::new(),
+                    }));
+                    let reading_into = assume_leaf_mut(into.v.last_mut().unwrap());
+                    let get_char = |this:&mut SexpParserState| {
+                        this.move_char_ptr_and_update_line_col().ok_or_else(|| {
+                            this.a_fail(format!("unclosed string starting at "))
+                        })
+                    };
+                    let mut c = get_char(self)?;
+                    if c == '\n' {
+                        //skip any initial newline, to allow the user to get everything lined up at the baseline, if they want.
+                        c = get_char(self)?;
+                    }
+                    loop {
+                        match c {
+                            '"' => {
+                                break;
+                            }
+                            '\\' => {
+                                reading_into.v.push(self.read_escaped_char()?);
+                            }
+                            c => {
+                                reading_into.v.push(c);
+                            }
+                        }
+                        c = get_char(self)?;
+                    }
                 }
-                '\\' => {
-                    self.read_escaped_char()?;
-                }
-                _ => {
-                    push(self, c);
+                mut c => {
+                    into.v.push(Leafv(Leaf {
+                        line: self.line,
+                        column: self.column,
+                        v: String::new(),
+                    }));
+                    let reading_into = assume_leaf_mut(into.v.last_mut().unwrap());
+                    loop {
+                        match c {
+                            '\\' => {
+                                reading_into.v.push(self.read_escaped_char()?);
+                            }
+                            c => {
+                                reading_into.v.push(c);
+                            }
+                        }
+                        //return control without advancing it again iff the next character is interrupty, the next char can be dealt with by the outer loop
+                        if let Some(nc) = self.iter.peek() {
+                            match *nc {
+                                ' ' | '\t' | '\n' | '"' | '(' | ')' => {
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        } else {
+                            return Ok(HowEnded::FoundEOF);
+                        }
+                        c = self.move_char_ptr_and_update_line_col().unwrap();
+                    }
                 }
             }
         }
-        Ok(())
+        Ok(HowEnded::FoundEOF)
     }
-} //SexpParserState
+}
 
 pub fn parse_multiline_woodslist<'a>(s: &'a str) -> Result<Wood, Box<WoodError>> {
     //parses as if it's a file, and each term at root is a separate term. This is not what you want if you expect only a single line, and you want that line to be the root term, but its behaviour is more consistent if you are parsing files
-    let mut root:Vec<Wood> = Vec::new();
-	let mut state = SexpParserState {
-        paren_stack: RefStack::new(&mut root),
+    let mut state = SexpParserState {
         iter: s.chars().peekable(),
-        line: 0,
-        column: 0,
-        mode: SexpParserState::seeking_term,
+        line: 1,
+        column: 1,
     };
 
-    loop {
-        // let co = state.iterate_char_iter();
-        let co = state.move_char_ptr_and_update_line_col();
-        (state.mode)(&mut state, co)?;
-        if co == None {
-            break;
-        }
-    }
+    let mut root_branch = Branch {
+        column: 1,
+        line: 1,
+        v: vec![],
+    };
 
-    Ok(Wood::branch(root))
+    match state.seeking(&mut root_branch)? {
+        HowEnded::FoundEOF => Ok(Branchv(root_branch)),
+        HowEnded::FoundParen => Err(Box::new(WoodError {
+            msg: "unmatched closing".into(),
+            line: state.line,
+            column: state.column,
+            cause: None,
+        })),
+    }
 }
 
 pub fn parse_woodslist<'a>(s: &'a str) -> Result<Wood, Box<WoodError>> {

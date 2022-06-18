@@ -86,7 +86,6 @@ fn do_indent(indent:&str, indent_depth:usize, out:&mut String){
 
 
 
-mod ref_stack;
 mod termpose_parser;
 pub use self::termpose_parser::*;
 
@@ -199,7 +198,7 @@ mod tests {
 	
 	#[test]
 	fn longterm_woodslist_idempotence(){
-		let w = parse_woodslist(&read_file_from_root("longterm.term")).unwrap();
+		let w = parse_woodslist(&read_file_from_root("big curvy.sli")).unwrap();
 		let wiw = parse_woodslist(&indented_woodslist(&w)).unwrap();
 		assert_eq!(&w, &wiw);
 	}
@@ -247,12 +246,14 @@ mod tests {
 	
 	#[test]
 	fn windows_style_line_endings_as_expected_in_multiline_string() {
-		let wshortterm = windowsify("
+		let raw = "
 ms \"
 	a
 	
 	b
-");
+";
+		println!("THE RAW LENGTH IS {}", raw.len());
+		let wshortterm = windowsify(raw);
 		
 		let expected_data = "a\n\nb";
 		
