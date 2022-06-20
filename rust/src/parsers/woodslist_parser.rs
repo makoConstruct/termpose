@@ -170,7 +170,7 @@ pub fn parse_multiline_woodslist<'a>(s: &'a str) -> Result<Wood, Box<WoodError>>
     match state.seeking(&mut root_branch)? {
         HowEnded::FoundEOF => Ok(Branchv(root_branch)),
         HowEnded::FoundParen => Err(Box::new(WoodError {
-            msg: "unmatched closing".into(),
+            msg: "unmatched closing paren".into(),
             line: state.line,
             column: state.column,
             cause: None,
