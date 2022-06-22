@@ -1,0 +1,23 @@
+woodspace
+    description ::a flexible format for expressing structured data
+    let's take a look "
+        
+    mako :"yeah that's a thing.
+        andre :"so once you know about that you know that you aren't going to get to do the other thing either.
+            mako :"Yeahhh.
+            mako :"Going to be hard.
+        
+    all a:to b:and
+    (:yeah let's go. How about it.
+    :what if I could do everything with just paren and colon. This would be pretty cool.:
+    a: bad
+    a :bad
+    ::(:escaped string is also allowed. A nice thing about this syntax is that (:it can nest:):)
+    (be (an (absolute madman))) and ((do this) (with us))
+    (:smile operator:)
+    :space allower:
+    ("ugh maybe I should do this actually.
+        ("Oh. No, this is not what you want.
+    (:  Would this work.
+        I guess so. Oh. It would.
+    :and that's pretty neat
