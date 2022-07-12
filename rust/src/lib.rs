@@ -102,20 +102,30 @@ fn push_escaped(take:&mut String, give:&str){
 	}
 }
 
+///A more succinct enum for discriminating leaves and branches, accessible via `Wood::what`
+pub enum LB<'a> {
+	L(&'a str),
+	B(&'a [Wood]),
+}
+pub use LB::*;
+
 impl Wood {
 	pub fn leaf(v:String)-> Wood    { Wood::Leafv(Leaf{line:-1, column:-1, v:v}) }
 	pub fn branch(v:Vec<Wood>)-> Wood { Wood::Branchv(Branch{line:-1, column:-1, v:v}) }
 	pub fn empty()-> Wood { Wood::branch(Vec::new()) }
 	pub fn is_leaf(&self)-> bool { match self { &Leafv(_)=> true, _=> false } }
 	pub fn is_branch(&self)-> bool { match self { &Branchv(_)=> true, _=> false } }
-	pub fn line(&self)-> isize { match *self { Leafv(ref s)=> s.line, Branchv(ref s)=> s.line } }
-	pub fn col(&self)-> isize { match *self { Leafv(ref s)=> s.column, Branchv(ref s)=> s.column } }
+	pub fn what(&self)-> LB { match *self { Leafv(ref s)=> L(&s.v), Branchv(ref s)=> B(&s.v) } }
+	pub fn get_leaf(&self)-> Option<&str> { match *self { Leafv(ref s)=> Some(&s.v), Branchv(_)=> None } }
+	pub fn get_branch(&self)-> Option<&[Wood]> { match *self { Leafv(_)=> None, Branchv(ref s)=> Some(&s.v) } }
 	pub fn line_and_col(&self)-> (isize, isize) {
 		match *self {
 			Wood::Branchv(ref l)=> (l.line, l.column),
 			Wood::Leafv(ref a)=> (a.line, a.column),
 		}
 	}
+	pub fn line(&self)-> isize { match *self { Leafv(ref s)=> s.line, Branchv(ref s)=> s.line } }
+	pub fn col(&self)-> isize { match *self { Leafv(ref s)=> s.column, Branchv(ref s)=> s.column } }
 	/// Seeks the earliest string in the tree by looking at the first element of each branch recursively until it hits a leaf. (If it runs into an empty list, returns the empty string.
 	/// I recommend this whenever you want to use the first string as a discriminator, or whenever you want to get leaf str contents in general.
 	/// This abstracts over similar structures in a way that I consider generally desirable. I would go as far as to say that the more obvious, less abstract way of getting initial string should be Considered Harmful.

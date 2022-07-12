@@ -66,11 +66,11 @@ a **:list** is a sequence type containing any number of :terms
 
 here, we will describe the function mapping our named syntactical elements to :terms. This function's name will be "data"
 
-data(:file) → the data of the :linecontent of each of the root :lines, that is, of each of the lines with an :indent of zero length
+data(:file) → a :list containing data of the :linecontent of each of the root :lines, that is, of each of the lines with an :indent of zero length
 
-data(:linecontent) → if the :linecontent contains multiple :items, it will result in a :list of the data of those items. If it contains just one item, it will result in just the data of that :item, without putting a list around it. If the line has :indental, wrap the data in a list and add the data of the :indental :linecontents to it and return that resultant list
-
-data(:item) → see the following :item variants
+data(:linecontent) → if the :linecontent contains multiple :items, it will result in a :list of the data of those items. If it contains just one item, it will result in just the data of that :item, without putting a list around it. If the line has :indental, then either:
+- if this :linecontent has unclosed parens, then the data of the innermost open paren contains the :indental's data(:linecontents)
+- if not all parens are closed, then wrap the data so far, of this :linecontent, in an additional list, and append the data of the :indental's data(:linecontents) to it, and return that
 
 data(:slist) → a list with the data of each contained :item. If :interrupted, the slist will contain any :indental
 
