@@ -3,13 +3,16 @@
 #![feature(core_intrinsics)]
 #![feature(extract_if)]
 
-use std::cmp::PartialEq;
-use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
-use std::mem::forget;
-use std::ptr::null_mut;
-use std::result::Result;
-use std::str::FromStr;
+use std::{
+    cmp::PartialEq,
+    error::Error,
+    fmt::{Debug, Display, Formatter},
+    mem::forget,
+    ptr::null_mut,
+    result::Result,
+    slice,
+    str::FromStr,
+};
 
 // pub trait Wood where Self:Sized {
 // 	type Iter:Iterator<Item=Self>;
@@ -277,6 +280,24 @@ impl Wood {
         match *self {
             Branchv(ref v) => tail((*v).v.iter()),
             Leafv(_) => [].iter(),
+        }
+    }
+    /// returns the tail of the first element of the wood chained with the rest of the wood. For dealing with a common situation with the termpose syntax where you want to ignore the structure of initial line items
+    /// ```
+    /// call a b car
+    ///   dog
+    ///   entropy
+    ///   foreign_adversary
+    /// ```
+    /// in this case, `flatter_tail` would give you `[a, b, car, dog, entropy, foreign_adversary]`. (by contrast, `tail` would only give you `[dog, entropy, foreign_adversary]`)
+    pub fn flatter_tail<'a>(
+        &'a self,
+    ) -> std::iter::Chain<slice::Iter<'a, Self>, slice::Iter<'a, Self>> {
+        let mut r = self.contents();
+        if let Some(first) = r.next() {
+            first.tail().chain(r)
+        } else {
+            [].iter().chain([].iter())
         }
     }
     /// `self.contents().find(|el| el.initial_str() == key)`
