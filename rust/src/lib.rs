@@ -1,6 +1,4 @@
 #![feature(test)]
-// #![feature(nll)]
-#![feature(core_intrinsics)]
 #![feature(extract_if)]
 
 use std::{
@@ -283,7 +281,7 @@ impl Wood {
         }
     }
     /// returns the tail of the first element of the wood chained with the rest of the wood. For dealing with a common situation with the termpose syntax where you want to ignore the structure of initial line items
-    /// ```
+    /// ```plain
     /// call a b car
     ///   dog
     ///   entropy
