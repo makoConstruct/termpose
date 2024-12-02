@@ -1,59 +1,45 @@
 # woodslist spec
 
-**:keywords**, words to which we assign special definitions, are written with a colon. :keywords will be bolded when mentioned for the first time in the document
+**:keywords**, words to which we assign special definitions, are written with a colon. :keywords will be bolded when defined.
 
-We will name the elements of the syntax, then explain how those elements are mapped by a parsing method into **:wood** data
+We will name the elements of the syntax, then explain how those elements are mapped by a parsing method into :wood data
 
 "any number of" means zero or more
 
-"some things" means one or more
+"some" means one or more
 
 
 
 ### data
 
-the process of parsing a **:file** produces a :wood
+the process of parsing a :file produces a :wood
 
-a :wood is either either a **:branch** or a **:leaf**. In a Rust API, for instance, it is defined as `enum Wood { Branchv(Branch), Leafv(Leaf) }`. In the C API, it is a tagged union
+a **:wood** is either either a :branch or a :leaf. In a Rust API, for instance, it is defined as `enum Wood { Branchv(Branch), Leafv(Leaf) }`. In the C API, it is a tagged union
 
-a :branch is a sequence type containing any number of :woods
+a **:branch** is a sequence type containing any number of :woods
 
-a :leaf contains a String
-
-
-
-### elements of syntax
-
-:file = any number of **:items**, separated by **:whitespace**
-
-:whitespace = some `space`, `tab`, or **:newline**
-
-:newline = "`\n`", "`\r`", or if a `\r` is immediately followed by a `\n`, this pair of characters constitutes only a single :newline "`\r` `\n`" (it's an ancient standard that, AFAIK, windows still uses)
-
-:item = one of **:slist** **:word** **:quoted**
+a **:leaf** contains a String
 
 
 
-:slist = `(` followed by any number of :whitespaces, :items and :newlines followed by `)`
+### syntax generating rules
 
-:word = some **:letters** without :whitespace, :newlines, `(`, `)`, `"`
+A woodslist file is valid if and only if it can be generated according to these rules.
 
-:letter = an **:escaped**, or any unicode letter except `\`. Includes :newlines
+**:file** = any number of :items, separated by any amount of :whitespace
 
-:quoted = `"` followed by any number of :letters, then `"`
+**:whitespace** = some `space`, `tab`, or :newline
 
-:escaped = `\\`, `\"`, `\n` (newline), `\r` (other newline), `\t` (tab)
+**:newline** = "`\n`", "`\r`", or if a `\r` is immediately followed by a `\n`, this pair of characters constitutes only a single :newline "`\r` `\n`" (it's an ancient standard that, AFAIK, windows still uses)
 
+**:item** = one of :slist, :word, pr :quoted
 
+**:slist** = `(` followed by any :whitespace, :items and :newlines followed by `)`
 
-### term data defined as a function of syntactical elements
+**:word** = some :letters without :whitespace, :newlines, `(`, `)`, `"`
 
-data(:file) → parsing will return a :branch containing data(:items), of all :items that are not contained within another :item
+**:letter** = an :escaped, or any unicode letter except `\`. Includes :newlines
 
-data(:item) → see the following :item types
+**:quoted** = `"` followed by any number of :letters, then `"`
 
-data(:slist) → a :branch containing the data of each contained sub-:item
-
-data(:word) → a leaf string. Each :escaped is translated, and each :newline resolves as a `\n` regardless of what went in.
-
-data(:quoted) → a leaf string. If the string starts with a :newline, it drops the :newline (the reason is, this allows you to start a multiline string on the first column, instead of putting the first line out wherever the string starts, which looks weird)
+**:escaped** = `\\`, `\"`, `\n` (newline), `\r` (other newline), `\t` (tab)
