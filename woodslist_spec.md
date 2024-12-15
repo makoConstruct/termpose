@@ -1,5 +1,29 @@
 # woodslist spec
 
+Concerning [woodslist](./woodslist.md).
+
+# claraifying examples
+
+`("quoted"then)` goes to `list(atom("quoted") atom("then"))`
+
+`("first""second")` goes to `list(atom("first") atom("second"))`.
+
+So does `"first""second"` (without parens). If there are multiple root items in a file/string being parsed, it produces a list.
+
+```
+(a "
+  first
+  second
+")
+```
+goes to `list(atom(a) atom("\n  first\n  second\n"))`
+
+You should now fully understand how to parse woodslist. Afaik there are no other counterintuitive cases.
+
+# formal definition of syntax
+
+I'm not sure this is really useful at all, but here's a formal definition of what kinds of strings are allowed which also strongly suggests a particular way of translating that text into structure.
+
 **:keywords**, words to which we assign special definitions, are written with a colon. :keywords will be bolded when defined.
 
 We will name the elements of the syntax, then explain how those elements are mapped by a parsing method into :wood data
