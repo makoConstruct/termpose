@@ -2,7 +2,7 @@
 
 Concerning [woodslist](./woodslist.md).
 
-# claraifying examples
+# clarifying examples
 
 `("quoted"then)` goes to `list(atom("quoted") atom("then"))`
 
