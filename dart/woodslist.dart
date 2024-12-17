@@ -361,14 +361,19 @@ void _writeEscaped(String str, StringBuffer buffer) {
     switch (char) {
       case NEWLINE:
         buffer.write('\\n');
+        break;
       case CARRIAGE_RETURN:
         buffer.write('\\r');
+        break;
       case TAB:
         buffer.write('\\t');
+        break;
       case QUOTE:
         buffer.write('\\"');
+        break;
       case ESCAPE_SLASH:
         buffer.write('\\\\');
+        break;
       default:
         buffer.writeCharCode(char);
     }
