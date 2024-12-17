@@ -4,9 +4,9 @@ Concerning [woodslist](./woodslist.md).
 
 # clarifying examples
 
-`("quoted"then)` goes to `list(atom("quoted") atom("then"))`
+`("quoted"then)` goes to `["quoted", "then"]`.
 
-`("first""second")` goes to `list(atom("first") atom("second"))`.
+`("first""second")` goes to `["first", "second"]`.
 
 So does `"first""second"` (without parens). If there are multiple root items in a file/string being parsed, it produces a list encompassing them.
 
@@ -16,7 +16,7 @@ So does `"first""second"` (without parens). If there are multiple root items in 
   second
 ")
 ```
-goes to `list(atom("a") atom("\n  first\n  second\n"))`
+goes to `["a", "  first\n  second\n"]`.
 
 You should now fully understand how to parse woodslist. Afaik there are no other counterintuitive cases. If you have any additional questions, though, feel free to ask, and I may want to add an example for that.
 

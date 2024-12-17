@@ -37,4 +37,4 @@ who are big and mean.")
 
 Woodslist is a [Wood](https://github.com/makoConstruct/termpose) language, meaning it parses into `Wood` and can be worked with using the same APIs as other wood formats.
 
-It is formally defined [here](https://github.com/makoConstruct/termpose/blob/master/woodslist_spec.md).
+[spec](https://github.com/makoConstruct/termpose/blob/master/woodslist_spec.md).
