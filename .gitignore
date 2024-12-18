@@ -10,3 +10,6 @@ target
 a.out
 basicCppExample
 scraps
+dart/flake.lock
+dart/pubspec.lock
+dart/.dart_tool

@@ -3,6 +3,7 @@
 Woodslist is a serialization format similar to s-expressions.
 
 
+`new donk.woods`
 ```
 (agent
   (name "Mitch Henderson")
@@ -32,7 +33,6 @@ Wuo isn't taking any guff from anyone.
 Except for the seagulls,
 who are big and mean.")
 )
-
 ```
 
 Woodslist is a [Wood](https://github.com/makoConstruct/termpose) language, meaning it parses into `Wood` and can be worked with using the same APIs as other wood formats.

@@ -55,17 +55,18 @@ We were always able to use a nice, minimal, flexible S-Expressions language inst
 
 Warning, Rust is currently the only language that supports termpose per specification, the others do something different with items in a line with indental, because until writing the spec I hadn't thought hard about what made the most sense there.
 
-| language | spec compliant | status | further info |
-| ---------|-----------|--------|------ |
-| C++ | No | Very nice. | [Basic API](https://github.com/makoConstruct/termpose/blob/master/basic%20C%2B%2B%20api.md), [Intro to parser combinators](https://github.com/makoConstruct/termpose/blob/master/cppintro.md), [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
-| Haxe | No | Pretty good. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| Scala | No | Very nice | [This brief intro](https://github.com/makoConstruct/termpose/wiki/Introducing-Termpose!-(To-Scala)) and the [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
-| Javascript | No | There is a basic API that converts termpose to arrays of strings. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| C# | No | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| Java | No | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| Python | No | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
-| C | No | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
-| Rust | Yes | Good support for termpose and [woodslist](https://github.com/makoConstruct/termpose/blob/master/woodslist.md). Has autoderive. | [Rust Intro](https://github.com/makoConstruct/termpose/blob/master/rust/README.md) |
+| language | spec compliant | woodslist | termpose | status | further info |
+| ---------|----------------|-----------|----------|--------|------------- |
+| C++ | No |  | Yes | Very nice. | [Basic API](https://github.com/makoConstruct/termpose/blob/master/basic%20C%2B%2B%20api.md), [Intro to parser combinators](https://github.com/makoConstruct/termpose/blob/master/cppintro.md), [termpose.ccp](https://github.com/makoConstruct/termpose/blob/master/termpose.cpp) |
+| Haxe | No |  | Yes | Pretty good. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| Scala | No |  | Yes | Very nice | [This brief intro](https://github.com/makoConstruct/termpose/wiki/Introducing-Termpose!-(To-Scala)) and the [Source](https://github.com/makoConstruct/termpose/blob/master/src/main/scala/Termpose.scala) (start at the bottom) |
+| Javascript | No |  | Yes | There is a basic API that converts termpose to arrays of strings. | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| C# | No |  | Yes | Give me an API design and I'll do it | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| Java | No |  | Yes | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| Python | No |  | Yes | Talk to me if you'd like to make a nice API, it'll be easy | [Haxe Source](https://github.com/makoConstruct/termpose/blob/master/Termpose.hx) |
+| C | No |  | Yes | low-level char* → Term* API is implemented and without leaks | [C Header](https://github.com/makoConstruct/termpose/blob/master/termpose.h) |
+| Rust | Yes | Yes | Yes | Good support for termpose and [woodslist](https://github.com/makoConstruct/termpose/blob/master/woodslist.md). Has autoderive. | [Rust Intro](https://github.com/makoConstruct/termpose/blob/master/rust/README.md) |
+| Dart | Yes | Yes |  | | |
 
 
 ## Format in detail
