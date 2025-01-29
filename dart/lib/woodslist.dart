@@ -1,4 +1,5 @@
 // Core data structures
+
 abstract class Wood {
   final int line;
   final int column;
@@ -18,6 +19,8 @@ abstract class Wood {
   String initialStr();
   bool get isLeaf;
   bool get isBranch;
+  @override
+  String toString() => woodToString(this);
 }
 
 class Branch extends Wood {
@@ -203,7 +206,8 @@ class WoodParser {
     }
   }
 
-  Wood parse() {
+  /// returns a Branch containing every item in the file
+  Wood parseMultiple() {
     final root = Branch(v: [], line: 1, column: 1);
     final result = _parseInternal(root);
 
@@ -215,7 +219,12 @@ class WoodParser {
       );
     }
 
-    if (root.v.length == 1) {
+    return root;
+  }
+
+  Wood parse() {
+    final root = parseMultiple();
+    if ((root as Branch).v.length == 1) {
       return root.v.first;
     }
     return root;
@@ -322,8 +331,13 @@ class WoodParser {
   }
 }
 
-// Helper method to parse a string into a Wood structure
-Wood parseWoodslist(String input) {
+/// returns a Branch listing every item in the file, even if there's only one item.
+Wood parseMultipleWoodslist(String input) {
+  return WoodParser(input).parseMultiple();
+}
+
+/// if there are multiple items in the file, returns a branch containing them all, otherwise returns the single item.
+Wood parseSingleWoodslist(String input) {
   return WoodParser(input).parse();
 }
 

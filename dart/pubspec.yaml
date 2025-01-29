@@ -1,8 +1,11 @@
 name: woodslist
-version: 0.1.0
+version: 0.2.0
 description: A parser for woodslist format, a flexible s-expression-like serialization format
 repository: https://github.com/makoConstruct/termpose
 homepage: https://github.com/makoConstruct/termpose/woodslist.md
 
 environment:
   sdk: '>=2.19.0 <4.0.0'
+
+dev_dependencies:
+  test: ^1.25.14
